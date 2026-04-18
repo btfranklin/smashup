@@ -1,16 +1,59 @@
 import "./style.css";
 
+import { CAR_PRESETS, ROUND_PLANS, SESSION_UPGRADES, getModifierSummary } from "./game/content";
 import { AudioManager } from "./game/audio";
-import { advanceState, applyPlayerControls, createInitialState, renderGameToText, restartState, startMatch } from "./game/game";
+import {
+  advanceAfterRound,
+  advanceState,
+  applyPlayerControls,
+  applySessionUpgrade,
+  beginCarSelect,
+  chooseStarterCar,
+  createCarPreviewState,
+  createInitialState,
+  renderGameToText,
+  restartState,
+} from "./game/game";
 import { renderGame } from "./game/render";
 import { getOutlastedDriverLabels, getPlayerCar, getWinnerCar } from "./game/selectors";
+import type { CarPresetId, CarPreviewScenarioId, SessionUpgradeId } from "./game/types";
 
 const app = document.querySelector<HTMLDivElement>("#app");
 if (!app) {
   throw new Error("App root missing.");
 }
 
-const state = createInitialState();
+function getCarPreviewRequest(): { presetId: CarPresetId; scenario: CarPreviewScenarioId } | null {
+  const params = new URLSearchParams(window.location.search);
+  if (params.get("preview") !== "car") {
+    return null;
+  }
+
+  const presetId = params.get("preset");
+  const scenario = params.get("scenario");
+  const validPresetIds: CarPresetId[] = ["bulldozer", "darter", "backstab"];
+  const validScenarios: CarPreviewScenarioId[] = [
+    "pristine",
+    "front_light",
+    "front_heavy",
+    "left_heavy",
+    "rear_heavy",
+    "critical",
+    "disabled",
+  ];
+
+  return {
+    presetId: validPresetIds.includes(presetId as CarPresetId) ? (presetId as CarPresetId) : "bulldozer",
+    scenario: validScenarios.includes(scenario as CarPreviewScenarioId)
+      ? (scenario as CarPreviewScenarioId)
+      : "pristine",
+  };
+}
+
+const previewRequest = getCarPreviewRequest();
+const state = previewRequest
+  ? createCarPreviewState(previewRequest.presetId, previewRequest.scenario)
+  : createInitialState();
 const audio = new AudioManager();
 const frame = document.createElement("div");
 frame.className = "frame";
@@ -39,57 +82,153 @@ const input = {
 };
 const automatedStepping = navigator.webdriver;
 
-function renderMenuContent(): void {
-  const desiredMode = state.mode === "finished" ? "finished" : "menu";
-  if (menu.dataset.mode === desiredMode) {
+function resetTournament(): void {
+  restartState(state);
+  renderMenuContent(true);
+}
+
+function bindPresetButtons(): void {
+  menu.querySelectorAll<HTMLButtonElement>("[data-preset-id]").forEach((button) => {
+    button.addEventListener("click", () => {
+      chooseStarterCar(state, button.dataset.presetId as CarPresetId);
+      syncMenu();
+    });
+  });
+}
+
+function bindUpgradeButtons(): void {
+  menu.querySelectorAll<HTMLButtonElement>("[data-upgrade-id]").forEach((button) => {
+    button.addEventListener("click", () => {
+      applySessionUpgrade(state, button.dataset.upgradeId as SessionUpgradeId);
+      syncMenu();
+    });
+  });
+}
+
+function renderMenuContent(force = false): void {
+  if (state.mode === "car_preview") {
+    menu.innerHTML = "";
     return;
   }
-  menu.dataset.mode = desiredMode;
 
-  if (state.mode === "finished") {
+  if (!force && menu.dataset.mode === state.mode) {
+    return;
+  }
+  menu.dataset.mode = state.mode;
+
+  if (state.mode === "menu") {
+    menu.innerHTML = `
+      <h1>Smashup<br />Derby</h1>
+      <h2>Three rounds. Pick your ride. Survive the wreckage.</h2>
+      <p>Choose a derby car, fight through three themed rounds, and patch the machine between fights.</p>
+      <button class="primary-button" id="start-btn" type="button">Start Tournament</button>
+      <p class="hint">Press Enter to begin, W/A/S/D or arrows to drive, F for fullscreen.</p>
+    `;
+    menu.querySelector<HTMLButtonElement>("#start-btn")?.addEventListener("click", () => {
+      beginCarSelect(state);
+      syncMenu();
+    });
+    return;
+  }
+
+  if (state.mode === "car_select") {
+    const cards = Object.values(CAR_PRESETS)
+      .map(
+        (preset, index) => `
+          <button class="choice-card" data-preset-id="${preset.id}" ${index === 0 ? 'id="recommended-preset"' : ""} type="button">
+            <span class="choice-kicker">${preset.subtitle}</span>
+            <strong>${preset.title}</strong>
+            <span>${preset.description}</span>
+            <span>Mass ${preset.mass} | Reverse ${preset.reverseMaxSpeed} | Top ${preset.forwardMaxSpeed}</span>
+          </button>
+        `,
+      )
+      .join("");
+    menu.innerHTML = `
+      <h1>Choose<br />Your Ride</h1>
+      <h2>Pick a derby identity for the full three-round run.</h2>
+      <div class="choice-grid">${cards}</div>
+      <p class="hint">Heavier cars take punishment. Faster cars escape better. Backstab hits hardest in reverse.</p>
+    `;
+    bindPresetButtons();
+    return;
+  }
+
+  if (state.mode === "round_results") {
+    const summary = state.session.lastRoundSummary;
+    menu.innerHTML = `
+      <h1>Round ${summary?.roundIndex ?? state.session.roundIndex + 1}<br />Result</h1>
+      <h2>${summary?.playerWon ? "You survived this heat." : "Your run hit the wall."}</h2>
+      <p>${summary?.playerWon ? `Winner: ${summary.winnerLabel ?? "Player"}.` : `Knocked out by: ${summary?.eliminatedByLabel ?? "the field"}.`}</p>
+      <p>${summary?.knockoutReason ? `Cause: ${summary.knockoutReason}.` : `Biggest hit: ${summary?.biggestHitLabel ?? "None"} (${Math.round((summary?.biggestHitSeverity ?? 0) * 100)}%).`}</p>
+      <p>${summary?.playerKnockouts.length ? `You wrecked: ${summary.playerKnockouts.join(", ")}.` : "No knockouts credited to you this round."}</p>
+      <button class="primary-button" id="advance-btn" type="button">${summary?.playerWon && state.session.roundIndex < state.session.totalRounds - 1 ? "Pit Stop" : "Tournament Wrap-Up"}</button>
+      <p class="hint">Survival time: ${summary?.survivalTime ?? 0}s.</p>
+    `;
+    menu.querySelector<HTMLButtonElement>("#advance-btn")?.addEventListener("click", () => {
+      advanceAfterRound(state);
+      syncMenu();
+    });
+    return;
+  }
+
+  if (state.mode === "upgrade") {
+    const nextPlan = ROUND_PLANS[state.session.roundIndex + 1];
+    const cards = Object.values(SESSION_UPGRADES)
+      .map(
+        (upgrade, index) => `
+          <button class="choice-card" data-upgrade-id="${upgrade.id}" ${index === 0 ? 'id="recommended-upgrade"' : ""} type="button">
+            <span class="choice-kicker">Pit Choice</span>
+            <strong>${upgrade.title}</strong>
+            <span>${upgrade.description}</span>
+          </button>
+        `,
+      )
+      .join("");
+    menu.innerHTML = `
+      <h1>Pit<br />Choice</h1>
+      <h2>Next up: ${nextPlan?.title ?? "Final Heat"}</h2>
+      <p>Round ${state.session.roundIndex + 2} of ${state.session.totalRounds}. ${nextPlan ? getModifierSummary(nextPlan.modifier) : ""}.</p>
+      <div class="choice-grid">${cards}</div>
+      <p class="hint">One choice only. Damage carries forward, but the pit crew gives a small baseline repair either way.</p>
+    `;
+    bindUpgradeButtons();
+    return;
+  }
+
+  if (state.mode === "tournament_over") {
     const winner = getWinnerCar(state);
     const playerLost = getPlayerCar(state)?.disabled ?? false;
-    const outlastedList = getOutlastedDriverLabels(state).join(", ");
+    const rounds = state.session.completedRounds
+      .map(
+        (round) =>
+          `<li>Round ${round.roundIndex}: ${round.title} - ${round.playerWon ? "Win" : `Out by ${round.eliminatedByLabel ?? "the field"}`}</li>`,
+      )
+      .join("");
     menu.innerHTML = `
-      <h1>Derby<br />Over</h1>
+      <h1>Tournament<br />Over</h1>
       <h2>${
         playerLost
-          ? "Your engine quit first."
+          ? "The derby chewed you up."
           : winner?.isPlayer
-            ? "You stayed moving."
-            : `${winner?.label ?? "Nobody"} outlasted the field.`
+            ? "You outlasted the whole card."
+            : `${winner?.label ?? "Nobody"} took the crown.`
       }</h2>
       <p>${
         playerLost
-          ? `Drivers still rolling: ${outlastedList || "nobody"}.`
-          : "Restart for another eight-car slugfest."
+          ? `Drivers still rolling when you went out: ${getOutlastedDriverLabels(state).join(", ") || "nobody"}.`
+          : `Rounds cleared: ${state.session.completedRounds.length}/${state.session.totalRounds}.`
       }</p>
-      <button id="start-btn" type="button">Restart Derby</button>
+      <ul class="results-list">${rounds}</ul>
+      <button class="primary-button" id="start-btn" type="button">Restart Tournament</button>
       <p class="hint">Press R or click restart.</p>
     `;
-    menu.querySelector<HTMLButtonElement>("#start-btn")?.addEventListener("click", restartMatch);
-    return;
+    menu.querySelector<HTMLButtonElement>("#start-btn")?.addEventListener("click", resetTournament);
   }
-
-  menu.innerHTML = `
-    <h1>Smashup<br />Derby</h1>
-    <h2>Reverse Hard. Survive Longer.</h2>
-    <p>Eight cars. One dirt bowl. Your engine only lives as long as your nose stays out of trouble.</p>
-    <p>Controls: steer with W/A/S/D or arrows, reverse for the big hits, press F for fullscreen.</p>
-    <button id="start-btn" type="button">Start Derby</button>
-    <p class="hint">Last drivable car wins. Press Enter to start and R to restart after the wrecks settle.</p>
-  `;
-  menu.querySelector<HTMLButtonElement>("#start-btn")?.addEventListener("click", beginMatch);
-}
-
-function restartMatch(): void {
-  restartState(state);
-  startMatch(state);
-  syncMenu();
 }
 
 function syncMenu(): void {
-  menu.hidden = state.mode === "running";
+  menu.hidden = state.mode === "running" || state.mode === "intro" || state.mode === "car_preview";
   renderMenuContent();
 }
 
@@ -106,13 +245,8 @@ function resizeCanvas(): void {
   canvas.style.height = `${height}px`;
 }
 
-function beginMatch(): void {
-  if (state.mode === "menu") {
-    startMatch(state);
-    syncMenu();
-  } else if (state.mode === "finished") {
-    restartMatch();
-  }
+function activateAudio(): void {
+  void audio.ensureStarted();
 }
 
 function toggleFullscreen(): void {
@@ -146,10 +280,6 @@ function keyState(code: string, active: boolean): boolean {
   }
 }
 
-function activateAudio(): void {
-  void audio.ensureStarted();
-}
-
 document.addEventListener("keydown", (event) => {
   activateAudio();
   if (event.repeat) {
@@ -159,13 +289,35 @@ document.addEventListener("keydown", (event) => {
     event.preventDefault();
   }
   if (event.code === "Enter") {
-    beginMatch();
+    if (state.mode === "menu") {
+      beginCarSelect(state);
+      syncMenu();
+    } else if (state.mode === "round_results") {
+      advanceAfterRound(state);
+      syncMenu();
+    } else if (state.mode === "tournament_over") {
+      resetTournament();
+      syncMenu();
+    }
   }
   if (event.code === "KeyF") {
     toggleFullscreen();
   }
-  if (event.code === "KeyR" && state.mode === "finished") {
-    restartMatch();
+  if (event.code === "Digit1" && state.mode === "car_select") {
+    chooseStarterCar(state, "bulldozer");
+    syncMenu();
+  }
+  if (event.code === "Digit2" && state.mode === "car_select") {
+    chooseStarterCar(state, "darter");
+    syncMenu();
+  }
+  if (event.code === "Digit3" && state.mode === "car_select") {
+    chooseStarterCar(state, "backstab");
+    syncMenu();
+  }
+  if (event.code === "KeyR" && state.mode !== "running" && state.mode !== "intro") {
+    resetTournament();
+    syncMenu();
   }
 });
 
@@ -176,7 +328,6 @@ document.addEventListener("keyup", (event) => {
 });
 
 document.addEventListener("pointerdown", activateAudio, { passive: true });
-
 window.addEventListener("resize", resizeCanvas);
 document.addEventListener("fullscreenchange", resizeCanvas);
 
@@ -239,6 +390,7 @@ window.advanceTime = (ms: number) => {
 window.render_game_to_text = () => renderGameToText(state);
 
 resizeCanvas();
+renderMenuContent(true);
 present();
 requestAnimationFrame(frameLoop);
 

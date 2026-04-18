@@ -11,42 +11,36 @@ The AIs of the cars should be modeled using a simple flock-like system, where th
 The game should run completely in-browser, with no server needed or saved state.
 
 Current state
-- Vite + TypeScript + canvas game is implemented and playable in-browser with no server state.
-- `window.advanceTime(ms)` and `window.render_game_to_text()` are wired for deterministic browser testing.
-- The match ends immediately when the player car is destroyed. If the player loses, the UI lists the drivers who outlasted them.
-- Disabled cars remain as physical hulks and lose all lights.
+- Browser-only Vite + TypeScript + canvas derby is implemented.
+- `window.advanceTime(ms)` and `window.render_game_to_text()` are stable and used for browser validation.
+- The game now runs as a three-round session with car select, intros, upgrades, round results, and tournament end.
+- Three player presets, three arena variants, AI archetypes, hazards, smoke/debris/dust, and procedural audio are in place.
+- The round ends immediately when the player is destroyed. Disabled cars remain as hulks and all lights go out.
 
-Gameplay rules and tuning that matter
-- Steering uses a wheel-angle model. Cars cannot turn in place.
-- AI uses reverse-attack behavior with separation and explicit wall-escape logic. Corner escape now uses a combined inward vector from pressured walls.
-- Collision damage uses a hard low-speed floor. A contact can have nonzero visual/audio severity while still having `damageSeverity: 0`.
-- Front-end drivetrain damage depends on direct received load into the nose. Rear impacts are much softer so backing into cars behaves like using the rear as a weapon.
+Visual and polish rules that matter
+- Car numbers are painted on the hood/body, not floated beside the car.
+- Damage overlays are clipped to the body silhouette so they stay inside the car art.
+- Smoke renders above cars and escalates from light smoke to dark smoke to flames only near critical failure.
+- Screen shake is now reserved for huge hits and decays quickly.
+- Multi-option selection screens use square choice cards; the single primary CTA buttons stay pill-shaped.
 
-Effects and presentation
-- Smoke puffs are world-space effects emitted from the hood area.
-- Smoke renders above cars, not below them.
-- Smoke communicates damage phase:
-- lighter smoke for moderate damage
-- darker smoke for worse damage
-- orange-core flame fading to black smoke when a car is very close to death
-- Debris particles appear only on hard impacts.
-- End-state audio uses a happy melody on player win and a sad melody on player loss.
+Developer/testing surfaces
+- Hidden preview endpoint: `/?preview=car&preset=<bulldozer|darter|backstab>&scenario=<pristine|front_light|front_heavy|left_heavy|rear_heavy|critical|disabled>`
+- Preview mode returns `mode: "car_preview"` from `render_game_to_text()` with preset/scenario and visible car state.
 
-Useful validation already done
-- Deterministic stepping no longer races `requestAnimationFrame`.
-- Wall-hugging AI no longer tends to freeze on the arena rail in the sampled long idle runs.
-- Harmless collisions were confirmed through text state with `severity > 0` and `damageSeverity: 0`.
-- Flame-phase smoke was confirmed in deterministic browser testing with player systems heavily degraded.
+Useful files
+- `src/game/game.ts`: state flow, camera/event logic, preview-state creation, text-state output
+- `src/game/render.ts`: car art, damage overlays, preview rendering, HUD
+- `src/main.ts`: menu flow, query-param preview entry, browser hooks
+- `src/game/content.ts`: presets, rounds, upgrades, preview scenarios
+- `src/game/physics.ts`, `src/game/damage.ts`, `src/game/ai.ts`: gameplay tuning
 
-Files worth checking first if more tuning is needed
-- `src/game/game.ts`: state transitions, text-state output
-- `src/game/physics.ts`: car movement, wall response, collision severity/damage floor
-- `src/game/damage.ts`: impact-to-subsystem damage mapping and disable rules
-- `src/game/ai.ts`: reverse-attack targeting, separation, wall escape
-- `src/game/smoke.ts`: smoke phase thresholds and puff spawning
-- `src/game/render.ts`: layer order and visual readability
+Latest validation
+- `npm run build` passes.
+- Preview endpoint validated through the required Playwright client with `front_heavy` state.
+- `render_game_to_text()` in preview mode reports the expected preset/scenario payload.
+- Car-select UI was checked in-browser and the square choice cards fit their text cleanly.
+- A direct Playwright camera probe confirmed a huge-hit event can occur while low-severity follow-up frames no longer retain meaningful camera shake (`lowAfterHuge: null`).
 
-Current watchpoints
-- Damage tuning is intentionally conservative at low speed; if kills feel too rare, adjust high-speed/direct-hit scaling instead of weakening the no-damage floor.
-- Smoke phase thresholds are now readable, but if visual clutter grows, tune spawn rate before changing z-order or removing phase cues.
-- Flame-phase smoke is now intentionally stricter than generic smoke. It is tied to critical subsystem collapse rather than general damage pressure, so flames should not appear while the main health bars are still comfortably above mid-range.
+Remaining roadmap
+- Only deferred items remain in `ROADMAP.md`: replay/highlight work and a light long-term meta layer.

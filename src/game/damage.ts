@@ -1,5 +1,5 @@
 import { clamp01 } from "./math";
-import type { Car, DamageZone, Vec2 } from "./types";
+import type { Car, DamagePhase, DamageZone, SystemName, Vec2 } from "./types";
 
 export function getLocalImpact(car: Car, point: Vec2): { forward: number; side: number } {
   const dx = point.x - car.x;
@@ -75,6 +75,28 @@ export function getTotalBodyDamage(car: Car): number {
   return car.body.front + car.body.rear + car.body.left + car.body.right;
 }
 
+export function getSystemPhase(value: number): DamagePhase {
+  if (value >= 0.78) {
+    return "healthy";
+  }
+  if (value >= 0.58) {
+    return "wounded";
+  }
+  if (value >= 0.36) {
+    return "failing";
+  }
+  return "critical";
+}
+
+export function getCarSystemPhases(car: Car): Record<SystemName, DamagePhase> {
+  return {
+    engine: getSystemPhase(car.systems.engine),
+    radiator: getSystemPhase(car.systems.radiator),
+    transmission: getSystemPhase(car.systems.transmission),
+    steering: getSystemPhase(car.systems.steering),
+  };
+}
+
 export function applyImpactDamage(
   car: Car,
   point: Vec2,
@@ -105,27 +127,33 @@ export function applyImpactDamage(
       : zone === "rear"
         ? scaled * Math.pow(zoneDirectness, 1.35) * 0.7
         : scaled * Math.pow(zoneDirectness, 1.5) * 0.45;
+  const frontArmor = car.frontArmor || 1;
+  const bodyArmor = car.bodyArmor || 1;
+  const frontStructural = structuralSeverity / frontArmor;
+  const frontDrivetrain = drivetrainSeverity / frontArmor;
+  const bodyStructural = structuralSeverity / bodyArmor;
+  const bodyDrivetrain = drivetrainSeverity / bodyArmor;
 
   if (zone === "front") {
-    car.body.front = clamp01(car.body.front + structuralSeverity * 0.12);
-    car.systems.engine = clamp01(car.systems.engine - drivetrainSeverity * 0.26);
-    car.systems.radiator = clamp01(car.systems.radiator - drivetrainSeverity * 0.29);
-    car.systems.transmission = clamp01(car.systems.transmission - drivetrainSeverity * 0.17);
+    car.body.front = clamp01(car.body.front + frontStructural * 0.12);
+    car.systems.engine = clamp01(car.systems.engine - frontDrivetrain * 0.26);
+    car.systems.radiator = clamp01(car.systems.radiator - frontDrivetrain * 0.29);
+    car.systems.transmission = clamp01(car.systems.transmission - frontDrivetrain * 0.17);
     car.systems.steering = clamp01(
-      car.systems.steering - (structuralSeverity * 0.03 + drivetrainSeverity * 0.11),
+      car.systems.steering - (frontStructural * 0.03 + frontDrivetrain * 0.11),
     );
-    if (structuralSeverity > 0.24) {
+    if (frontStructural > 0.24) {
       breakFrontLight(car, side);
     }
-    if (structuralSeverity > 0.46) {
+    if (frontStructural > 0.46) {
       car.lights.frontLeft = car.lights.frontLeft && side > 0;
       car.lights.frontRight = car.lights.frontRight && side < 0;
     }
   } else if (zone === "rear") {
-    const rearWeaponSeverity = structuralSeverity * 0.55;
+    const rearWeaponSeverity = bodyStructural * 0.55;
     car.body.rear = clamp01(car.body.rear + rearWeaponSeverity * 0.08);
-    car.systems.engine = clamp01(car.systems.engine - drivetrainSeverity * 0.015);
-    car.systems.transmission = clamp01(car.systems.transmission - drivetrainSeverity * 0.035);
+    car.systems.engine = clamp01(car.systems.engine - bodyDrivetrain * 0.015);
+    car.systems.transmission = clamp01(car.systems.transmission - bodyDrivetrain * 0.035);
     if (rearWeaponSeverity > 0.22) {
       breakRearLight(car, side);
     }
@@ -134,22 +162,22 @@ export function applyImpactDamage(
       car.lights.rearRight = car.lights.rearRight && side < 0;
     }
   } else if (zone === "left") {
-    car.body.left = clamp01(car.body.left + structuralSeverity * 0.1);
-    car.systems.engine = clamp01(car.systems.engine - drivetrainSeverity * 0.03);
-    car.systems.steering = clamp01(car.systems.steering - drivetrainSeverity * 0.1);
-    car.systems.transmission = clamp01(car.systems.transmission - drivetrainSeverity * 0.04);
+    car.body.left = clamp01(car.body.left + bodyStructural * 0.1);
+    car.systems.engine = clamp01(car.systems.engine - bodyDrivetrain * 0.03);
+    car.systems.steering = clamp01(car.systems.steering - bodyDrivetrain * 0.1);
+    car.systems.transmission = clamp01(car.systems.transmission - bodyDrivetrain * 0.04);
   } else {
-    car.body.right = clamp01(car.body.right + structuralSeverity * 0.1);
-    car.systems.engine = clamp01(car.systems.engine - drivetrainSeverity * 0.03);
-    car.systems.steering = clamp01(car.systems.steering - drivetrainSeverity * 0.1);
-    car.systems.transmission = clamp01(car.systems.transmission - drivetrainSeverity * 0.04);
+    car.body.right = clamp01(car.body.right + bodyStructural * 0.1);
+    car.systems.engine = clamp01(car.systems.engine - bodyDrivetrain * 0.03);
+    car.systems.steering = clamp01(car.systems.steering - bodyDrivetrain * 0.1);
+    car.systems.transmission = clamp01(car.systems.transmission - bodyDrivetrain * 0.04);
   }
 
   const engineHealth = getEngineHealth(car);
   const totalBodyDamage = getTotalBodyDamage(car);
   const catastrophicFrontHit =
     zone === "front" &&
-    drivetrainSeverity > 0.72 &&
+    frontDrivetrain > 0.72 &&
     zoneDirectness > 0.82 &&
     (engineHealth < 0.56 || (car.body.front > 0.16 && car.systems.engine < 0.58));
 

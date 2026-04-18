@@ -61,6 +61,12 @@ canvas {
   box-shadow: 0 18px 60px rgba(53, 21, 0, 0.18);
 }
 
+.menu[data-mode="car_select"],
+.menu[data-mode="upgrade"],
+.menu[data-mode="tournament_over"] {
+  width: min(720px, calc(100% - 64px));
+}
+
 .menu h1,
 .menu h2,
 .menu p {
@@ -88,7 +94,7 @@ canvas {
   line-height: 1.4;
 }
 
-.menu button {
+.menu .primary-button {
   margin-top: 1rem;
   padding: 0.9rem 1.2rem;
   width: 100%;
@@ -103,8 +109,73 @@ canvas {
   cursor: pointer;
 }
 
-.menu button:hover {
+.menu .primary-button:hover {
   filter: brightness(1.06);
+}
+
+.choice-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+  margin-top: 1rem;
+}
+
+.choice-card {
+  display: grid;
+  gap: 0.45rem;
+  align-content: start;
+  min-height: 168px;
+  padding: 0.95rem 1rem 1rem;
+  width: 100%;
+  margin-top: 0;
+  border-radius: 6px;
+  border: 2px solid rgba(97, 49, 17, 0.24);
+  background:
+    linear-gradient(180deg, rgba(255, 248, 231, 0.96) 0%, rgba(238, 211, 162, 0.9) 100%);
+  color: #2b1a0d;
+  text-align: left;
+  font: inherit;
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+  cursor: pointer;
+  transition:
+    transform 120ms ease,
+    box-shadow 120ms ease,
+    border-color 120ms ease;
+}
+
+.choice-card:hover {
+  transform: translateY(-1px);
+  border-color: rgba(124, 59, 12, 0.58);
+  box-shadow: 0 8px 18px rgba(65, 28, 6, 0.12);
+}
+
+.choice-card strong {
+  font-size: 1.1rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.choice-card span:last-child {
+  font-size: 0.9rem;
+  line-height: 1.32;
+}
+
+.choice-kicker {
+  font-size: 0.72rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: #8a4f1b;
+}
+
+.results-list {
+  margin: 1rem 0 0;
+  padding-left: 1.2rem;
+}
+
+.results-list li + li {
+  margin-top: 0.35rem;
 }
 
 .menu .hint {

@@ -1,3 +1,5 @@
+import { AI_ARCHETYPE_CONFIG } from "./content";
+import { getEngineHealth } from "./damage";
 import { clamp, normalizeAngle } from "./math";
 import type { Car } from "./types";
 
@@ -13,6 +15,8 @@ export function updateAi(
     car.controls = { steer: 0, forward: 0, reverse: 0 };
     return;
   }
+
+  const profile = car.aiArchetype ? AI_ARCHETYPE_CONFIG[car.aiArchetype] : AI_ARCHETYPE_CONFIG.bruiser;
 
   const obstacles = cars.filter((candidate) => candidate.id !== car.id);
   const rivals = obstacles.filter((candidate) => !candidate.disabled);
@@ -50,7 +54,12 @@ export function updateAi(
     const sideOpenness = 1 - Math.abs(targetFacingScore);
     const exposure = Math.max(0, targetFacingScore) * 0.8 + sideOpenness * 0.45;
     const distanceScore = 1 / Math.max(distance, 80);
-    const score = reverseAlignment * 1.3 + exposure * 1.2 + distanceScore * 120;
+    const woundedScore = clamp((0.82 - getEngineHealth(candidate)) / 0.42, 0, 1);
+    const score =
+      reverseAlignment * 1.3 * profile.targetBias +
+      exposure * 1.2 * profile.exposureBias +
+      distanceScore * 120 +
+      woundedScore * 0.9 * profile.woundedBias;
 
     if (score > bestScore) {
       bestScore = score;
@@ -113,7 +122,7 @@ export function updateAi(
   const packDistance = Math.hypot(toPackX, toPackY) || 1;
   const packPullX = toPackX / packDistance;
   const packPullY = toPackY / packDistance;
-  const packWeight = packDistance > 300 ? 1.1 : 0.28;
+  const packWeight = (packDistance > 300 ? 1.1 : 0.28) * profile.packBias;
 
   const nearestWallDistance = Math.min(
     car.x - wallPadding,
@@ -158,9 +167,10 @@ export function updateAi(
   const boundaryDanger = clamp(worstBoundaryPressure, 0, 1);
   const cornered = pressuredBoundaries >= 2;
   const wallEscapeWeight =
-    nearestWallDistance < 80 ? 3.3 : nearestWallDistance < 150 ? 1.95 : 0.72;
-  const crowdWeight = localCrowding > 1.2 ? 1.7 : 0.9;
-  const targetWeight = target ? 1.9 : 1.15;
+    (nearestWallDistance < 80 ? 3.3 : nearestWallDistance < 150 ? 1.95 : 0.72) *
+    profile.wallEscapeBias;
+  const crowdWeight = (localCrowding > 1.2 ? 1.7 : 0.9) / profile.crowdTolerance;
+  const targetWeight = (target ? 1.9 : 1.15) * profile.targetBias;
 
   const desiredX =
     seekX * targetWeight +
@@ -187,10 +197,10 @@ export function updateAi(
     car.y > arenaHeight - wallPadding - 46;
 
   if (
-    boundaryDanger > 0.16 ||
+    boundaryDanger > 0.16 * profile.wallEscapeBias ||
     (nearWall && speed < 42) ||
     (speed < 32 && Math.abs(headingError) > 2.2) ||
-    localCrowding > 1.8
+    localCrowding > 1.8 / profile.crowdTolerance
   ) {
     car.aiState.jamTimer += dt;
   } else {
@@ -198,10 +208,13 @@ export function updateAi(
   }
 
   if (boundaryDanger > 0.58 || (cornered && boundaryDanger > 0.32)) {
-    car.aiState.resetTimer = Math.max(car.aiState.resetTimer, cornered ? 2.1 : 1.8);
+    car.aiState.resetTimer = Math.max(
+      car.aiState.resetTimer,
+      (cornered ? 2.1 : 1.8) * profile.jamBias,
+    );
     car.aiState.jamTimer = 0;
-  } else if (car.aiState.jamTimer > 0.4) {
-    car.aiState.resetTimer = 1.45;
+  } else if (car.aiState.jamTimer > 0.4 * profile.jamBias) {
+    car.aiState.resetTimer = 1.45 * profile.jamBias;
     car.aiState.jamTimer = 0;
   }
 
@@ -228,7 +241,11 @@ export function updateAi(
     return;
   }
 
-  car.controls.reverse = clamp(0.82 + Math.max(0, bestScore) * 0.08, 0.6, 1);
+  car.controls.reverse = clamp(
+    (0.82 + Math.max(0, bestScore) * 0.08) * profile.reverseAggression,
+    0.58,
+    1,
+  );
   car.controls.forward = 0;
   const leadCompensation = signedTravel <= 0 ? 0.16 : -0.1;
   car.controls.steer = clamp(-(headingError + leadCompensation * Math.sign(headingError)) / 1.7, -1, 1);

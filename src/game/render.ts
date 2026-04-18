@@ -1,5 +1,29 @@
+import { getModifierSummary } from "./content";
 import { getActiveCars, getOutlastedDriverLabels, getPlayerCar, getWinnerCar } from "./selectors";
-import type { Car, DebrisParticle, GameState, SmokePuff } from "./types";
+import type {
+  ArenaObject,
+  Car,
+  DamagePhase,
+  DebrisParticle,
+  DustPuff,
+  EventMessage,
+  GameState,
+  MudZone,
+  SmokePuff,
+} from "./types";
+
+function phaseColor(phase: DamagePhase, base: string): string {
+  switch (phase) {
+    case "healthy":
+      return base;
+    case "wounded":
+      return "#e0c15b";
+    case "failing":
+      return "#ec8c41";
+    case "critical":
+      return "#e24a33";
+  }
+}
 
 function drawMeter(
   ctx: CanvasRenderingContext2D,
@@ -8,6 +32,7 @@ function drawMeter(
   width: number,
   label: string,
   value: number,
+  phase: DamagePhase,
   fill: string,
 ): void {
   ctx.fillStyle = "#fff6da";
@@ -15,20 +40,36 @@ function drawMeter(
   ctx.fillText(label, x, y);
   ctx.fillStyle = "rgba(255, 240, 214, 0.16)";
   ctx.fillRect(x, y + 6, width, 9);
-  ctx.fillStyle = fill;
+  ctx.fillStyle = phaseColor(phase, fill);
   ctx.fillRect(x, y + 6, Math.max(0, Math.min(width, width * value)), 9);
+}
+
+function drawMudZones(ctx: CanvasRenderingContext2D, mudZones: MudZone[]): void {
+  ctx.save();
+  for (const zone of mudZones) {
+    const gradient = ctx.createLinearGradient(zone.x, zone.y, zone.x + zone.width, zone.y + zone.height);
+    gradient.addColorStop(0, "rgba(118, 79, 42, 0.32)");
+    gradient.addColorStop(1, "rgba(74, 48, 22, 0.4)");
+    ctx.fillStyle = gradient;
+    ctx.beginPath();
+    ctx.roundRect(zone.x, zone.y, zone.width, zone.height, 38);
+    ctx.fill();
+    ctx.strokeStyle = "rgba(77, 47, 16, 0.24)";
+    ctx.lineWidth = 4;
+    ctx.stroke();
+  }
+  ctx.restore();
 }
 
 function drawArena(
   ctx: CanvasRenderingContext2D,
-  width: number,
-  height: number,
-  wallPadding: number,
+  state: GameState,
 ): void {
+  const { width, height, wallPadding, mudZones, variant } = state.arena;
   const dirt = ctx.createLinearGradient(0, 0, 0, height);
-  dirt.addColorStop(0, "#d8ad65");
-  dirt.addColorStop(0.5, "#c88b46");
-  dirt.addColorStop(1, "#8d5328");
+  dirt.addColorStop(0, variant === "junkyard" ? "#d5a15d" : "#d8ad65");
+  dirt.addColorStop(0.5, variant === "mud_pit" ? "#b97b39" : "#c88b46");
+  dirt.addColorStop(1, variant === "junkyard" ? "#7c4b24" : "#8d5328");
   ctx.fillStyle = dirt;
   ctx.fillRect(0, 0, width, height);
 
@@ -43,6 +84,10 @@ function drawArena(
     ctx.fill();
   }
   ctx.restore();
+
+  if (mudZones.length > 0) {
+    drawMudZones(ctx, mudZones);
+  }
 
   ctx.save();
   ctx.strokeStyle = "#f7e9b8";
@@ -66,6 +111,33 @@ function drawArena(
     width - innerPadding * 2,
     height - innerPadding * 2,
   );
+  ctx.restore();
+}
+
+function drawArenaObject(ctx: CanvasRenderingContext2D, object: ArenaObject): void {
+  ctx.save();
+  ctx.translate(object.x, object.y);
+  ctx.rotate(object.rotation);
+  if (object.kind === "tire") {
+    ctx.fillStyle = "#2c231d";
+    ctx.beginPath();
+    ctx.arc(0, 0, object.radius, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = "#9d8662";
+    ctx.beginPath();
+    ctx.arc(0, 0, object.radius * 0.48, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = "rgba(255, 236, 201, 0.18)";
+    ctx.lineWidth = 2;
+    ctx.stroke();
+  } else {
+    ctx.fillStyle = "#6c5a4a";
+    ctx.beginPath();
+    ctx.roundRect(-object.radius * 1.2, -object.radius * 0.8, object.radius * 2.4, object.radius * 1.6, 8);
+    ctx.fill();
+    ctx.fillStyle = "rgba(198, 164, 114, 0.5)";
+    ctx.fillRect(-object.radius * 0.5, -object.radius * 0.22, object.radius * 1.1, object.radius * 0.44);
+  }
   ctx.restore();
 }
 
@@ -142,11 +214,6 @@ function drawSmokePuffs(ctx: CanvasRenderingContext2D, puffs: SmokePuff[]): void
       ctx.arc(puff.x - radius * 0.06, puff.y - radius * 0.1, flameRadius, 0, Math.PI * 2);
       ctx.fill();
     }
-
-    ctx.fillStyle = `rgba(150, 146, 138, ${smokeAlpha * 0.34 * (1 - puff.flame * 0.45)})`;
-    ctx.beginPath();
-    ctx.arc(puff.x + radius * 0.18, puff.y - radius * 0.1, radius * 0.42, 0, Math.PI * 2);
-    ctx.fill();
   }
   ctx.restore();
 }
@@ -174,39 +241,113 @@ function drawDebrisParticles(ctx: CanvasRenderingContext2D, particles: DebrisPar
   ctx.restore();
 }
 
-function drawDamageScrapes(ctx: CanvasRenderingContext2D, car: Car): void {
-  const scrapeColor = "rgba(33, 26, 22, 0.45)";
-  ctx.strokeStyle = scrapeColor;
-  ctx.lineWidth = 5;
+function drawDustPuffs(ctx: CanvasRenderingContext2D, puffs: DustPuff[]): void {
+  if (puffs.length === 0) {
+    return;
+  }
+  ctx.save();
+  for (const puff of puffs) {
+    const life = 1 - puff.age / puff.ttl;
+    const radius = puff.size + (1 - life) * 10;
+    const alpha = puff.alpha * life;
+    ctx.fillStyle = `rgba(${Math.round(188 * puff.tone)}, ${Math.round(144 * puff.tone)}, 88, ${alpha})`;
+    ctx.beginPath();
+    ctx.arc(puff.x, puff.y, radius, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.restore();
+}
 
-  if (car.body.front > 0.12) {
+function traceCarBodyPath(ctx: CanvasRenderingContext2D, car: Car): void {
+  ctx.beginPath();
+  ctx.roundRect(-car.length * 0.49, -car.width * 0.48, car.length * 0.98, car.width * 0.96, 16);
+}
+
+function drawHoodNumberDecal(ctx: CanvasRenderingContext2D, car: Car): void {
+  const decalX = car.length * 0.14;
+  const fontSize = Math.max(12, Math.min(18, car.length * 0.18));
+  ctx.save();
+  traceCarBodyPath(ctx, car);
+  ctx.clip();
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.font = `700 ${fontSize}px 'Trebuchet MS', sans-serif`;
+  ctx.lineWidth = Math.max(2.6, fontSize * 0.22);
+  ctx.strokeStyle = "rgba(28, 18, 12, 0.68)";
+  ctx.fillStyle = car.disabled ? "rgba(203, 194, 180, 0.72)" : "rgba(250, 242, 228, 0.88)";
+  ctx.strokeText(car.roofNumber, decalX, 0);
+  ctx.fillText(car.roofNumber, decalX, 0);
+  ctx.restore();
+}
+
+function drawDamageScrapes(ctx: CanvasRenderingContext2D, car: Car): void {
+  const halfLength = car.length * 0.49;
+  const halfWidth = car.width * 0.48;
+  ctx.save();
+  traceCarBodyPath(ctx, car);
+  ctx.clip();
+
+  ctx.lineCap = "round";
+  ctx.strokeStyle = "rgba(33, 26, 22, 0.58)";
+  ctx.lineWidth = 4.5;
+
+  if (car.body.front > 0.08) {
+    const inset = 8 + car.body.front * 16;
+    ctx.fillStyle = `rgba(26, 18, 13, ${0.12 + car.body.front * 0.18})`;
     ctx.beginPath();
-    ctx.moveTo(20, -18);
-    ctx.lineTo(43, -8);
-    ctx.moveTo(18, 18);
-    ctx.lineTo(45, 8);
+    ctx.moveTo(halfLength - inset, -halfWidth + 6);
+    ctx.lineTo(halfLength + 10, -halfWidth + 16);
+    ctx.lineTo(halfLength + 10, halfWidth - 16);
+    ctx.lineTo(halfLength - inset, halfWidth - 6);
+    ctx.closePath();
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(halfLength - inset - 8, -14);
+    ctx.lineTo(halfLength - 10, -6);
+    ctx.moveTo(halfLength - inset - 10, 12);
+    ctx.lineTo(halfLength - 8, 5);
     ctx.stroke();
   }
-  if (car.body.rear > 0.12) {
+
+  if (car.body.rear > 0.08) {
+    const inset = 8 + car.body.rear * 15;
+    ctx.fillStyle = `rgba(28, 20, 14, ${0.1 + car.body.rear * 0.16})`;
     ctx.beginPath();
-    ctx.moveTo(-20, -16);
-    ctx.lineTo(-42, -6);
-    ctx.moveTo(-18, 16);
-    ctx.lineTo(-41, 6);
+    ctx.moveTo(-halfLength + inset, -halfWidth + 7);
+    ctx.lineTo(-halfLength - 8, -halfWidth + 18);
+    ctx.lineTo(-halfLength - 8, halfWidth - 18);
+    ctx.lineTo(-halfLength + inset, halfWidth - 7);
+    ctx.closePath();
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(-halfLength + inset + 2, -12);
+    ctx.lineTo(-halfLength + 10, -4);
+    ctx.moveTo(-halfLength + inset - 2, 11);
+    ctx.lineTo(-halfLength + 12, 4);
     ctx.stroke();
   }
-  if (car.body.left > 0.1) {
+
+  if (car.body.left > 0.08) {
+    const band = 6 + car.body.left * 10;
+    ctx.fillStyle = `rgba(30, 22, 16, ${0.1 + car.body.left * 0.16})`;
+    ctx.fillRect(-halfLength + 10, -halfWidth - 2, car.length - 20, band + 4);
     ctx.beginPath();
-    ctx.moveTo(-20, -24);
-    ctx.lineTo(20, -24);
+    ctx.moveTo(-18, -halfWidth + 7);
+    ctx.lineTo(18, -halfWidth + band - 1);
     ctx.stroke();
   }
-  if (car.body.right > 0.1) {
+
+  if (car.body.right > 0.08) {
+    const band = 6 + car.body.right * 10;
+    ctx.fillStyle = `rgba(30, 22, 16, ${0.1 + car.body.right * 0.16})`;
+    ctx.fillRect(-halfLength + 10, halfWidth - band - 2, car.length - 20, band + 4);
     ctx.beginPath();
-    ctx.moveTo(-20, 24);
-    ctx.lineTo(20, 24);
+    ctx.moveTo(-18, halfWidth - 7);
+    ctx.lineTo(18, halfWidth - band + 1);
     ctx.stroke();
   }
+
+  ctx.restore();
 }
 
 function drawFrontWheels(ctx: CanvasRenderingContext2D, car: Car): void {
@@ -228,7 +369,14 @@ function drawFrontWheels(ctx: CanvasRenderingContext2D, car: Car): void {
   ctx.restore();
 }
 
-export function drawCar(ctx: CanvasRenderingContext2D, car: Car): void {
+export function drawCar(
+  ctx: CanvasRenderingContext2D,
+  car: Car,
+  options?: {
+    showPlayerOutline?: boolean;
+  },
+): void {
+  const showPlayerOutline = options?.showPlayerOutline ?? true;
   ctx.save();
   ctx.translate(car.x, car.y);
   ctx.rotate(car.angle);
@@ -239,11 +387,15 @@ export function drawCar(ctx: CanvasRenderingContext2D, car: Car): void {
   bodyGradient.addColorStop(0.86, car.accent);
   bodyGradient.addColorStop(1, "#221712");
   ctx.fillStyle = car.disabled ? "#6f665f" : bodyGradient;
-  ctx.beginPath();
-  ctx.roundRect(-42, -26, 84, 52, 16);
+  traceCarBodyPath(ctx, car);
   ctx.fill();
 
-  ctx.fillStyle = car.disabled ? "#4d4845" : "rgba(248, 232, 213, 0.82)";
+  drawHoodNumberDecal(ctx, car);
+
+  ctx.fillStyle =
+    car.phases.engine === "critical" || car.disabled
+      ? "rgba(88, 82, 78, 0.88)"
+      : "rgba(248, 232, 213, 0.82)";
   ctx.beginPath();
   ctx.roundRect(-8, -18, 28, 36, 10);
   ctx.fill();
@@ -260,7 +412,8 @@ export function drawCar(ctx: CanvasRenderingContext2D, car: Car): void {
 
   ctx.strokeStyle = car.disabled ? "#3a3430" : "rgba(30, 17, 10, 0.78)";
   ctx.lineWidth = 3;
-  ctx.strokeRect(-39, -23, 78, 46);
+  traceCarBodyPath(ctx, car);
+  ctx.stroke();
 
   drawDamageScrapes(ctx, car);
   drawFrontWheels(ctx, car);
@@ -270,12 +423,27 @@ export function drawCar(ctx: CanvasRenderingContext2D, car: Car): void {
   drawLight(ctx, -36, -15, car.lights.rearLeft, "#ff6245");
   drawLight(ctx, -36, 15, car.lights.rearRight, "#ff6245");
 
-  if (car.isPlayer) {
-    ctx.strokeStyle = "rgba(255, 245, 220, 0.8)";
+  if (showPlayerOutline && car.isPlayer) {
+    ctx.strokeStyle = "rgba(255, 245, 220, 0.82)";
     ctx.lineWidth = 3;
     ctx.strokeRect(-46, -30, 92, 60);
   }
 
+  ctx.restore();
+}
+
+function drawPreviewBackground(ctx: CanvasRenderingContext2D, width: number, height: number): void {
+  const background = ctx.createLinearGradient(0, 0, 0, height);
+  background.addColorStop(0, "#efe5d4");
+  background.addColorStop(1, "#c6b090");
+  ctx.fillStyle = background;
+  ctx.fillRect(0, 0, width, height);
+
+  ctx.save();
+  ctx.fillStyle = "rgba(53, 36, 18, 0.08)";
+  ctx.beginPath();
+  ctx.ellipse(width * 0.5, height * 0.58, 210, 72, 0, 0, Math.PI * 2);
+  ctx.fill();
   ctx.restore();
 }
 
@@ -286,81 +454,132 @@ function drawHud(ctx: CanvasRenderingContext2D, state: GameState): void {
   }
 
   ctx.save();
-  ctx.fillStyle = "rgba(32, 18, 11, 0.68)";
+  ctx.fillStyle = "rgba(32, 18, 11, 0.7)";
   ctx.beginPath();
-  ctx.roundRect(24, 24, 360, 136, 16);
+  ctx.roundRect(24, 24, 404, 184, 16);
   ctx.fill();
 
   ctx.fillStyle = "#fff6da";
   ctx.font = "700 26px 'Trebuchet MS', sans-serif";
-  ctx.fillText(`Drivers Left: ${getActiveCars(state).length}`, 42, 58);
+  ctx.fillText(`Round ${state.session.roundIndex + 1}/${state.session.totalRounds}`, 42, 56);
+  ctx.font = "600 16px 'Trebuchet MS', sans-serif";
+  ctx.fillText(state.arena.title, 42, 78);
+  ctx.fillText(getModifierSummary(state.arena.modifier), 250, 78);
 
-  drawMeter(ctx, 42, 78, 132, "Engine", player.systems.engine, "#d86e3f");
-  drawMeter(ctx, 204, 78, 132, "Radiator", player.systems.radiator, "#78c9d6");
-  drawMeter(ctx, 42, 112, 132, "Transmission", player.systems.transmission, "#dbc16a");
-  drawMeter(ctx, 204, 112, 132, "Steering", player.systems.steering, "#c69ae8");
+  drawMeter(ctx, 42, 102, 152, "Engine", player.systems.engine, player.phases.engine, "#d86e3f");
+  drawMeter(ctx, 226, 102, 152, "Radiator", player.systems.radiator, player.phases.radiator, "#78c9d6");
+  drawMeter(ctx, 42, 136, 152, "Transmission", player.systems.transmission, player.phases.transmission, "#dbc16a");
+  drawMeter(ctx, 226, 136, 152, "Steering", player.systems.steering, player.phases.steering, "#c69ae8");
 
   ctx.fillStyle = "#fff6da";
   ctx.font = "600 13px 'Trebuchet MS', sans-serif";
-  ctx.fillText(`Heat ${Math.round(player.systems.overheat * 100)}%`, 42, 146);
+  ctx.fillText(`Heat ${Math.round(player.systems.overheat * 100)}%`, 42, 172);
   ctx.fillStyle = "rgba(255, 240, 214, 0.16)";
-  ctx.fillRect(96, 137, 240, 10);
-  ctx.fillStyle = "#ff6d52";
-  ctx.fillRect(96, 137, 240 * player.systems.overheat, 10);
+  ctx.fillRect(96, 163, 282, 10);
+  ctx.fillStyle = player.systems.overheat > 0.75 ? "#ff4d31" : player.systems.overheat > 0.45 ? "#ff9954" : "#ffcf6a";
+  ctx.fillRect(96, 163, 282 * player.systems.overheat, 10);
+
+  ctx.font = "700 18px 'Trebuchet MS', sans-serif";
+  ctx.fillStyle = "#fff0c7";
+  ctx.fillText(`Drivers Left: ${getActiveCars(state).length}`, 42, 198);
   ctx.restore();
 }
 
-function drawMenuOverlay(ctx: CanvasRenderingContext2D, width: number, height: number): void {
+function drawEventFeed(ctx: CanvasRenderingContext2D, events: EventMessage[]): void {
+  if (events.length === 0) {
+    return;
+  }
+  const active = events.slice(-3);
   ctx.save();
-  ctx.fillStyle = "rgba(25, 15, 7, 0.2)";
+  ctx.textAlign = "center";
+  active.forEach((event, index) => {
+    const y = 130 + index * 32;
+    const alpha = Math.min(1, event.ttl / 0.5) * 0.95;
+    ctx.fillStyle = `rgba(22, 12, 8, ${alpha * 0.55})`;
+    ctx.beginPath();
+    ctx.roundRect(480, y - 20, 540, 28, 10);
+    ctx.fill();
+    ctx.fillStyle =
+      event.kind === "system"
+        ? "#ffd989"
+        : event.kind === "warning"
+          ? "#ffb760"
+          : event.kind === "result"
+            ? "#fff0bc"
+            : "#fff8d8";
+    ctx.font = `${600 + Math.round(event.emphasis * 140)} 20px 'Trebuchet MS', sans-serif`;
+    ctx.fillText(event.text, 750, y);
+  });
+  ctx.restore();
+}
+
+function drawIntroOverlay(ctx: CanvasRenderingContext2D, state: GameState): void {
+  ctx.save();
+  ctx.fillStyle = "rgba(20, 12, 5, 0.48)";
+  ctx.fillRect(0, 0, state.arena.width, state.arena.height);
+  ctx.fillStyle = "#fff0cb";
+  ctx.textAlign = "center";
+  ctx.font = "700 70px 'Trebuchet MS', sans-serif";
+  ctx.fillText(state.arena.title, state.arena.width * 0.5, state.arena.height * 0.36);
+  ctx.font = "600 26px 'Trebuchet MS', sans-serif";
+  ctx.fillText(state.arena.introLine, state.arena.width * 0.5, state.arena.height * 0.42);
+  ctx.font = "700 34px 'Trebuchet MS', sans-serif";
+  ctx.fillText(getModifierSummary(state.arena.modifier), state.arena.width * 0.5, state.arena.height * 0.49);
+  const countdown = Math.max(1, Math.ceil(state.session.countdown));
+  ctx.font = "700 110px 'Trebuchet MS', sans-serif";
+  ctx.fillText(String(countdown), state.arena.width * 0.5, state.arena.height * 0.66);
+  ctx.restore();
+}
+
+function drawNonRunningOverlay(ctx: CanvasRenderingContext2D, width: number, height: number): void {
+  ctx.save();
+  ctx.fillStyle = "rgba(25, 15, 7, 0.22)";
   ctx.fillRect(0, 0, width, height);
   ctx.restore();
 }
 
-function drawFinishOverlay(ctx: CanvasRenderingContext2D, state: GameState): void {
-  const winner = getWinnerCar(state);
-  const playerLost = getPlayerCar(state)?.disabled ?? false;
-  const outlastedNames = getOutlastedDriverLabels(state);
-  ctx.save();
-  ctx.fillStyle = "rgba(18, 10, 3, 0.58)";
-  ctx.fillRect(0, 0, state.arena.width, state.arena.height);
-  ctx.fillStyle = "#fff3d3";
-  ctx.font = "700 68px 'Trebuchet MS', sans-serif";
-  ctx.fillText("Derby Over", state.arena.width * 0.5 - 180, state.arena.height * 0.42);
-  ctx.font = "600 30px 'Trebuchet MS', sans-serif";
-  const line = playerLost
-    ? "Your car is done."
-    : winner?.isPlayer
-      ? "You survived the pileup."
-      : `${winner?.label ?? "Nobody"} wins.`;
-  ctx.fillText(line, state.arena.width * 0.5 - 170, state.arena.height * 0.5);
-  if (playerLost) {
-    ctx.font = "600 21px 'Trebuchet MS', sans-serif";
-    ctx.fillText(
-      `Outlasted by: ${outlastedNames.join(", ") || "nobody"}`,
-      state.arena.width * 0.5 - 260,
-      state.arena.height * 0.56,
-    );
-    ctx.fillText("Press R to restart", state.arena.width * 0.5 - 130, state.arena.height * 0.62);
-  } else {
-    ctx.fillText("Press R to restart", state.arena.width * 0.5 - 130, state.arena.height * 0.56);
-  }
-  ctx.restore();
-}
-
 export function renderGame(ctx: CanvasRenderingContext2D, state: GameState): void {
-  drawArena(ctx, state.arena.width, state.arena.height, state.arena.wallPadding);
+  ctx.clearRect(0, 0, state.arena.width, state.arena.height);
+
+  if (state.mode === "car_preview") {
+    drawPreviewBackground(ctx, state.arena.width, state.arena.height);
+    const previewCar = state.cars[0];
+    const previewScale = 3.4;
+    ctx.save();
+    ctx.translate(state.arena.width * 0.5, state.arena.height * 0.52);
+    ctx.scale(previewScale, previewScale);
+    ctx.translate(-previewCar.x, -previewCar.y);
+    for (const car of state.cars) {
+      drawCar(ctx, car, { showPlayerOutline: false });
+    }
+    drawSmokePuffs(ctx, state.smokePuffs);
+    ctx.restore();
+    return;
+  }
+
+  const shakeX = Math.sin(state.tick * 0.8) * state.camera.shake * 0.5 + state.camera.nudgeX * 0.7;
+  const shakeY = Math.cos(state.tick * 0.9) * state.camera.shake * 0.3 + state.camera.nudgeY * 0.7;
+
+  ctx.save();
+  ctx.translate(shakeX, shakeY);
+  drawArena(ctx, state);
+  for (const object of state.arena.objects) {
+    drawArenaObject(ctx, object);
+  }
+  drawDustPuffs(ctx, state.dustPuffs);
   drawDebrisParticles(ctx, state.debrisParticles);
   for (const car of state.cars) {
     drawCar(ctx, car);
   }
   drawSmokePuffs(ctx, state.smokePuffs);
+  ctx.restore();
 
   drawHud(ctx, state);
+  drawEventFeed(ctx, state.events);
 
-  if (state.mode === "menu") {
-    drawMenuOverlay(ctx, state.arena.width, state.arena.height);
-  } else if (state.mode === "finished") {
-    drawFinishOverlay(ctx, state);
+  if (state.mode === "intro") {
+    drawIntroOverlay(ctx, state);
+  } else if (state.mode !== "running") {
+    drawNonRunningOverlay(ctx, state.arena.width, state.arena.height);
   }
 }

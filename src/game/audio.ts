@@ -31,9 +31,15 @@ export class AudioManager {
 
   private noiseBuffer: AudioBuffer | null = null;
 
+  private skidGain: GainNode | null = null;
+
+  private skidFilter: BiquadFilterNode | null = null;
+
   private crashCooldownTicks = 0;
 
   private lastMode: GameState["mode"] = "menu";
+
+  private lastIntroCount = 0;
 
   async ensureStarted(): Promise<void> {
     const AudioCtor = (window.AudioContext ||
@@ -74,11 +80,22 @@ export class AudioManager {
       this.engineNoiseFilter.connect(this.engineNoiseGain);
       this.engineNoiseGain.connect(this.master);
 
+      this.skidFilter = this.ctx.createBiquadFilter();
+      this.skidFilter.type = "bandpass";
+      this.skidFilter.frequency.value = 1600;
+      this.skidFilter.Q.value = 1.2;
+
+      this.skidGain = this.ctx.createGain();
+      this.skidGain.gain.value = 0;
+      this.skidFilter.connect(this.skidGain);
+      this.skidGain.connect(this.master);
+
       this.noiseBuffer = createNoiseBuffer(this.ctx);
       const noiseLoop = this.ctx.createBufferSource();
       noiseLoop.buffer = this.noiseBuffer;
       noiseLoop.loop = true;
       noiseLoop.connect(this.engineNoiseFilter);
+      noiseLoop.connect(this.skidFilter);
       noiseLoop.start();
     }
 
@@ -88,7 +105,7 @@ export class AudioManager {
   }
 
   update(state: GameState): void {
-    if (!this.ctx || !this.engineGain || !this.engineOsc || !this.engineSub || !this.engineNoiseGain || !this.engineNoiseFilter) {
+    if (!this.ctx || !this.engineGain || !this.engineOsc || !this.engineSub || !this.engineNoiseGain || !this.engineNoiseFilter || !this.skidGain || !this.skidFilter) {
       return;
     }
 
@@ -104,32 +121,51 @@ export class AudioManager {
     const transmission = player.systems.transmission;
     const now = this.ctx.currentTime;
     const finishedThisFrame = this.lastMode !== "finished" && state.mode === "finished";
+    const roughness = clamp((0.78 - health) / 0.4 + player.systems.overheat * 0.4, 0, 1);
 
     const enginePitch = 48 + speed * 0.55 + throttle * 28;
     const healthColor = 0.72 + health * 0.42;
-    this.engineOsc.frequency.linearRampToValueAtTime(enginePitch * healthColor, now + 0.05);
-    this.engineSub.frequency.linearRampToValueAtTime((enginePitch * 0.48) * transmission, now + 0.05);
+    const wobble = Math.sin(state.elapsed * (6 + roughness * 12)) * roughness * 7;
+    this.engineOsc.frequency.linearRampToValueAtTime((enginePitch + wobble) * healthColor * player.engineTone, now + 0.05);
+    this.engineSub.frequency.linearRampToValueAtTime((enginePitch * 0.48 - roughness * 8) * transmission * player.engineTone, now + 0.05);
     this.engineNoiseFilter.frequency.linearRampToValueAtTime(
-      280 + speed * 4.2 + throttle * 180,
+      280 + speed * 4.2 + throttle * 180 + roughness * 260,
       now + 0.05,
     );
 
     const engineLevel = active
-      ? clamp(0.015 + throttle * 0.045 + speed / player.forwardMaxSpeed * 0.06, 0, 0.12)
+      ? clamp(0.015 + throttle * 0.045 + speed / player.forwardMaxSpeed * 0.06 + roughness * 0.016, 0, 0.13)
       : 0;
     const rumbleLevel = active
-      ? clamp(0.01 + throttle * 0.018 + speed / player.forwardMaxSpeed * 0.02, 0, 0.05)
+      ? clamp(0.01 + throttle * 0.018 + speed / player.forwardMaxSpeed * 0.02 + roughness * 0.012, 0, 0.06)
       : 0;
     this.engineGain.gain.linearRampToValueAtTime(engineLevel, now + 0.06);
     this.engineNoiseGain.gain.linearRampToValueAtTime(rumbleLevel, now + 0.06);
+
+    const skidLevel =
+      active && speed > 35
+        ? clamp((player.slipAmount - 12) / 65, 0, 0.07)
+        : 0;
+    this.skidFilter.frequency.linearRampToValueAtTime(1200 + player.slipAmount * 18, now + 0.04);
+    this.skidGain.gain.linearRampToValueAtTime(skidLevel, now + 0.04);
 
     this.crashCooldownTicks = Math.max(0, this.crashCooldownTicks - 1);
     if (state.mode === "running" && state.recentCollisions.length > 0) {
       this.playCrashSounds(state.recentCollisions, state.cars);
     }
+    if (state.mode === "intro") {
+      const nextCount = Math.max(0, Math.ceil(state.session.countdown));
+      if (nextCount > 0 && nextCount !== this.lastIntroCount) {
+        this.playCountdownTone(now, nextCount === 1 ? 880 : 660);
+      }
+      this.lastIntroCount = nextCount;
+    } else {
+      this.lastIntroCount = 0;
+    }
     if (finishedThisFrame) {
       this.engineGain.gain.linearRampToValueAtTime(0, now + 0.05);
       this.engineNoiseGain.gain.linearRampToValueAtTime(0, now + 0.05);
+      this.skidGain.gain.linearRampToValueAtTime(0, now + 0.05);
       this.playFinishMelody(now, player.disabled ? "sad" : "happy");
     }
     this.lastMode = state.mode;
@@ -230,5 +266,22 @@ export class AudioManager {
       osc.start(now);
       osc.stop(now + (mood === "happy" ? 0.2 : 0.3));
     });
+  }
+
+  private playCountdownTone(startTime: number, frequency: number): void {
+    if (!this.ctx || !this.master) {
+      return;
+    }
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    osc.type = "triangle";
+    osc.frequency.setValueAtTime(frequency, startTime);
+    gain.gain.setValueAtTime(0.0001, startTime);
+    gain.gain.exponentialRampToValueAtTime(0.026, startTime + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.0001, startTime + 0.12);
+    osc.connect(gain);
+    gain.connect(this.master);
+    osc.start(startTime);
+    osc.stop(startTime + 0.14);
   }
 }

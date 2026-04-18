@@ -1,6 +1,6 @@
 import { applyImpactDamage, impactZoneForPoint, updateSubsystemWear } from "./damage";
 import { clamp, normalizeAngle } from "./math";
-import type { Car, CollisionEvent, Vec2 } from "./types";
+import type { ArenaObject, Car, CollisionEvent, GameState, MudZone, Vec2 } from "./types";
 
 function dot(a: Vec2, b: Vec2): number {
   return a.x * b.x + a.y * b.y;
@@ -91,20 +91,36 @@ function resolveWallResponse(
   car.angularVelocity *= 0.3;
 }
 
+function getGroundGrip(car: Car, mudZones: MudZone[]): number {
+  let grip = car.tractionBias;
+  for (const zone of mudZones) {
+    if (
+      car.x > zone.x &&
+      car.x < zone.x + zone.width &&
+      car.y > zone.y &&
+      car.y < zone.y + zone.height
+    ) {
+      grip = Math.min(grip, zone.grip * car.tractionBias);
+    }
+  }
+  return grip;
+}
+
 export function stepCar(
   car: Car,
   dt: number,
-  arenaWidth: number,
-  arenaHeight: number,
-  wallPadding: number,
+  arena: GameState["arena"],
+  mudZones: MudZone[],
 ): void {
-  updateSubsystemWear(car, dt);
+  const heatFactor = arena.modifier === "hot_engines" ? 1.45 : 1;
+  updateSubsystemWear(car, dt * heatFactor);
 
   const forwardX = Math.cos(car.angle);
   const forwardY = Math.sin(car.angle);
   const rightX = -forwardY;
   const rightY = forwardX;
   const forwardSpeed = car.vx * forwardX + car.vy * forwardY;
+  const groundGrip = getGroundGrip(car, mudZones);
 
   if (car.disabled) {
     car.controls.forward = 0;
@@ -112,15 +128,22 @@ export function stepCar(
     car.controls.steer = 0;
   }
 
-  const enginePower = car.engineForce * (0.35 + car.systems.engine * 0.65);
-  const reversePower = car.reverseForce * (0.25 + car.systems.transmission * 0.75);
+  const desiredDrive = car.controls.forward - car.controls.reverse;
+  const transmissionResponse = (3.2 + car.systems.transmission * 4.6) * car.steeringSharpness;
+  car.driveInput += (desiredDrive - car.driveInput) * dt * transmissionResponse;
+
+  const enginePower = car.engineForce * (0.32 + car.systems.engine * 0.68);
+  const reversePower = car.reverseForce * (0.2 + car.systems.transmission * 0.8);
   const wantsBrake =
     (car.controls.forward > 0 && car.controls.reverse > 0) ||
     (car.controls.forward > 0 && forwardSpeed < -8) ||
     (car.controls.reverse > 0 && forwardSpeed > 8);
   const throttleForce = wantsBrake
     ? 0
-    : car.controls.forward * enginePower - car.controls.reverse * reversePower;
+    : car.driveInput >= 0
+      ? car.driveInput * enginePower * clamp(groundGrip * 1.04, 0.72, 1.08)
+      : car.driveInput * reversePower * clamp(groundGrip * 1.08, 0.72, 1.12);
+
   const accelX = forwardX * throttleForce / car.mass;
   const accelY = forwardY * throttleForce / car.mass;
   car.vx += accelX * dt;
@@ -131,14 +154,14 @@ export function stepCar(
     car.vy -= forwardY * Math.sign(forwardSpeed) * brakeDelta;
   }
 
-  const drag = clamp(0.992 - car.body.front * 0.012, 0.978, 0.992);
+  const drag = clamp(0.992 - car.body.front * 0.014 + (1 - groundGrip) * 0.004, 0.97, 0.994);
   car.vx *= Math.pow(drag, dt * 60);
   car.vy *= Math.pow(drag, dt * 60);
 
-  const engineSpeedFactor = 0.55 + car.systems.engine * 0.45;
-  const transmissionFactor = 0.45 + car.systems.transmission * 0.55;
-  const forwardSpeedCap = car.forwardMaxSpeed * engineSpeedFactor;
-  const reverseSpeedCap = car.reverseMaxSpeed * engineSpeedFactor * transmissionFactor;
+  const engineSpeedFactor = 0.45 + car.systems.engine * 0.55;
+  const transmissionFactor = 0.32 + car.systems.transmission * 0.68;
+  const forwardSpeedCap = (car.forwardMaxSpeed * engineSpeedFactor) * clamp(groundGrip * 1.02, 0.78, 1.05);
+  const reverseSpeedCap = car.reverseMaxSpeed * engineSpeedFactor * transmissionFactor * clamp(groundGrip * 1.04, 0.8, 1.06);
   const postForceForwardSpeed = car.vx * forwardX + car.vy * forwardY;
   let cappedForwardSpeed = postForceForwardSpeed;
   if (cappedForwardSpeed > forwardSpeedCap) {
@@ -155,14 +178,15 @@ export function stepCar(
 
   const correctedForwardSpeed = car.vx * forwardX + car.vy * forwardY;
   const correctedLateralSpeed = car.vx * rightX + car.vy * rightY;
-  const lateralGrip = 0.82 + car.systems.steering * 0.14;
+  car.slipAmount = Math.abs(correctedLateralSpeed);
+  const lateralGrip = clamp((0.72 + car.systems.steering * 0.19) * groundGrip, 0.44, 0.98);
   const lateralReduction = correctedLateralSpeed * (1 - Math.pow(lateralGrip, dt * 60));
   car.vx -= rightX * lateralReduction;
   car.vy -= rightY * lateralReduction;
 
-  const maxSteerAngle = 0.62 * (0.45 + car.systems.steering * 0.55);
+  const maxSteerAngle = 0.62 * (0.42 + car.systems.steering * 0.58) * car.steeringSharpness;
   car.steerAngleTarget = clamp(car.controls.steer, -1, 1) * maxSteerAngle;
-  const steerResponse = 4.1 + car.systems.steering * 2.6;
+  const steerResponse = (3.4 + car.systems.steering * 3.4) * car.steeringSharpness;
   car.steerAngle += (car.steerAngleTarget - car.steerAngle) * dt * steerResponse;
 
   const turnSpeedThreshold = 16;
@@ -172,7 +196,11 @@ export function stepCar(
     car.angle = normalizeAngle(car.angle + clamp(headingRate, -2.1, 2.1) * dt);
   }
 
-  car.angularVelocity *= Math.pow(0.92, dt * 60);
+  const steeringPull =
+    (car.body.left - car.body.right) * (1 - car.systems.steering) * 1.15 +
+    (car.body.front * 0.22) * Math.sign(correctedForwardSpeed || 1);
+  car.angularVelocity += steeringPull * dt * 0.45;
+  car.angularVelocity *= Math.pow(0.91, dt * 60);
   car.angle = normalizeAngle(car.angle + car.angularVelocity * dt);
 
   car.x += car.vx * dt;
@@ -180,12 +208,10 @@ export function stepCar(
 
   const halfLength = car.length * 0.5;
   const halfWidth = car.width * 0.5;
-  const wall = arenaWidth;
-  const floor = arenaHeight;
-  const xMin = halfLength + wallPadding;
-  const xMax = wall - halfLength - wallPadding;
-  const yMin = halfWidth + wallPadding;
-  const yMax = floor - halfWidth - wallPadding;
+  const xMin = halfLength + arena.wallPadding;
+  const xMax = arena.width - halfLength - arena.wallPadding;
+  const yMin = halfWidth + arena.wallPadding;
+  const yMax = arena.height - halfWidth - arena.wallPadding;
 
   if (car.x < xMin) {
     car.x = xMin;
@@ -202,6 +228,89 @@ export function stepCar(
     car.y = yMax;
     resolveWallResponse(car, { x: 0, y: -1 }, { x: 1, y: 0 }, Math.max(0, car.vy));
   }
+}
+
+export function stepArenaObjects(
+  objects: ArenaObject[],
+  dt: number,
+  arena: GameState["arena"],
+): void {
+  for (const object of objects) {
+    object.x += object.vx * dt;
+    object.y += object.vy * dt;
+    object.vx *= Math.pow(0.972, dt * 60);
+    object.vy *= Math.pow(0.972, dt * 60);
+    object.rotation += object.spin * dt;
+    object.spin *= Math.pow(0.93, dt * 60);
+
+    const minX = arena.wallPadding + object.radius;
+    const maxX = arena.width - arena.wallPadding - object.radius;
+    const minY = arena.wallPadding + object.radius;
+    const maxY = arena.height - arena.wallPadding - object.radius;
+
+    if (object.x < minX) {
+      object.x = minX;
+      object.vx = Math.abs(object.vx) * 0.55;
+    } else if (object.x > maxX) {
+      object.x = maxX;
+      object.vx = -Math.abs(object.vx) * 0.55;
+    }
+    if (object.y < minY) {
+      object.y = minY;
+      object.vy = Math.abs(object.vy) * 0.55;
+    } else if (object.y > maxY) {
+      object.y = maxY;
+      object.vy = -Math.abs(object.vy) * 0.55;
+    }
+  }
+}
+
+export function resolveArenaObjectInteractions(
+  cars: Car[],
+  objects: ArenaObject[],
+  arena: GameState["arena"],
+): void {
+  for (const car of cars) {
+    const [forward, right] = getAxes(car);
+    const halfLength = car.length * 0.5;
+    const halfWidth = car.width * 0.5;
+    for (const object of objects) {
+      const localX = (object.x - car.x) * forward.x + (object.y - car.y) * forward.y;
+      const localY = (object.x - car.x) * right.x + (object.y - car.y) * right.y;
+      const closestX = clamp(localX, -halfLength, halfLength);
+      const closestY = clamp(localY, -halfWidth, halfWidth);
+      const dx = localX - closestX;
+      const dy = localY - closestY;
+      const distance = Math.hypot(dx, dy);
+      if (distance >= object.radius || distance === 0) {
+        continue;
+      }
+
+      const worldNormal = normalize({
+        x: forward.x * dx + right.x * dy,
+        y: forward.y * dx + right.y * dy,
+      });
+      const overlap = object.radius - distance;
+      car.x -= worldNormal.x * overlap * 0.3;
+      car.y -= worldNormal.y * overlap * 0.3;
+      object.x += worldNormal.x * overlap * 0.7;
+      object.y += worldNormal.y * overlap * 0.7;
+
+      const relativeVelocity = {
+        x: car.vx - object.vx,
+        y: car.vy - object.vy,
+      };
+      const normalSpeed = dot(relativeVelocity, worldNormal);
+      if (normalSpeed > 0) {
+        object.vx += worldNormal.x * normalSpeed * 0.9;
+        object.vy += worldNormal.y * normalSpeed * 0.9;
+        car.vx -= worldNormal.x * normalSpeed * 0.18;
+        car.vy -= worldNormal.y * normalSpeed * 0.18;
+        object.spin += normalSpeed * 0.01 * (object.kind === "tire" ? 1.4 : 0.8);
+      }
+    }
+  }
+  stepArenaObjects(objects, 0, arena);
 }
 
 export function resolveCarCollisions(cars: Car[]): CollisionEvent[] {
