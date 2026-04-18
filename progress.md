@@ -41,6 +41,13 @@ Latest validation
 - `render_game_to_text()` in preview mode reports the expected preset/scenario payload.
 - Car-select UI was checked in-browser and the square choice cards fit their text cleanly.
 - A direct Playwright camera probe confirmed a huge-hit event can occur while low-severity follow-up frames no longer retain meaningful camera shake (`lowAfterHuge: null`).
+- Thermal and damage retune pass validated through direct module probes on the Vite dev server:
+- `hot_engines` idle heat stayed around `0.38` after five seconds from a `0.4` start instead of collapsing toward zero
+- a damaged radiator under sustained throttle reached `overheat: 1`
+- a healthy car still cooled from `0.5` to about `0.39` over eight seconds off-throttle in a normal round
+- front-hit damage now separates medium and extreme impacts again (`damageSeverity` about `0.56` vs `1`)
+- front-into-rear hits are now much softer on the striker (`engine` about `0.99` after a 100-speed rear-end hit, `0.92` at 180-speed)
+- Preview screenshots were rechecked after the decal pass; the number now sits on the roof-center panel and is no longer covered by the windshield/cabin art.
 
 Remaining roadmap
 - Only deferred items remain in `ROADMAP.md`: replay/highlight work and a light long-term meta layer.

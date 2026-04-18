@@ -263,20 +263,24 @@ function traceCarBodyPath(ctx: CanvasRenderingContext2D, car: Car): void {
   ctx.roundRect(-car.length * 0.49, -car.width * 0.48, car.length * 0.98, car.width * 0.96, 16);
 }
 
-function drawHoodNumberDecal(ctx: CanvasRenderingContext2D, car: Car): void {
-  const decalX = car.length * 0.14;
+function traceRoofPanelPath(ctx: CanvasRenderingContext2D): void {
+  ctx.beginPath();
+  ctx.roundRect(-12, -17, 24, 34, 9);
+}
+
+function drawRoofNumberDecal(ctx: CanvasRenderingContext2D, car: Car): void {
   const fontSize = Math.max(12, Math.min(18, car.length * 0.18));
   ctx.save();
-  traceCarBodyPath(ctx, car);
+  traceRoofPanelPath(ctx);
   ctx.clip();
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   ctx.font = `700 ${fontSize}px 'Trebuchet MS', sans-serif`;
   ctx.lineWidth = Math.max(2.6, fontSize * 0.22);
-  ctx.strokeStyle = "rgba(28, 18, 12, 0.68)";
-  ctx.fillStyle = car.disabled ? "rgba(203, 194, 180, 0.72)" : "rgba(250, 242, 228, 0.88)";
-  ctx.strokeText(car.roofNumber, decalX, 0);
-  ctx.fillText(car.roofNumber, decalX, 0);
+  ctx.strokeStyle = "rgba(74, 48, 28, 0.42)";
+  ctx.fillStyle = car.disabled ? "rgba(182, 171, 157, 0.8)" : "rgba(246, 236, 220, 0.9)";
+  ctx.strokeText(car.roofNumber, 0, 0);
+  ctx.fillText(car.roofNumber, 0, 0);
   ctx.restore();
 }
 
@@ -390,24 +394,21 @@ export function drawCar(
   traceCarBodyPath(ctx, car);
   ctx.fill();
 
-  drawHoodNumberDecal(ctx, car);
-
   ctx.fillStyle =
     car.phases.engine === "critical" || car.disabled
       ? "rgba(88, 82, 78, 0.88)"
       : "rgba(248, 232, 213, 0.82)";
-  ctx.beginPath();
-  ctx.roundRect(-8, -18, 28, 36, 10);
+  traceRoofPanelPath(ctx);
   ctx.fill();
 
   ctx.fillStyle = car.disabled ? "#60544e" : "#2b1910";
   ctx.beginPath();
-  ctx.roundRect(18, -18, 16, 36, 7);
+  ctx.roundRect(16, -18, 18, 36, 7);
   ctx.fill();
 
   ctx.fillStyle = "rgba(255, 244, 233, 0.35)";
   ctx.beginPath();
-  ctx.roundRect(-5, -16, 11, 32, 5);
+  ctx.roundRect(-7, -15, 7, 30, 4);
   ctx.fill();
 
   ctx.strokeStyle = car.disabled ? "#3a3430" : "rgba(30, 17, 10, 0.78)";
@@ -416,6 +417,7 @@ export function drawCar(
   ctx.stroke();
 
   drawDamageScrapes(ctx, car);
+  drawRoofNumberDecal(ctx, car);
   drawFrontWheels(ctx, car);
 
   drawLight(ctx, 36, -15, car.lights.frontLeft, "#ffe9ac");

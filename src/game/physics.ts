@@ -74,6 +74,16 @@ function overlapAmount(a: { min: number; max: number }, b: { min: number; max: n
   return Math.min(a.max, b.max) - Math.max(a.min, b.min);
 }
 
+function damageScaleForZones(selfZone: ReturnType<typeof impactZoneForPoint>, otherZone: ReturnType<typeof impactZoneForPoint>): number {
+  if (selfZone === "front" && otherZone === "rear") {
+    return 0.38;
+  }
+  if (selfZone === "rear" && otherZone === "front") {
+    return 0.2;
+  }
+  return 1;
+}
+
 function resolveWallResponse(
   car: Car,
   inwardNormal: Vec2,
@@ -112,8 +122,7 @@ export function stepCar(
   arena: GameState["arena"],
   mudZones: MudZone[],
 ): void {
-  const heatFactor = arena.modifier === "hot_engines" ? 1.45 : 1;
-  updateSubsystemWear(car, dt * heatFactor);
+  updateSubsystemWear(car, dt, arena.modifier);
 
   const forwardX = Math.cos(car.angle);
   const forwardY = Math.sin(car.angle);
@@ -396,16 +405,33 @@ export function resolveCarCollisions(cars: Car[]): CollisionEvent[] {
           (zoneA === "rear" ? 0.06 : 0) +
           (zoneB === "rear" ? 0.06 : 0);
         const severity = clamp((closingSpeed - 10) / 85 + frontClipBonus, 0, 1);
-        const damageSeverityBase = clamp((closingSpeed - 42) / 66, 0, 1);
-        const damageSeverity = damageSeverityBase * damageSeverityBase;
+        const damageSeverityBase = clamp((closingSpeed - 42) / 155, 0, 1);
+        const damageSeverity =
+          damageSeverityBase <= 0
+            ? 0
+            : clamp(
+                Math.pow(damageSeverityBase, 2.2) * (0.7 + Math.pow(damageSeverityBase, 1.35) * 1.55),
+                0,
+                1,
+              );
         if (severity > 0) {
           const point = {
             x: (pointOnA.x + pointOnB.x) * 0.5,
             y: (pointOnA.y + pointOnB.y) * 0.5,
           };
           if (damageSeverity > 0) {
-            applyImpactDamage(a, pointOnA, damageSeverity, { x: -normal.x, y: -normal.y });
-            applyImpactDamage(b, pointOnB, damageSeverity, normal);
+            applyImpactDamage(
+              a,
+              pointOnA,
+              damageSeverity * damageScaleForZones(zoneA, zoneB),
+              { x: -normal.x, y: -normal.y },
+            );
+            applyImpactDamage(
+              b,
+              pointOnB,
+              damageSeverity * damageScaleForZones(zoneB, zoneA),
+              normal,
+            );
           }
           collisions.push({
             aId: a.id,

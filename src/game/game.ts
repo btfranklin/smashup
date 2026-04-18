@@ -11,7 +11,7 @@ import {
   getArenaObjects,
   getModifierSummary,
 } from "./content";
-import { getCarSystemPhases, getEngineHealth } from "./damage";
+import { getCarSystemPhases, getEngineHealth, getKnockoutCause } from "./damage";
 import { getRecentDebrisSummary, spawnImpactDebris, updateDebrisEffects } from "./debris";
 import { spawnCollisionDust, spawnSlipDust, updateDustEffects } from "./dust";
 import { signedSpeedForCar } from "./math";
@@ -290,25 +290,28 @@ function resetRoundStats(state: GameState): void {
 }
 
 function getKnockoutReason(car: Car): string {
-  if (car.systems.overheat >= 1) {
-    return "Engine Heat";
-  }
-  const ordered: Array<[SystemName, number]> = [
-    ["engine", car.systems.engine],
-    ["radiator", car.systems.radiator],
-    ["transmission", car.systems.transmission],
-    ["steering", car.systems.steering],
-  ].sort((a, b) => a[1] - b[1]);
-  const weakest = ordered[0][0];
-  switch (weakest) {
-    case "engine":
+  const cause = getKnockoutCause(car);
+  switch (cause) {
+    case "engine_fire":
+      return "Engine Heat";
+    case "engine_failure":
       return "Engine Failure";
-    case "radiator":
+    case "radiator_failure":
       return "Radiator Gone";
-    case "transmission":
-      return "Transmission Gone";
-    case "steering":
-      return "Steering Folded";
+    case "catastrophic_front_hit":
+      return "Front End Wrecked";
+    case "body_collapse":
+      return "Body Folded";
+    default: {
+      const ordered: Array<[SystemName, number]> = [
+        ["engine", car.systems.engine],
+        ["radiator", car.systems.radiator],
+        ["transmission", car.systems.transmission],
+        ["steering", car.systems.steering],
+      ].sort((a, b) => a[1] - b[1]);
+      const weakest = ordered[0][0];
+      return weakest === "steering" ? "Steering Folded" : "Engine Failure";
+    }
   }
 }
 
@@ -451,7 +454,7 @@ function prepareRound(state: GameState, roundIndex: number): void {
 
   if (roundPlan.modifier === "hot_engines") {
     for (const car of state.cars) {
-      car.systems.overheat = 0.12;
+      car.systems.overheat = 0.4;
     }
   }
   if (roundPlan.modifier === "lights_out") {
@@ -546,7 +549,10 @@ function registerCollisionDrama(state: GameState): void {
   if (playerInvolved && strongest.severity >= 0.94) {
     state.camera.freezeTime = Math.max(state.camera.freezeTime, 0.02);
   }
-  if (strongest.severity > 0.82) {
+  const strongestA = getCarById(state, strongest.aId);
+  const strongestB = getCarById(state, strongest.bId);
+  const hasDisabledParticipant = Boolean(strongestA?.disabled || strongestB?.disabled);
+  if (strongest.severity > 0.82 && !hasDisabledParticipant) {
     pushEvent(state, "Huge Hit!", "impact", strongest.severity, 1.2);
   }
 }
