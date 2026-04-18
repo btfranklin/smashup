@@ -25,14 +25,18 @@ Visual and polish rules that matter
 - Multi-option selection screens use square choice cards; the single primary CTA buttons stay pill-shaped.
 
 Developer/testing surfaces
-- Hidden preview endpoint: `/?preview=car&preset=<bulldozer|darter|backstab>&scenario=<pristine|front_light|front_heavy|left_heavy|rear_heavy|critical|disabled>`
+- Hidden preview endpoint: `/?preview=car&preset=<id>&scenario=<id>`
+- Valid preview ids are defined in `src/game/content.ts` via `CAR_PRESET_IDS` and `CAR_PREVIEW_SCENARIO_IDS`.
 - Preview mode returns `mode: "car_preview"` from `render_game_to_text()` with preset/scenario and visible car state.
+- Validation entrypoint: `npm run validate` runs the production build plus Playwright smoke coverage for preview contracts, invalid preview failures, runtime hooks, and audio transition logic.
 
 Useful files
-- `src/game/game.ts`: state flow, camera/event logic, preview-state creation, text-state output
+- `src/game/session.ts`: state setup, round progression, car factory, preview-state creation
+- `src/game/runtime.ts`: per-frame advancement, event feed, camera, eliminations, round transitions
+- `src/game/debug.ts`: `render_game_to_text()` payload generation
 - `src/game/render.ts`: car art, damage overlays, preview rendering, HUD
-- `src/main.ts`: menu flow, query-param preview entry, browser hooks
-- `src/game/content.ts`: presets, rounds, upgrades, preview scenarios
+- `src/main.ts`: menu flow, preview parsing, startup error handling, browser hooks
+- `src/game/content.ts`: presets, rounds, upgrades, preview scenarios, preview id helpers
 - `src/game/physics.ts`, `src/game/damage.ts`, `src/game/ai.ts`: gameplay tuning
 
 Latest validation
@@ -52,6 +56,19 @@ Latest validation
 - healthy off-throttle cooling now drops `overheat` from `0.5` to about `0.248` over eight seconds in a normal round
 - `hot_engines` still stays elevated at about `0.38` after five idle seconds from a `0.4` start
 - damaged-radiator sustained throttle in `hot_engines` still reaches terminal overheat
+- Preview contract is now sourced from `CAR_PRESET_IDS` and `CAR_PREVIEW_SCENARIO_IDS`; invalid preview ids render a visible startup error instead of coercing to defaults.
+- Runtime logic is split across `src/game/session.ts`, `src/game/runtime.ts`, and `src/game/debug.ts`; shared condition helpers live in `src/game/conditions.ts`.
+- End-of-round audio cues now key off the real `running -> round_results` transition through `src/game/audioTransitions.ts`.
+- `npm run validate` passes and covers:
+- preview matrix alignment against source ids
+- invalid preview startup failures
+- runtime hook availability through tournament start flow
+- deterministic audio transition cue selection
+- Agent-legibility pass added:
+- `AGENTS.md` as a short repo map
+- indexed `docs/` system of record for architecture, operations, quality, validation surfaces, and audit notes
+- `scripts/check-repo-legibility.mjs` plus `npm run check:repo`
+- `npm run validate` now includes the repo legibility check before build + browser smoke coverage
 
 Remaining roadmap
 - Only deferred items remain in `ROADMAP.md`: replay/highlight work and a light long-term meta layer.

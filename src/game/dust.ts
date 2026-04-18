@@ -33,7 +33,9 @@ export function updateDustEffects(state: GameState, dt: number): void {
     puff.vy *= Math.pow(0.96, dt * 60);
     puff.age += dt;
   }
-  state.dustPuffs = state.dustPuffs.filter((puff) => puff.age < puff.ttl).slice(-180);
+  state.dustPuffs = state.dustPuffs
+    .filter((puff) => puff.age < puff.ttl)
+    .slice(-180);
 }
 
 export function spawnCollisionDust(state: GameState): void {
@@ -43,14 +45,20 @@ export function spawnCollisionDust(state: GameState): void {
     }
     const burstCount = collision.severity > 0.72 ? 4 : 2;
     for (let i = 0; i < burstCount; i += 1) {
-      const seed = collision.point.x * 0.07 + collision.point.y * 0.11 + i * 17 + state.tick;
+      const seed =
+        collision.point.x * 0.07 +
+        collision.point.y * 0.11 +
+        i * 17 +
+        state.tick;
       state.dustPuffs.push(
         createDustPuff(
           state,
           collision.point.x + (pseudoRandom(seed + 1) - 0.5) * 12,
           collision.point.y + (pseudoRandom(seed + 2) - 0.5) * 12,
-          collision.normal.x * 24 * collision.severity + (pseudoRandom(seed + 3) - 0.5) * 32,
-          collision.normal.y * 24 * collision.severity + (pseudoRandom(seed + 4) - 0.5) * 32,
+          collision.normal.x * 24 * collision.severity +
+            (pseudoRandom(seed + 3) - 0.5) * 32,
+          collision.normal.y * 24 * collision.severity +
+            (pseudoRandom(seed + 4) - 0.5) * 32,
           8 + collision.severity * 12,
           0.24 + collision.severity * 0.28,
           0.8 + pseudoRandom(seed + 5) * 0.2,
@@ -60,7 +68,13 @@ export function spawnCollisionDust(state: GameState): void {
   }
 }
 
-function spawnWheelDust(state: GameState, car: Car, wheelX: number, wheelY: number, bias: number): void {
+function spawnWheelDust(
+  state: GameState,
+  car: Car,
+  wheelX: number,
+  wheelY: number,
+  bias: number,
+): void {
   const forwardX = Math.cos(car.angle);
   const forwardY = Math.sin(car.angle);
   const rightX = -forwardY;

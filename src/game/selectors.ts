@@ -1,6 +1,9 @@
 import type { Car, GameState } from "./types";
 
-export function getCarById(state: GameState, id: number | null): Car | undefined {
+export function getCarById(
+  state: GameState,
+  id: number | null,
+): Car | undefined {
   if (id === null) {
     return undefined;
   }

@@ -19,7 +19,9 @@ export function normalizeAngle(angle: number): number {
   return result;
 }
 
-export function signedSpeedForCar(car: Pick<Car, "vx" | "vy" | "angle">): number {
+export function signedSpeedForCar(
+  car: Pick<Car, "vx" | "vy" | "angle">,
+): number {
   return car.vx * Math.cos(car.angle) + car.vy * Math.sin(car.angle);
 }
 

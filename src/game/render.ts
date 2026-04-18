@@ -1,5 +1,10 @@
 import { getModifierSummary } from "./content";
-import { getActiveCars, getOutlastedDriverLabels, getPlayerCar, getWinnerCar } from "./selectors";
+import {
+  getActiveCars,
+  getOutlastedDriverLabels,
+  getPlayerCar,
+  getWinnerCar,
+} from "./selectors";
 import type {
   ArenaObject,
   Car,
@@ -44,10 +49,18 @@ function drawMeter(
   ctx.fillRect(x, y + 6, Math.max(0, Math.min(width, width * value)), 9);
 }
 
-function drawMudZones(ctx: CanvasRenderingContext2D, mudZones: MudZone[]): void {
+function drawMudZones(
+  ctx: CanvasRenderingContext2D,
+  mudZones: MudZone[],
+): void {
   ctx.save();
   for (const zone of mudZones) {
-    const gradient = ctx.createLinearGradient(zone.x, zone.y, zone.x + zone.width, zone.y + zone.height);
+    const gradient = ctx.createLinearGradient(
+      zone.x,
+      zone.y,
+      zone.x + zone.width,
+      zone.y + zone.height,
+    );
     gradient.addColorStop(0, "rgba(118, 79, 42, 0.32)");
     gradient.addColorStop(1, "rgba(74, 48, 22, 0.4)");
     ctx.fillStyle = gradient;
@@ -61,10 +74,7 @@ function drawMudZones(ctx: CanvasRenderingContext2D, mudZones: MudZone[]): void 
   ctx.restore();
 }
 
-function drawArena(
-  ctx: CanvasRenderingContext2D,
-  state: GameState,
-): void {
+function drawArena(ctx: CanvasRenderingContext2D, state: GameState): void {
   const { width, height, wallPadding, mudZones, variant } = state.arena;
   const dirt = ctx.createLinearGradient(0, 0, 0, height);
   dirt.addColorStop(0, variant === "junkyard" ? "#d5a15d" : "#d8ad65");
@@ -114,7 +124,10 @@ function drawArena(
   ctx.restore();
 }
 
-function drawArenaObject(ctx: CanvasRenderingContext2D, object: ArenaObject): void {
+function drawArenaObject(
+  ctx: CanvasRenderingContext2D,
+  object: ArenaObject,
+): void {
   ctx.save();
   ctx.translate(object.x, object.y);
   ctx.rotate(object.rotation);
@@ -133,10 +146,21 @@ function drawArenaObject(ctx: CanvasRenderingContext2D, object: ArenaObject): vo
   } else {
     ctx.fillStyle = "#6c5a4a";
     ctx.beginPath();
-    ctx.roundRect(-object.radius * 1.2, -object.radius * 0.8, object.radius * 2.4, object.radius * 1.6, 8);
+    ctx.roundRect(
+      -object.radius * 1.2,
+      -object.radius * 0.8,
+      object.radius * 2.4,
+      object.radius * 1.6,
+      8,
+    );
     ctx.fill();
     ctx.fillStyle = "rgba(198, 164, 114, 0.5)";
-    ctx.fillRect(-object.radius * 0.5, -object.radius * 0.22, object.radius * 1.1, object.radius * 0.44);
+    ctx.fillRect(
+      -object.radius * 0.5,
+      -object.radius * 0.22,
+      object.radius * 1.1,
+      object.radius * 0.44,
+    );
   }
   ctx.restore();
 }
@@ -163,7 +187,10 @@ function drawLight(
   ctx.restore();
 }
 
-function drawSmokePuffs(ctx: CanvasRenderingContext2D, puffs: SmokePuff[]): void {
+function drawSmokePuffs(
+  ctx: CanvasRenderingContext2D,
+  puffs: SmokePuff[],
+): void {
   if (puffs.length === 0) {
     return;
   }
@@ -205,20 +232,41 @@ function drawSmokePuffs(ctx: CanvasRenderingContext2D, puffs: SmokePuff[]): void
         puff.y,
         Math.max(flameRadius, 1),
       );
-      flameGradient.addColorStop(0, `rgba(255, 244, 186, ${life * puff.flame * 0.95})`);
-      flameGradient.addColorStop(0.34, `rgba(255, 170, 64, ${life * puff.flame * 0.88})`);
-      flameGradient.addColorStop(0.68, `rgba(214, 78, 22, ${life * puff.flame * 0.62})`);
-      flameGradient.addColorStop(1, `rgba(28, 18, 16, ${life * puff.flame * 0.1})`);
+      flameGradient.addColorStop(
+        0,
+        `rgba(255, 244, 186, ${life * puff.flame * 0.95})`,
+      );
+      flameGradient.addColorStop(
+        0.34,
+        `rgba(255, 170, 64, ${life * puff.flame * 0.88})`,
+      );
+      flameGradient.addColorStop(
+        0.68,
+        `rgba(214, 78, 22, ${life * puff.flame * 0.62})`,
+      );
+      flameGradient.addColorStop(
+        1,
+        `rgba(28, 18, 16, ${life * puff.flame * 0.1})`,
+      );
       ctx.fillStyle = flameGradient;
       ctx.beginPath();
-      ctx.arc(puff.x - radius * 0.06, puff.y - radius * 0.1, flameRadius, 0, Math.PI * 2);
+      ctx.arc(
+        puff.x - radius * 0.06,
+        puff.y - radius * 0.1,
+        flameRadius,
+        0,
+        Math.PI * 2,
+      );
       ctx.fill();
     }
   }
   ctx.restore();
 }
 
-function drawDebrisParticles(ctx: CanvasRenderingContext2D, particles: DebrisParticle[]): void {
+function drawDebrisParticles(
+  ctx: CanvasRenderingContext2D,
+  particles: DebrisParticle[],
+): void {
   if (particles.length === 0) {
     return;
   }
@@ -231,7 +279,12 @@ function drawDebrisParticles(ctx: CanvasRenderingContext2D, particles: DebrisPar
     ctx.translate(particle.x, particle.y);
     ctx.rotate(particle.rotation);
     ctx.fillStyle = `rgba(72, 64, 54, ${alpha})`;
-    ctx.fillRect(-particle.size * 0.6, -particle.size * 0.35, particle.size * 1.2, particle.size * 0.7);
+    ctx.fillRect(
+      -particle.size * 0.6,
+      -particle.size * 0.35,
+      particle.size * 1.2,
+      particle.size * 0.7,
+    );
     ctx.fillStyle = `rgba(182, 154, 112, ${alpha * particle.tone})`;
     ctx.beginPath();
     ctx.arc(0, 0, particle.size * 0.45, 0, Math.PI * 2);
@@ -260,7 +313,13 @@ function drawDustPuffs(ctx: CanvasRenderingContext2D, puffs: DustPuff[]): void {
 
 function traceCarBodyPath(ctx: CanvasRenderingContext2D, car: Car): void {
   ctx.beginPath();
-  ctx.roundRect(-car.length * 0.49, -car.width * 0.48, car.length * 0.98, car.width * 0.96, 16);
+  ctx.roundRect(
+    -car.length * 0.49,
+    -car.width * 0.48,
+    car.length * 0.98,
+    car.width * 0.96,
+    16,
+  );
 }
 
 function traceRoofPanelPath(ctx: CanvasRenderingContext2D): void {
@@ -278,7 +337,9 @@ function drawRoofNumberDecal(ctx: CanvasRenderingContext2D, car: Car): void {
   ctx.font = `700 ${fontSize}px 'Trebuchet MS', sans-serif`;
   ctx.lineWidth = Math.max(2.6, fontSize * 0.22);
   ctx.strokeStyle = "rgba(74, 48, 28, 0.42)";
-  ctx.fillStyle = car.disabled ? "rgba(182, 171, 157, 0.8)" : "rgba(246, 236, 220, 0.9)";
+  ctx.fillStyle = car.disabled
+    ? "rgba(182, 171, 157, 0.8)"
+    : "rgba(246, 236, 220, 0.9)";
   ctx.strokeText(car.roofNumber, 0, 0);
   ctx.fillText(car.roofNumber, 0, 0);
   ctx.restore();
@@ -344,7 +405,12 @@ function drawDamageScrapes(ctx: CanvasRenderingContext2D, car: Car): void {
   if (car.body.right > 0.08) {
     const band = 6 + car.body.right * 10;
     ctx.fillStyle = `rgba(30, 22, 16, ${0.1 + car.body.right * 0.16})`;
-    ctx.fillRect(-halfLength + 10, halfWidth - band - 2, car.length - 20, band + 4);
+    ctx.fillRect(
+      -halfLength + 10,
+      halfWidth - band - 2,
+      car.length - 20,
+      band + 4,
+    );
     ctx.beginPath();
     ctx.moveTo(-18, halfWidth - 7);
     ctx.lineTo(18, halfWidth - band + 1);
@@ -366,7 +432,12 @@ function drawFrontWheels(ctx: CanvasRenderingContext2D, car: Car): void {
     ctx.save();
     ctx.translate(wheelX, wheelY * side);
     ctx.rotate(car.steerAngle * 0.9);
-    ctx.fillRect(-wheelWidth * 0.5, -wheelHeight * 0.5, wheelWidth, wheelHeight);
+    ctx.fillRect(
+      -wheelWidth * 0.5,
+      -wheelHeight * 0.5,
+      wheelWidth,
+      wheelHeight,
+    );
     ctx.restore();
   }
 
@@ -434,7 +505,11 @@ export function drawCar(
   ctx.restore();
 }
 
-function drawPreviewBackground(ctx: CanvasRenderingContext2D, width: number, height: number): void {
+function drawPreviewBackground(
+  ctx: CanvasRenderingContext2D,
+  width: number,
+  height: number,
+): void {
   const background = ctx.createLinearGradient(0, 0, 0, height);
   background.addColorStop(0, "#efe5d4");
   background.addColorStop(1, "#c6b090");
@@ -463,22 +538,67 @@ function drawHud(ctx: CanvasRenderingContext2D, state: GameState): void {
 
   ctx.fillStyle = "#fff6da";
   ctx.font = "700 26px 'Trebuchet MS', sans-serif";
-  ctx.fillText(`Round ${state.session.roundIndex + 1}/${state.session.totalRounds}`, 42, 56);
+  ctx.fillText(
+    `Round ${state.session.roundIndex + 1}/${state.session.totalRounds}`,
+    42,
+    56,
+  );
   ctx.font = "600 16px 'Trebuchet MS', sans-serif";
   ctx.fillText(state.arena.title, 42, 78);
   ctx.fillText(getModifierSummary(state.arena.modifier), 250, 78);
 
-  drawMeter(ctx, 42, 102, 152, "Engine", player.systems.engine, player.phases.engine, "#d86e3f");
-  drawMeter(ctx, 226, 102, 152, "Radiator", player.systems.radiator, player.phases.radiator, "#78c9d6");
-  drawMeter(ctx, 42, 136, 152, "Transmission", player.systems.transmission, player.phases.transmission, "#dbc16a");
-  drawMeter(ctx, 226, 136, 152, "Steering", player.systems.steering, player.phases.steering, "#c69ae8");
+  drawMeter(
+    ctx,
+    42,
+    102,
+    152,
+    "Engine",
+    player.systems.engine,
+    player.phases.engine,
+    "#d86e3f",
+  );
+  drawMeter(
+    ctx,
+    226,
+    102,
+    152,
+    "Radiator",
+    player.systems.radiator,
+    player.phases.radiator,
+    "#78c9d6",
+  );
+  drawMeter(
+    ctx,
+    42,
+    136,
+    152,
+    "Transmission",
+    player.systems.transmission,
+    player.phases.transmission,
+    "#dbc16a",
+  );
+  drawMeter(
+    ctx,
+    226,
+    136,
+    152,
+    "Steering",
+    player.systems.steering,
+    player.phases.steering,
+    "#c69ae8",
+  );
 
   ctx.fillStyle = "#fff6da";
   ctx.font = "600 13px 'Trebuchet MS', sans-serif";
   ctx.fillText(`Heat ${Math.round(player.systems.overheat * 100)}%`, 42, 172);
   ctx.fillStyle = "rgba(255, 240, 214, 0.16)";
   ctx.fillRect(96, 163, 282, 10);
-  ctx.fillStyle = player.systems.overheat > 0.75 ? "#ff4d31" : player.systems.overheat > 0.45 ? "#ff9954" : "#ffcf6a";
+  ctx.fillStyle =
+    player.systems.overheat > 0.75
+      ? "#ff4d31"
+      : player.systems.overheat > 0.45
+        ? "#ff9954"
+        : "#ffcf6a";
   ctx.fillRect(96, 163, 282 * player.systems.overheat, 10);
 
   ctx.font = "700 18px 'Trebuchet MS', sans-serif";
@@ -487,7 +607,10 @@ function drawHud(ctx: CanvasRenderingContext2D, state: GameState): void {
   ctx.restore();
 }
 
-function drawEventFeed(ctx: CanvasRenderingContext2D, events: EventMessage[]): void {
+function drawEventFeed(
+  ctx: CanvasRenderingContext2D,
+  events: EventMessage[],
+): void {
   if (events.length === 0) {
     return;
   }
@@ -515,32 +638,58 @@ function drawEventFeed(ctx: CanvasRenderingContext2D, events: EventMessage[]): v
   ctx.restore();
 }
 
-function drawIntroOverlay(ctx: CanvasRenderingContext2D, state: GameState): void {
+function drawIntroOverlay(
+  ctx: CanvasRenderingContext2D,
+  state: GameState,
+): void {
   ctx.save();
   ctx.fillStyle = "rgba(20, 12, 5, 0.48)";
   ctx.fillRect(0, 0, state.arena.width, state.arena.height);
   ctx.fillStyle = "#fff0cb";
   ctx.textAlign = "center";
   ctx.font = "700 70px 'Trebuchet MS', sans-serif";
-  ctx.fillText(state.arena.title, state.arena.width * 0.5, state.arena.height * 0.36);
+  ctx.fillText(
+    state.arena.title,
+    state.arena.width * 0.5,
+    state.arena.height * 0.36,
+  );
   ctx.font = "600 26px 'Trebuchet MS', sans-serif";
-  ctx.fillText(state.arena.introLine, state.arena.width * 0.5, state.arena.height * 0.42);
+  ctx.fillText(
+    state.arena.introLine,
+    state.arena.width * 0.5,
+    state.arena.height * 0.42,
+  );
   ctx.font = "700 34px 'Trebuchet MS', sans-serif";
-  ctx.fillText(getModifierSummary(state.arena.modifier), state.arena.width * 0.5, state.arena.height * 0.49);
+  ctx.fillText(
+    getModifierSummary(state.arena.modifier),
+    state.arena.width * 0.5,
+    state.arena.height * 0.49,
+  );
   const countdown = Math.max(1, Math.ceil(state.session.countdown));
   ctx.font = "700 110px 'Trebuchet MS', sans-serif";
-  ctx.fillText(String(countdown), state.arena.width * 0.5, state.arena.height * 0.66);
+  ctx.fillText(
+    String(countdown),
+    state.arena.width * 0.5,
+    state.arena.height * 0.66,
+  );
   ctx.restore();
 }
 
-function drawNonRunningOverlay(ctx: CanvasRenderingContext2D, width: number, height: number): void {
+function drawNonRunningOverlay(
+  ctx: CanvasRenderingContext2D,
+  width: number,
+  height: number,
+): void {
   ctx.save();
   ctx.fillStyle = "rgba(25, 15, 7, 0.22)";
   ctx.fillRect(0, 0, width, height);
   ctx.restore();
 }
 
-export function renderGame(ctx: CanvasRenderingContext2D, state: GameState): void {
+export function renderGame(
+  ctx: CanvasRenderingContext2D,
+  state: GameState,
+): void {
   ctx.clearRect(0, 0, state.arena.width, state.arena.height);
 
   if (state.mode === "car_preview") {
@@ -559,8 +708,12 @@ export function renderGame(ctx: CanvasRenderingContext2D, state: GameState): voi
     return;
   }
 
-  const shakeX = Math.sin(state.tick * 0.8) * state.camera.shake * 0.5 + state.camera.nudgeX * 0.7;
-  const shakeY = Math.cos(state.tick * 0.9) * state.camera.shake * 0.3 + state.camera.nudgeY * 0.7;
+  const shakeX =
+    Math.sin(state.tick * 0.8) * state.camera.shake * 0.5 +
+    state.camera.nudgeX * 0.7;
+  const shakeY =
+    Math.cos(state.tick * 0.9) * state.camera.shake * 0.3 +
+    state.camera.nudgeY * 0.7;
 
   ctx.save();
   ctx.translate(shakeX, shakeY);

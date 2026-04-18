@@ -6,11 +6,15 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "check:repo": "node scripts/check-repo-legibility.mjs",
+    "test:e2e": "playwright test",
+    "validate": "npm run check:repo && npm run build && npm run test:e2e"
   },
   "devDependencies": {
+    "@playwright/test": ">=1.59.1",
     "playwright": ">=1.59.1",
-    "typescript": ">=6.0.2",
-    "vite": ">=8.0.3"
+    "typescript": ">=6.0.3",
+    "vite": ">=8.0.8"
   }
 }

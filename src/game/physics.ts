@@ -1,6 +1,17 @@
-import { applyImpactDamage, impactZoneForPoint, updateSubsystemWear } from "./damage";
+import {
+  applyImpactDamage,
+  impactZoneForPoint,
+  updateSubsystemWear,
+} from "./damage";
 import { clamp, normalizeAngle } from "./math";
-import type { ArenaObject, Car, CollisionEvent, GameState, MudZone, Vec2 } from "./types";
+import type {
+  ArenaObject,
+  Car,
+  CollisionEvent,
+  GameState,
+  MudZone,
+  Vec2,
+} from "./types";
 
 function dot(a: Vec2, b: Vec2): number {
   return a.x * b.x + a.y * b.y;
@@ -70,11 +81,17 @@ function project(corners: Vec2[], axis: Vec2): { min: number; max: number } {
   return { min, max };
 }
 
-function overlapAmount(a: { min: number; max: number }, b: { min: number; max: number }): number {
+function overlapAmount(
+  a: { min: number; max: number },
+  b: { min: number; max: number },
+): number {
   return Math.min(a.max, b.max) - Math.max(a.min, b.min);
 }
 
-function damageScaleForZones(selfZone: ReturnType<typeof impactZoneForPoint>, otherZone: ReturnType<typeof impactZoneForPoint>): number {
+function damageScaleForZones(
+  selfZone: ReturnType<typeof impactZoneForPoint>,
+  otherZone: ReturnType<typeof impactZoneForPoint>,
+): number {
   if (selfZone === "front" && otherZone === "rear") {
     return 0.38;
   }
@@ -93,11 +110,9 @@ function resolveWallResponse(
   const tangentialSpeed = dot({ x: car.vx, y: car.vy }, tangentialAxis);
   const inwardBias = Math.max(26, 10 + outwardSpeed * 0.38);
   car.vx =
-    inwardNormal.x * inwardBias +
-    tangentialAxis.x * tangentialSpeed * 0.42;
+    inwardNormal.x * inwardBias + tangentialAxis.x * tangentialSpeed * 0.42;
   car.vy =
-    inwardNormal.y * inwardBias +
-    tangentialAxis.y * tangentialSpeed * 0.42;
+    inwardNormal.y * inwardBias + tangentialAxis.y * tangentialSpeed * 0.42;
   car.angularVelocity *= 0.3;
 }
 
@@ -138,11 +153,13 @@ export function stepCar(
   }
 
   const desiredDrive = car.controls.forward - car.controls.reverse;
-  const transmissionResponse = (3.2 + car.systems.transmission * 4.6) * car.steeringSharpness;
+  const transmissionResponse =
+    (3.2 + car.systems.transmission * 4.6) * car.steeringSharpness;
   car.driveInput += (desiredDrive - car.driveInput) * dt * transmissionResponse;
 
   const enginePower = car.engineForce * (0.32 + car.systems.engine * 0.68);
-  const reversePower = car.reverseForce * (0.2 + car.systems.transmission * 0.8);
+  const reversePower =
+    car.reverseForce * (0.2 + car.systems.transmission * 0.8);
   const wantsBrake =
     (car.controls.forward > 0 && car.controls.reverse > 0) ||
     (car.controls.forward > 0 && forwardSpeed < -8) ||
@@ -153,24 +170,38 @@ export function stepCar(
       ? car.driveInput * enginePower * clamp(groundGrip * 1.04, 0.72, 1.08)
       : car.driveInput * reversePower * clamp(groundGrip * 1.08, 0.72, 1.12);
 
-  const accelX = forwardX * throttleForce / car.mass;
-  const accelY = forwardY * throttleForce / car.mass;
+  const accelX = (forwardX * throttleForce) / car.mass;
+  const accelY = (forwardY * throttleForce) / car.mass;
   car.vx += accelX * dt;
   car.vy += accelY * dt;
   if (wantsBrake && Math.abs(forwardSpeed) > 0.2) {
-    const brakeDelta = Math.min(Math.abs(forwardSpeed), (car.brakeForce / car.mass) * dt);
+    const brakeDelta = Math.min(
+      Math.abs(forwardSpeed),
+      (car.brakeForce / car.mass) * dt,
+    );
     car.vx -= forwardX * Math.sign(forwardSpeed) * brakeDelta;
     car.vy -= forwardY * Math.sign(forwardSpeed) * brakeDelta;
   }
 
-  const drag = clamp(0.992 - car.body.front * 0.014 + (1 - groundGrip) * 0.004, 0.97, 0.994);
+  const drag = clamp(
+    0.992 - car.body.front * 0.014 + (1 - groundGrip) * 0.004,
+    0.97,
+    0.994,
+  );
   car.vx *= Math.pow(drag, dt * 60);
   car.vy *= Math.pow(drag, dt * 60);
 
   const engineSpeedFactor = 0.45 + car.systems.engine * 0.55;
   const transmissionFactor = 0.32 + car.systems.transmission * 0.68;
-  const forwardSpeedCap = (car.forwardMaxSpeed * engineSpeedFactor) * clamp(groundGrip * 1.02, 0.78, 1.05);
-  const reverseSpeedCap = car.reverseMaxSpeed * engineSpeedFactor * transmissionFactor * clamp(groundGrip * 1.04, 0.8, 1.06);
+  const forwardSpeedCap =
+    car.forwardMaxSpeed *
+    engineSpeedFactor *
+    clamp(groundGrip * 1.02, 0.78, 1.05);
+  const reverseSpeedCap =
+    car.reverseMaxSpeed *
+    engineSpeedFactor *
+    transmissionFactor *
+    clamp(groundGrip * 1.04, 0.8, 1.06);
   const postForceForwardSpeed = car.vx * forwardX + car.vy * forwardY;
   let cappedForwardSpeed = postForceForwardSpeed;
   if (cappedForwardSpeed > forwardSpeedCap) {
@@ -188,26 +219,38 @@ export function stepCar(
   const correctedForwardSpeed = car.vx * forwardX + car.vy * forwardY;
   const correctedLateralSpeed = car.vx * rightX + car.vy * rightY;
   car.slipAmount = Math.abs(correctedLateralSpeed);
-  const lateralGrip = clamp((0.72 + car.systems.steering * 0.19) * groundGrip, 0.44, 0.98);
-  const lateralReduction = correctedLateralSpeed * (1 - Math.pow(lateralGrip, dt * 60));
+  const lateralGrip = clamp(
+    (0.72 + car.systems.steering * 0.19) * groundGrip,
+    0.44,
+    0.98,
+  );
+  const lateralReduction =
+    correctedLateralSpeed * (1 - Math.pow(lateralGrip, dt * 60));
   car.vx -= rightX * lateralReduction;
   car.vy -= rightY * lateralReduction;
 
-  const maxSteerAngle = 0.62 * (0.42 + car.systems.steering * 0.58) * car.steeringSharpness;
+  const maxSteerAngle =
+    0.62 * (0.42 + car.systems.steering * 0.58) * car.steeringSharpness;
   car.steerAngleTarget = clamp(car.controls.steer, -1, 1) * maxSteerAngle;
-  const steerResponse = (3.4 + car.systems.steering * 3.4) * car.steeringSharpness;
-  car.steerAngle += (car.steerAngleTarget - car.steerAngle) * dt * steerResponse;
+  const steerResponse =
+    (3.4 + car.systems.steering * 3.4) * car.steeringSharpness;
+  car.steerAngle +=
+    (car.steerAngleTarget - car.steerAngle) * dt * steerResponse;
 
   const turnSpeedThreshold = 16;
-  if (Math.abs(correctedForwardSpeed) >= turnSpeedThreshold && Math.abs(car.steerAngle) > 0.002) {
+  if (
+    Math.abs(correctedForwardSpeed) >= turnSpeedThreshold &&
+    Math.abs(car.steerAngle) > 0.002
+  ) {
     const headingRate =
-      (correctedForwardSpeed / Math.max(car.wheelbase, 1)) * Math.tan(car.steerAngle);
+      (correctedForwardSpeed / Math.max(car.wheelbase, 1)) *
+      Math.tan(car.steerAngle);
     car.angle = normalizeAngle(car.angle + clamp(headingRate, -2.1, 2.1) * dt);
   }
 
   const steeringPull =
     (car.body.left - car.body.right) * (1 - car.systems.steering) * 1.15 +
-    (car.body.front * 0.22) * Math.sign(correctedForwardSpeed || 1);
+    car.body.front * 0.22 * Math.sign(correctedForwardSpeed || 1);
   car.angularVelocity += steeringPull * dt * 0.45;
   car.angularVelocity *= Math.pow(0.91, dt * 60);
   car.angle = normalizeAngle(car.angle + car.angularVelocity * dt);
@@ -224,18 +267,38 @@ export function stepCar(
 
   if (car.x < xMin) {
     car.x = xMin;
-    resolveWallResponse(car, { x: 1, y: 0 }, { x: 0, y: 1 }, Math.max(0, -car.vx));
+    resolveWallResponse(
+      car,
+      { x: 1, y: 0 },
+      { x: 0, y: 1 },
+      Math.max(0, -car.vx),
+    );
   } else if (car.x > xMax) {
     car.x = xMax;
-    resolveWallResponse(car, { x: -1, y: 0 }, { x: 0, y: 1 }, Math.max(0, car.vx));
+    resolveWallResponse(
+      car,
+      { x: -1, y: 0 },
+      { x: 0, y: 1 },
+      Math.max(0, car.vx),
+    );
   }
 
   if (car.y < yMin) {
     car.y = yMin;
-    resolveWallResponse(car, { x: 0, y: 1 }, { x: 1, y: 0 }, Math.max(0, -car.vy));
+    resolveWallResponse(
+      car,
+      { x: 0, y: 1 },
+      { x: 1, y: 0 },
+      Math.max(0, -car.vy),
+    );
   } else if (car.y > yMax) {
     car.y = yMax;
-    resolveWallResponse(car, { x: 0, y: -1 }, { x: 1, y: 0 }, Math.max(0, car.vy));
+    resolveWallResponse(
+      car,
+      { x: 0, y: -1 },
+      { x: 1, y: 0 },
+      Math.max(0, car.vy),
+    );
   }
 }
 
@@ -284,8 +347,10 @@ export function resolveArenaObjectInteractions(
     const halfLength = car.length * 0.5;
     const halfWidth = car.width * 0.5;
     for (const object of objects) {
-      const localX = (object.x - car.x) * forward.x + (object.y - car.y) * forward.y;
-      const localY = (object.x - car.x) * right.x + (object.y - car.y) * right.y;
+      const localX =
+        (object.x - car.x) * forward.x + (object.y - car.y) * forward.y;
+      const localY =
+        (object.x - car.x) * right.x + (object.y - car.y) * right.y;
       const closestX = clamp(localX, -halfLength, halfLength);
       const closestY = clamp(localY, -halfWidth, halfWidth);
       const dx = localX - closestX;
@@ -315,7 +380,8 @@ export function resolveArenaObjectInteractions(
         object.vy += worldNormal.y * normalSpeed * 0.9;
         car.vx -= worldNormal.x * normalSpeed * 0.18;
         car.vy -= worldNormal.y * normalSpeed * 0.18;
-        object.spin += normalSpeed * 0.01 * (object.kind === "tire" ? 1.4 : 0.8);
+        object.spin +=
+          normalSpeed * 0.01 * (object.kind === "tire" ? 1.4 : 0.8);
       }
     }
   }
@@ -374,7 +440,8 @@ export function resolveCarCollisions(cars: Car[]): CollisionEvent[] {
       const separatingSpeed = dot(relativeVelocity, normal);
       if (separatingSpeed < 0) {
         const restitution = 0.44;
-        const impulse = (-(1 + restitution) * separatingSpeed) / (1 / a.mass + 1 / b.mass);
+        const impulse =
+          (-(1 + restitution) * separatingSpeed) / (1 / a.mass + 1 / b.mass);
         const impulseX = impulse * normal.x;
         const impulseY = impulse * normal.y;
         a.vx -= impulseX / a.mass;
@@ -386,10 +453,10 @@ export function resolveCarCollisions(cars: Car[]): CollisionEvent[] {
         const tangentSpeed = dot(relativeVelocity, tangential);
         const frictionImpulse =
           (-tangentSpeed * 0.18) / (1 / a.mass + 1 / b.mass);
-        a.vx -= tangential.x * frictionImpulse / a.mass;
-        a.vy -= tangential.y * frictionImpulse / a.mass;
-        b.vx += tangential.x * frictionImpulse / b.mass;
-        b.vy += tangential.y * frictionImpulse / b.mass;
+        a.vx -= (tangential.x * frictionImpulse) / a.mass;
+        a.vy -= (tangential.y * frictionImpulse) / a.mass;
+        b.vx += (tangential.x * frictionImpulse) / b.mass;
+        b.vy += (tangential.y * frictionImpulse) / b.mass;
 
         a.angularVelocity -= tangentSpeed * 0.00055;
         b.angularVelocity += tangentSpeed * 0.00055;
@@ -410,7 +477,8 @@ export function resolveCarCollisions(cars: Car[]): CollisionEvent[] {
           damageSeverityBase <= 0
             ? 0
             : clamp(
-                Math.pow(damageSeverityBase, 2.2) * (0.7 + Math.pow(damageSeverityBase, 1.35) * 1.55),
+                Math.pow(damageSeverityBase, 2.2) *
+                  (0.7 + Math.pow(damageSeverityBase, 1.35) * 1.55),
                 0,
                 1,
               );

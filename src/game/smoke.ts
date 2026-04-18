@@ -27,7 +27,9 @@ function getSmokeProfile(car: Car): SmokeProfile {
       frontPressure * 0.66 + overheatPressure * 0.7,
     ),
   );
-  const darkness = clamp01(intensity * 0.48 + drivetrainPressure * 0.42 + frontPressure * 0.22);
+  const darkness = clamp01(
+    intensity * 0.48 + drivetrainPressure * 0.42 + frontPressure * 0.22,
+  );
   const flame = clamp01(
     Math.max(
       (0.54 - getEngineHealth(car)) / 0.14,
@@ -96,8 +98,11 @@ export function updateSmokeEffects(state: GameState, dt: number): void {
       continue;
     }
 
-    const speedFactor = clamp01(Math.abs(signedSpeedForCar(car)) / Math.max(car.forwardMaxSpeed, 1));
-    const spawnInterval = 0.34 - intensity * 0.19 - profile.flame * 0.05 - speedFactor * 0.05;
+    const speedFactor = clamp01(
+      Math.abs(signedSpeedForCar(car)) / Math.max(car.forwardMaxSpeed, 1),
+    );
+    const spawnInterval =
+      0.34 - intensity * 0.19 - profile.flame * 0.05 - speedFactor * 0.05;
     car.smokeTimer += dt;
     while (car.smokeTimer >= spawnInterval) {
       car.smokeTimer -= spawnInterval;

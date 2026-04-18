@@ -184,6 +184,33 @@ canvas {
   color: #5c4527;
 }
 
+.startup-error {
+  width: min(560px, 100%);
+  padding: 28px 30px;
+  background: rgba(250, 234, 198, 0.95);
+  border: 2px solid rgba(99, 28, 7, 0.35);
+  border-radius: 20px;
+  box-shadow: 0 20px 64px rgba(53, 21, 0, 0.22);
+}
+
+.startup-error h1,
+.startup-error p {
+  margin: 0;
+}
+
+.startup-error h1 {
+  font-size: clamp(2rem, 5vw, 3.2rem);
+  line-height: 0.92;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.startup-error p {
+  margin-top: 1rem;
+  font-size: 1rem;
+  line-height: 1.5;
+}
+
 @media (max-width: 900px) {
   .frame {
     width: 100%;

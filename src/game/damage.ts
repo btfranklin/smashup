@@ -1,5 +1,12 @@
 import { clamp01 } from "./math";
-import type { Car, DamagePhase, DamageZone, GameState, SystemName, Vec2 } from "./types";
+import type {
+  Car,
+  DamagePhase,
+  DamageZone,
+  GameState,
+  SystemName,
+  Vec2,
+} from "./types";
 
 export type KnockoutCause =
   | "engine_failure"
@@ -26,7 +33,10 @@ const HOT_ENGINES_TUNING: ThermalTuning = {
   startingHeatFloor: 0.38,
 };
 
-export function getLocalImpact(car: Car, point: Vec2): { forward: number; side: number } {
+export function getLocalImpact(
+  car: Car,
+  point: Vec2,
+): { forward: number; side: number } {
   const dx = point.x - car.x;
   const dy = point.y - car.y;
   const forwardX = Math.cos(car.angle);
@@ -40,7 +50,10 @@ export function getLocalImpact(car: Car, point: Vec2): { forward: number; side: 
   };
 }
 
-function getLocalDirection(car: Car, direction: Vec2): { forward: number; side: number } {
+function getLocalDirection(
+  car: Car,
+  direction: Vec2,
+): { forward: number; side: number } {
   const forwardX = Math.cos(car.angle);
   const forwardY = Math.sin(car.angle);
   const rightX = -forwardY;
@@ -147,7 +160,9 @@ export function getKnockoutCause(car: Car): KnockoutCause | null {
     return "radiator_failure";
   }
   if (engineHealth <= 0.16) {
-    return car.systems.radiator < car.systems.engine ? "radiator_failure" : "engine_failure";
+    return car.systems.radiator < car.systems.engine
+      ? "radiator_failure"
+      : "engine_failure";
   }
   if (totalBodyDamage > 1.56 && engineHealth < 0.3) {
     return "body_collapse";
@@ -195,8 +210,12 @@ export function applyImpactDamage(
   if (zone === "front") {
     car.body.front = clamp01(car.body.front + frontStructural * 0.12);
     car.systems.engine = clamp01(car.systems.engine - frontDrivetrain * 0.26);
-    car.systems.radiator = clamp01(car.systems.radiator - frontDrivetrain * 0.29);
-    car.systems.transmission = clamp01(car.systems.transmission - frontDrivetrain * 0.17);
+    car.systems.radiator = clamp01(
+      car.systems.radiator - frontDrivetrain * 0.29,
+    );
+    car.systems.transmission = clamp01(
+      car.systems.transmission - frontDrivetrain * 0.17,
+    );
     car.systems.steering = clamp01(
       car.systems.steering - (frontStructural * 0.03 + frontDrivetrain * 0.11),
     );
@@ -211,7 +230,9 @@ export function applyImpactDamage(
     const rearWeaponSeverity = bodyStructural * 0.55;
     car.body.rear = clamp01(car.body.rear + rearWeaponSeverity * 0.08);
     car.systems.engine = clamp01(car.systems.engine - bodyDrivetrain * 0.005);
-    car.systems.transmission = clamp01(car.systems.transmission - bodyDrivetrain * 0.012);
+    car.systems.transmission = clamp01(
+      car.systems.transmission - bodyDrivetrain * 0.012,
+    );
     if (rearWeaponSeverity > 0.22) {
       breakRearLight(car, side);
     }
@@ -223,12 +244,16 @@ export function applyImpactDamage(
     car.body.left = clamp01(car.body.left + bodyStructural * 0.1);
     car.systems.engine = clamp01(car.systems.engine - bodyDrivetrain * 0.03);
     car.systems.steering = clamp01(car.systems.steering - bodyDrivetrain * 0.1);
-    car.systems.transmission = clamp01(car.systems.transmission - bodyDrivetrain * 0.025);
+    car.systems.transmission = clamp01(
+      car.systems.transmission - bodyDrivetrain * 0.025,
+    );
   } else {
     car.body.right = clamp01(car.body.right + bodyStructural * 0.1);
     car.systems.engine = clamp01(car.systems.engine - bodyDrivetrain * 0.03);
     car.systems.steering = clamp01(car.systems.steering - bodyDrivetrain * 0.1);
-    car.systems.transmission = clamp01(car.systems.transmission - bodyDrivetrain * 0.025);
+    car.systems.transmission = clamp01(
+      car.systems.transmission - bodyDrivetrain * 0.025,
+    );
   }
 
   const engineHealth = getEngineHealth(car);
@@ -240,9 +265,7 @@ export function applyImpactDamage(
     scaled > 0.86 &&
     (engineHealth < 0.5 || (car.body.front > 0.2 && car.systems.engine < 0.54));
 
-  if (
-    catastrophicFrontHit
-  ) {
+  if (catastrophicFrontHit) {
     disableCar(car);
     return;
   }
@@ -264,22 +287,27 @@ export function updateSubsystemWear(
   const tuning = getThermalTuningForModifier(modifier);
   const throttle = Math.max(car.controls.forward, car.controls.reverse);
   const radiatorLoss = 1 - car.systems.radiator;
-  const overheatPersistence = car.systems.overheat * (0.0015 + radiatorLoss * 0.012);
+  const overheatPersistence =
+    car.systems.overheat * (0.0015 + radiatorLoss * 0.012);
   const heatRate =
-    (
-      throttle * (0.024 + radiatorLoss * 0.115) +
+    (throttle * (0.024 + radiatorLoss * 0.115) +
       radiatorLoss * 0.03 +
       Math.max(0, radiatorLoss - 0.28) * 0.19 +
-      overheatPersistence
-    ) * tuning.heatGainScale;
-  const coolRate =
-    Math.max(
-      0.004,
-      (0.01 + car.systems.radiator * 0.018 + (1 - throttle) * 0.004 - throttle * 0.002) *
-        tuning.coolingScale,
-    );
+      overheatPersistence) *
+    tuning.heatGainScale;
+  const coolRate = Math.max(
+    0.004,
+    (0.01 +
+      car.systems.radiator * 0.018 +
+      (1 - throttle) * 0.004 -
+      throttle * 0.002) *
+      tuning.coolingScale,
+  );
   car.systems.overheat = clamp01(
-    Math.max(tuning.startingHeatFloor, car.systems.overheat + (heatRate - coolRate) * dt),
+    Math.max(
+      tuning.startingHeatFloor,
+      car.systems.overheat + (heatRate - coolRate) * dt,
+    ),
   );
   car.systems.engine = clamp01(
     car.systems.engine -

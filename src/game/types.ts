@@ -205,7 +205,6 @@ export type SessionState = {
   roundPlan: RoundPlan | null;
   playerBuild: PlayerBuild | null;
   playerCondition: CarCondition | null;
-  pendingUpgradeChoices: SessionUpgradeId[];
   completedRounds: RoundSummary[];
   lastRoundSummary: RoundSummary | null;
   countdown: number;
@@ -274,13 +273,11 @@ export type GameState = {
     mudZones: MudZone[];
     objects: ArenaObject[];
   };
-  preview:
-    | null
-    | {
-        kind: "car";
-        presetId: CarPresetId;
-        scenario: CarPreviewScenarioId;
-      };
+  preview: null | {
+    kind: "car";
+    presetId: CarPresetId;
+    scenario: CarPreviewScenarioId;
+  };
   session: SessionState;
   cars: Car[];
   playerId: number;

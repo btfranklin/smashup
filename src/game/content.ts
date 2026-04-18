@@ -1,3 +1,4 @@
+import { createFreshCondition } from "./conditions";
 import type {
   AIArchetype,
   ArenaObject,
@@ -43,7 +44,8 @@ export const CAR_PRESETS: Record<
     id: "bulldozer",
     title: "Bulldozer",
     subtitle: "Heavy and steady",
-    description: "Stable under pressure, tougher at the nose, slower to rotate.",
+    description:
+      "Stable under pressure, tougher at the nose, slower to rotate.",
     color: "#235873",
     accent: "#59b7dd",
     width: 56,
@@ -106,6 +108,14 @@ export const CAR_PRESETS: Record<
     engineTone: 1.02,
   },
 };
+
+export const CAR_PRESET_IDS = Object.freeze(
+  Object.keys(CAR_PRESETS) as CarPresetId[],
+);
+
+export function isCarPresetId(value: string | null): value is CarPresetId {
+  return value !== null && CAR_PRESET_IDS.includes(value as CarPresetId);
+}
 
 export const AI_ARCHETYPE_LABELS: Record<AIArchetype, string> = {
   bruiser: "Bruiser",
@@ -187,7 +197,8 @@ export const ROUND_PLANS: RoundPlan[] = [
   {
     id: 3,
     title: "Junkyard Night",
-    introLine: "Loose junk in the dirt and busted lights from the opening bell.",
+    introLine:
+      "Loose junk in the dirt and busted lights from the opening bell.",
     arenaVariant: "junkyard",
     modifier: "lights_out",
   },
@@ -204,17 +215,20 @@ export const SESSION_UPGRADES: Record<
   pit_patch: {
     id: "pit_patch",
     title: "Pit Patch",
-    description: "Restore battered systems and pull some damage back out of the shell.",
+    description:
+      "Restore battered systems and pull some damage back out of the shell.",
   },
   ram_rig: {
     id: "ram_rig",
     title: "Ram Rig",
-    description: "Tune the drivetrain for nastier reverse launches and better front bracing.",
+    description:
+      "Tune the drivetrain for nastier reverse launches and better front bracing.",
   },
   steering_clinic: {
     id: "steering_clinic",
     title: "Steering Clinic",
-    description: "Straighten the front end and sharpen turn-in for the next round.",
+    description:
+      "Straighten the front end and sharpen turn-in for the next round.",
   },
 };
 
@@ -236,99 +250,152 @@ export const CAR_PREVIEW_SCENARIOS: Record<
     title: string;
     condition: CarCondition;
     disabled?: boolean;
-    smoke?:
-      | {
-          density: number;
-          flame: number;
-          count: number;
-        }
-      | null;
+    smoke?: {
+      density: number;
+      flame: number;
+      count: number;
+    } | null;
   }
 > = {
   pristine: {
     title: "Pristine",
-    condition: createFreshPreviewCondition(),
+    condition: createFreshCondition(),
     smoke: null,
   },
   front_light: {
     title: "Front Light Damage",
     condition: {
-      systems: { engine: 0.9, radiator: 0.92, transmission: 0.95, steering: 0.94, overheat: 0 },
+      systems: {
+        engine: 0.9,
+        radiator: 0.92,
+        transmission: 0.95,
+        steering: 0.94,
+        overheat: 0,
+      },
       body: { front: 0.18, rear: 0, left: 0, right: 0 },
-      lights: { frontLeft: true, frontRight: false, rearLeft: true, rearRight: true },
+      lights: {
+        frontLeft: true,
+        frontRight: false,
+        rearLeft: true,
+        rearRight: true,
+      },
     },
     smoke: null,
   },
   front_heavy: {
     title: "Front Heavy Damage",
     condition: {
-      systems: { engine: 0.64, radiator: 0.58, transmission: 0.71, steering: 0.67, overheat: 0.08 },
+      systems: {
+        engine: 0.64,
+        radiator: 0.58,
+        transmission: 0.71,
+        steering: 0.67,
+        overheat: 0.08,
+      },
       body: { front: 0.56, rear: 0.04, left: 0.08, right: 0.1 },
-      lights: { frontLeft: false, frontRight: false, rearLeft: true, rearRight: true },
+      lights: {
+        frontLeft: false,
+        frontRight: false,
+        rearLeft: true,
+        rearRight: true,
+      },
     },
     smoke: { density: 0.52, flame: 0, count: 3 },
   },
   left_heavy: {
     title: "Left-Side Damage",
     condition: {
-      systems: { engine: 0.84, radiator: 0.93, transmission: 0.88, steering: 0.61, overheat: 0 },
+      systems: {
+        engine: 0.84,
+        radiator: 0.93,
+        transmission: 0.88,
+        steering: 0.61,
+        overheat: 0,
+      },
       body: { front: 0.04, rear: 0.06, left: 0.56, right: 0 },
-      lights: { frontLeft: true, frontRight: true, rearLeft: false, rearRight: true },
+      lights: {
+        frontLeft: true,
+        frontRight: true,
+        rearLeft: false,
+        rearRight: true,
+      },
     },
     smoke: null,
   },
   rear_heavy: {
     title: "Rear Heavy Damage",
     condition: {
-      systems: { engine: 0.93, radiator: 0.95, transmission: 0.82, steering: 0.9, overheat: 0 },
+      systems: {
+        engine: 0.93,
+        radiator: 0.95,
+        transmission: 0.82,
+        steering: 0.9,
+        overheat: 0,
+      },
       body: { front: 0, rear: 0.58, left: 0.04, right: 0.08 },
-      lights: { frontLeft: true, frontRight: true, rearLeft: false, rearRight: false },
+      lights: {
+        frontLeft: true,
+        frontRight: true,
+        rearLeft: false,
+        rearRight: false,
+      },
     },
     smoke: null,
   },
   critical: {
     title: "Critical",
     condition: {
-      systems: { engine: 0.28, radiator: 0.24, transmission: 0.34, steering: 0.42, overheat: 0.82 },
+      systems: {
+        engine: 0.28,
+        radiator: 0.24,
+        transmission: 0.34,
+        steering: 0.42,
+        overheat: 0.82,
+      },
       body: { front: 0.74, rear: 0.12, left: 0.22, right: 0.18 },
-      lights: { frontLeft: false, frontRight: false, rearLeft: true, rearRight: false },
+      lights: {
+        frontLeft: false,
+        frontRight: false,
+        rearLeft: true,
+        rearRight: false,
+      },
     },
     smoke: { density: 1, flame: 1, count: 5 },
   },
   disabled: {
     title: "Disabled",
     condition: {
-      systems: { engine: 0.08, radiator: 0.1, transmission: 0.12, steering: 0.16, overheat: 1 },
+      systems: {
+        engine: 0.08,
+        radiator: 0.1,
+        transmission: 0.12,
+        steering: 0.16,
+        overheat: 1,
+      },
       body: { front: 0.84, rear: 0.36, left: 0.28, right: 0.32 },
-      lights: { frontLeft: false, frontRight: false, rearLeft: false, rearRight: false },
+      lights: {
+        frontLeft: false,
+        frontRight: false,
+        rearLeft: false,
+        rearRight: false,
+      },
     },
     disabled: true,
     smoke: null,
   },
 };
 
-function createFreshPreviewCondition(): CarCondition {
-  return {
-    systems: {
-      engine: 1,
-      radiator: 1,
-      transmission: 1,
-      steering: 1,
-      overheat: 0,
-    },
-    body: {
-      front: 0,
-      rear: 0,
-      left: 0,
-      right: 0,
-    },
-    lights: {
-      frontLeft: true,
-      frontRight: true,
-      rearLeft: true,
-      rearRight: true,
-    },
-  };
+export const CAR_PREVIEW_SCENARIO_IDS = Object.freeze(
+  Object.keys(CAR_PREVIEW_SCENARIOS) as CarPreviewScenarioId[],
+);
+
+export function isCarPreviewScenarioId(
+  value: string | null,
+): value is CarPreviewScenarioId {
+  return (
+    value !== null &&
+    CAR_PREVIEW_SCENARIO_IDS.includes(value as CarPreviewScenarioId)
+  );
 }
 
 export function getArenaMudZones(variant: ArenaVariantId): MudZone[] {
@@ -347,7 +414,9 @@ export function getArenaObjects(variant: ArenaVariantId): ArenaObject[] {
     return [];
   }
 
-  const items: Array<Omit<ArenaObject, "id" | "vx" | "vy" | "rotation" | "spin">> = [
+  const items: Array<
+    Omit<ArenaObject, "id" | "vx" | "vy" | "rotation" | "spin">
+  > = [
     { kind: "junk", x: 560, y: 250, radius: 26, mass: 240 },
     { kind: "tire", x: 720, y: 210, radius: 18, mass: 90 },
     { kind: "junk", x: 900, y: 430, radius: 28, mass: 260 },

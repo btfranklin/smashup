@@ -1,3 +1,4 @@
+import { getRoundResultCue } from "./audioTransitions";
 import { clamp, signedSpeedForCar } from "./math";
 import { getPlayerCar } from "./selectors";
 import type { Car, CollisionEvent, GameState } from "./types";
@@ -42,8 +43,10 @@ export class AudioManager {
   private lastIntroCount = 0;
 
   async ensureStarted(): Promise<void> {
-    const AudioCtor = (window.AudioContext ||
-      (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext);
+    const AudioCtor =
+      window.AudioContext ||
+      (window as Window & { webkitAudioContext?: typeof AudioContext })
+        .webkitAudioContext;
     if (!AudioCtor) {
       return;
     }
@@ -105,7 +108,16 @@ export class AudioManager {
   }
 
   update(state: GameState): void {
-    if (!this.ctx || !this.engineGain || !this.engineOsc || !this.engineSub || !this.engineNoiseGain || !this.engineNoiseFilter || !this.skidGain || !this.skidFilter) {
+    if (
+      !this.ctx ||
+      !this.engineGain ||
+      !this.engineOsc ||
+      !this.engineSub ||
+      !this.engineNoiseGain ||
+      !this.engineNoiseFilter ||
+      !this.skidGain ||
+      !this.skidFilter
+    ) {
       return;
     }
 
@@ -120,33 +132,63 @@ export class AudioManager {
     const health = player.systems.engine;
     const transmission = player.systems.transmission;
     const now = this.ctx.currentTime;
-    const finishedThisFrame = this.lastMode !== "finished" && state.mode === "finished";
-    const roughness = clamp((0.78 - health) / 0.4 + player.systems.overheat * 0.4, 0, 1);
+    const finishCue = getRoundResultCue(
+      this.lastMode,
+      state.mode,
+      player.disabled,
+    );
+    const roughness = clamp(
+      (0.78 - health) / 0.4 + player.systems.overheat * 0.4,
+      0,
+      1,
+    );
 
     const enginePitch = 48 + speed * 0.55 + throttle * 28;
     const healthColor = 0.72 + health * 0.42;
-    const wobble = Math.sin(state.elapsed * (6 + roughness * 12)) * roughness * 7;
-    this.engineOsc.frequency.linearRampToValueAtTime((enginePitch + wobble) * healthColor * player.engineTone, now + 0.05);
-    this.engineSub.frequency.linearRampToValueAtTime((enginePitch * 0.48 - roughness * 8) * transmission * player.engineTone, now + 0.05);
+    const wobble =
+      Math.sin(state.elapsed * (6 + roughness * 12)) * roughness * 7;
+    this.engineOsc.frequency.linearRampToValueAtTime(
+      (enginePitch + wobble) * healthColor * player.engineTone,
+      now + 0.05,
+    );
+    this.engineSub.frequency.linearRampToValueAtTime(
+      (enginePitch * 0.48 - roughness * 8) * transmission * player.engineTone,
+      now + 0.05,
+    );
     this.engineNoiseFilter.frequency.linearRampToValueAtTime(
       280 + speed * 4.2 + throttle * 180 + roughness * 260,
       now + 0.05,
     );
 
     const engineLevel = active
-      ? clamp(0.015 + throttle * 0.045 + speed / player.forwardMaxSpeed * 0.06 + roughness * 0.016, 0, 0.13)
+      ? clamp(
+          0.015 +
+            throttle * 0.045 +
+            (speed / player.forwardMaxSpeed) * 0.06 +
+            roughness * 0.016,
+          0,
+          0.13,
+        )
       : 0;
     const rumbleLevel = active
-      ? clamp(0.01 + throttle * 0.018 + speed / player.forwardMaxSpeed * 0.02 + roughness * 0.012, 0, 0.06)
+      ? clamp(
+          0.01 +
+            throttle * 0.018 +
+            (speed / player.forwardMaxSpeed) * 0.02 +
+            roughness * 0.012,
+          0,
+          0.06,
+        )
       : 0;
     this.engineGain.gain.linearRampToValueAtTime(engineLevel, now + 0.06);
     this.engineNoiseGain.gain.linearRampToValueAtTime(rumbleLevel, now + 0.06);
 
     const skidLevel =
-      active && speed > 35
-        ? clamp((player.slipAmount - 12) / 65, 0, 0.07)
-        : 0;
-    this.skidFilter.frequency.linearRampToValueAtTime(1200 + player.slipAmount * 18, now + 0.04);
+      active && speed > 35 ? clamp((player.slipAmount - 12) / 65, 0, 0.07) : 0;
+    this.skidFilter.frequency.linearRampToValueAtTime(
+      1200 + player.slipAmount * 18,
+      now + 0.04,
+    );
     this.skidGain.gain.linearRampToValueAtTime(skidLevel, now + 0.04);
 
     this.crashCooldownTicks = Math.max(0, this.crashCooldownTicks - 1);
@@ -162,11 +204,11 @@ export class AudioManager {
     } else {
       this.lastIntroCount = 0;
     }
-    if (finishedThisFrame) {
+    if (finishCue) {
       this.engineGain.gain.linearRampToValueAtTime(0, now + 0.05);
       this.engineNoiseGain.gain.linearRampToValueAtTime(0, now + 0.05);
       this.skidGain.gain.linearRampToValueAtTime(0, now + 0.05);
-      this.playFinishMelody(now, player.disabled ? "sad" : "happy");
+      this.playFinishMelody(now, finishCue);
     }
     this.lastMode = state.mode;
   }
@@ -184,7 +226,9 @@ export class AudioManager {
     const now = this.ctx.currentTime;
 
     const carsById = new Map(cars.map((car) => [car.id, car]));
-    const strongest = [...collisions].sort((a, b) => b.severity - a.severity).slice(0, 2);
+    const strongest = [...collisions]
+      .sort((a, b) => b.severity - a.severity)
+      .slice(0, 2);
 
     for (const collision of strongest) {
       const a = carsById.get(collision.aId);
@@ -197,7 +241,8 @@ export class AudioManager {
           (b?.body.front ?? 0) +
           (b?.body.rear ?? 0) +
           (b?.body.left ?? 0) +
-          (b?.body.right ?? 0)) * 0.5;
+          (b?.body.right ?? 0)) *
+        0.5;
       const metallicBias =
         collision.zoneA === "front" || collision.zoneB === "front" ? 1.15 : 0.9;
 
@@ -206,13 +251,20 @@ export class AudioManager {
 
       const filter = this.ctx.createBiquadFilter();
       filter.type = "bandpass";
-      filter.frequency.value = clamp(420 + collision.severity * 1600 * metallicBias - accumulatedDamage * 90, 220, 2200);
+      filter.frequency.value = clamp(
+        420 + collision.severity * 1600 * metallicBias - accumulatedDamage * 90,
+        220,
+        2200,
+      );
       filter.Q.value = 0.7;
 
       const gain = this.ctx.createGain();
       const level = clamp(0.035 + collision.severity * 0.18, 0, 0.24);
       gain.gain.setValueAtTime(level, now);
-      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.22 + collision.severity * 0.1);
+      gain.gain.exponentialRampToValueAtTime(
+        0.001,
+        now + 0.22 + collision.severity * 0.1,
+      );
 
       burst.connect(filter);
       filter.connect(gain);
@@ -260,7 +312,10 @@ export class AudioManager {
       osc.frequency.setValueAtTime(frequency, now);
       gain.gain.setValueAtTime(0.0001, now);
       gain.gain.exponentialRampToValueAtTime(peakGain, now + 0.02);
-      gain.gain.exponentialRampToValueAtTime(0.0001, now + (mood === "happy" ? 0.18 : 0.28));
+      gain.gain.exponentialRampToValueAtTime(
+        0.0001,
+        now + (mood === "happy" ? 0.18 : 0.28),
+      );
       osc.connect(gain);
       gain.connect(this.master!);
       osc.start(now);

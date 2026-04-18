@@ -16,7 +16,9 @@ export function updateAi(
     return;
   }
 
-  const profile = car.aiArchetype ? AI_ARCHETYPE_CONFIG[car.aiArchetype] : AI_ARCHETYPE_CONFIG.bruiser;
+  const profile = car.aiArchetype
+    ? AI_ARCHETYPE_CONFIG[car.aiArchetype]
+    : AI_ARCHETYPE_CONFIG.bruiser;
 
   const obstacles = cars.filter((candidate) => candidate.id !== car.id);
   const rivals = obstacles.filter((candidate) => !candidate.disabled);
@@ -48,13 +50,19 @@ export function updateAi(
 
     const toTargetX = dx / distance;
     const toTargetY = dy / distance;
-    const reverseAlignment = reverseForwardX * toTargetX + reverseForwardY * toTargetY;
+    const reverseAlignment =
+      reverseForwardX * toTargetX + reverseForwardY * toTargetY;
     const targetFacingScore =
-      Math.cos(candidate.angle) * -toTargetX + Math.sin(candidate.angle) * -toTargetY;
+      Math.cos(candidate.angle) * -toTargetX +
+      Math.sin(candidate.angle) * -toTargetY;
     const sideOpenness = 1 - Math.abs(targetFacingScore);
     const exposure = Math.max(0, targetFacingScore) * 0.8 + sideOpenness * 0.45;
     const distanceScore = 1 / Math.max(distance, 80);
-    const woundedScore = clamp((0.82 - getEngineHealth(candidate)) / 0.42, 0, 1);
+    const woundedScore = clamp(
+      (0.82 - getEngineHealth(candidate)) / 0.42,
+      0,
+      1,
+    );
     const score =
       reverseAlignment * 1.3 * profile.targetBias +
       exposure * 1.2 * profile.exposureBias +
@@ -169,7 +177,8 @@ export function updateAi(
   const wallEscapeWeight =
     (nearestWallDistance < 80 ? 3.3 : nearestWallDistance < 150 ? 1.95 : 0.72) *
     profile.wallEscapeBias;
-  const crowdWeight = (localCrowding > 1.2 ? 1.7 : 0.9) / profile.crowdTolerance;
+  const crowdWeight =
+    (localCrowding > 1.2 ? 1.7 : 0.9) / profile.crowdTolerance;
   const targetWeight = (target ? 1.9 : 1.15) * profile.targetBias;
 
   const desiredX =
@@ -248,5 +257,9 @@ export function updateAi(
   );
   car.controls.forward = 0;
   const leadCompensation = signedTravel <= 0 ? 0.16 : -0.1;
-  car.controls.steer = clamp(-(headingError + leadCompensation * Math.sign(headingError)) / 1.7, -1, 1);
+  car.controls.steer = clamp(
+    -(headingError + leadCompensation * Math.sign(headingError)) / 1.7,
+    -1,
+    1,
+  );
 }
