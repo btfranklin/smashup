@@ -1,0 +1,126 @@
+:root {
+  color-scheme: light;
+  font-family: "Trebuchet MS", "Gill Sans", "Avenir Next Condensed", sans-serif;
+  background: #d8c49d;
+  color: #1b1813;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  min-height: 100%;
+}
+
+body {
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at top, rgba(255, 245, 214, 0.72), transparent 38%),
+    linear-gradient(180deg, #d7c48f 0%, #ba8d4f 54%, #81542d 100%);
+}
+
+#app {
+  width: 100vw;
+  height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+}
+
+.frame {
+  position: relative;
+  width: min(100%, 1480px);
+  aspect-ratio: 16 / 10;
+  display: grid;
+  place-items: center;
+}
+
+canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+  border-radius: 20px;
+  box-shadow:
+    0 26px 80px rgba(55, 20, 0, 0.35),
+    inset 0 0 0 2px rgba(80, 33, 5, 0.2);
+}
+
+.menu {
+  position: absolute;
+  inset: 32px auto auto 32px;
+  width: min(380px, calc(100% - 64px));
+  padding: 18px 20px;
+  background: rgba(250, 234, 198, 0.92);
+  border: 2px solid rgba(73, 33, 6, 0.25);
+  border-radius: 18px;
+  box-shadow: 0 18px 60px rgba(53, 21, 0, 0.18);
+}
+
+.menu h1,
+.menu h2,
+.menu p {
+  margin: 0;
+}
+
+.menu h1 {
+  font-size: clamp(2.3rem, 6vw, 4.2rem);
+  line-height: 0.9;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.menu h2 {
+  margin-top: 0.5rem;
+  font-size: 0.95rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: #7b3c0a;
+}
+
+.menu p {
+  margin-top: 0.9rem;
+  font-size: 0.98rem;
+  line-height: 1.4;
+}
+
+.menu button {
+  margin-top: 1rem;
+  padding: 0.9rem 1.2rem;
+  width: 100%;
+  border: 0;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #c44914 0%, #7f2707 100%);
+  color: #fff7ed;
+  font: inherit;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.menu button:hover {
+  filter: brightness(1.06);
+}
+
+.menu .hint {
+  margin-top: 0.8rem;
+  font-size: 0.84rem;
+  color: #5c4527;
+}
+
+@media (max-width: 900px) {
+  .frame {
+    width: 100%;
+    aspect-ratio: 9 / 14;
+  }
+
+  .menu {
+    inset: auto 16px 16px 16px;
+    width: auto;
+  }
+}
