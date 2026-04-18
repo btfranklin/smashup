@@ -8,14 +8,16 @@
 
 ## Mechanical Coverage
 - `npm run check:repo` enforces the agent map, docs presence, validation scripts, preview-source wiring, and the absence of the old `src/game/game.ts` catch-all.
-- `npm run test:e2e` verifies:
-- the preview matrix matches source ids
-- invalid preview params fail visibly
-- runtime hooks survive a real tournament-start flow
-- the round-result audio cue helper behaves deterministically
+- `npm run test:coverage` verifies:
+- preview parsing matches source ids and fails visibly on invalid params
+- runtime/session/debug modules preserve the documented state contracts
+- browser hooks survive bootstrap and deterministic stepping in `jsdom`
+- audio transition, countdown, crash cooldown, and mix helpers behave deterministically
+- render and effect systems stay branch-covered without browser-driving
+- `scripts/check-test-coverage.mjs` enforces calibrated per-surface thresholds so pure rule modules stay near-complete while imperative bootstrap/runtime wrappers still have explicit floors.
 
 ## When To Extend Validation
-- Add or update Playwright smoke coverage when a change affects the preview URL contract, startup errors, browser hooks, or round-start flow.
+- Add or update Vitest coverage when a change affects the preview URL contract, startup errors, browser hooks, round-start flow, or documented tuning regressions.
 - Extend `check:repo` when a repeated agent mistake can be detected cheaply through file layout, doc links, or command wiring.
 
 ## Recovery Guidance

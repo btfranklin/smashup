@@ -28,23 +28,24 @@ Developer/testing surfaces
 - Hidden preview endpoint: `/?preview=car&preset=<id>&scenario=<id>`
 - Valid preview ids are defined in `src/game/content.ts` via `CAR_PRESET_IDS` and `CAR_PREVIEW_SCENARIO_IDS`.
 - Preview mode returns `mode: "car_preview"` from `render_game_to_text()` with preset/scenario and visible car state.
-- Validation entrypoint: `npm run validate` runs the production build plus Playwright smoke coverage for preview contracts, invalid preview failures, runtime hooks, and audio transition logic.
+- Validation entrypoint: `npm run validate` runs the repo legibility check, production build, and coverage-gated Vitest suite for preview contracts, runtime hooks, audio transitions, and core rule modules.
 
 Useful files
 - `src/game/session.ts`: state setup, round progression, car factory, preview-state creation
 - `src/game/runtime.ts`: per-frame advancement, event feed, camera, eliminations, round transitions
 - `src/game/debug.ts`: `render_game_to_text()` payload generation
 - `src/game/render.ts`: car art, damage overlays, preview rendering, HUD
-- `src/main.ts`: menu flow, preview parsing, startup error handling, browser hooks
+- `src/app/bootstrap.ts`: menu flow, preview parsing, startup error handling, browser hooks
+- `src/main.ts`: thin browser entrypoint and CSS import
 - `src/game/content.ts`: presets, rounds, upgrades, preview scenarios, preview id helpers
 - `src/game/physics.ts`, `src/game/damage.ts`, `src/game/ai.ts`: gameplay tuning
 
 Latest validation
 - `npm run build` passes.
-- Preview endpoint validated through the required Playwright client with `front_heavy` state.
-- `render_game_to_text()` in preview mode reports the expected preset/scenario payload.
-- Car-select UI was checked in-browser and the square choice cards fit their text cleanly.
-- A direct Playwright camera probe confirmed a huge-hit event can occur while low-severity follow-up frames no longer retain meaningful camera shake (`lowAfterHuge: null`).
+- `npm run test:unit` passes with the fast Vitest/jsdom suite.
+- Preview parsing now validates the full preset/scenario matrix directly from `CAR_PRESET_IDS` and `CAR_PREVIEW_SCENARIO_IDS`.
+- Bootstrap coverage now checks visible startup errors, deterministic `window.advanceTime(ms)`, `window.render_game_to_text()`, resize math, fullscreen toggling, and keyboard mapping without browser-driving.
+- Render/debug coverage now checks preview payload echoing, running payload truncation, intro/non-running overlays, and smoke ordering with a recording canvas context.
 - Thermal and damage retune pass validated through direct module probes on the Vite dev server:
 - `hot_engines` idle heat stayed around `0.38` after five seconds from a `0.4` start instead of collapsing toward zero
 - a damaged radiator under sustained throttle reached `overheat: 1`
@@ -62,13 +63,15 @@ Latest validation
 - `npm run validate` passes and covers:
 - preview matrix alignment against source ids
 - invalid preview startup failures
-- runtime hook availability through tournament start flow
-- deterministic audio transition cue selection
+- bootstrap hook installation and deterministic stepping
+- deterministic audio transition, countdown, crash cooldown, and mix selection
+- session/runtime/debug/render/effects rule coverage through fast unit tests
+- calibrated per-surface coverage thresholds through `scripts/check-test-coverage.mjs`
 - Agent-legibility pass added:
 - `AGENTS.md` as a short repo map
 - indexed `docs/` system of record for architecture, operations, quality, validation surfaces, and audit notes
 - `scripts/check-repo-legibility.mjs` plus `npm run check:repo`
-- `npm run validate` now includes the repo legibility check before build + browser smoke coverage
+- `npm run validate` now includes the repo legibility check before build + coverage-gated Vitest validation
 
 Remaining roadmap
 - Only deferred items remain in `ROADMAP.md`: replay/highlight work and a light long-term meta layer.

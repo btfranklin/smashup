@@ -16,7 +16,7 @@
 - Physics and damage tuning remain understandable mostly through code and `progress.md`, not through dedicated design notes.
 
 ## Next Investments
-1. Add CI that runs `npm run validate` on pull requests so repo checks and browser smoke coverage become unavoidable.
+1. Add CI that runs `npm run validate` on pull requests so repo checks and Vitest coverage become unavoidable.
 2. Extract content-heavy factory logic from `src/game/session.ts` into a dedicated builder module before replay/meta work expands setup complexity.
 3. Add a small tuning/design note for physics, damage, and thermal rules so future balancing work stops relying on archaeology in `progress.md`.
 

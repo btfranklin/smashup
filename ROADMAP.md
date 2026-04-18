@@ -6,7 +6,7 @@ The main roadmap batch is implemented. What remains is the optional follow-on wo
 
 Before replay/highlight or meta-progression work lands, keep these hardening steps in place:
 - Preserve the shared preview contract from `src/game/content.ts` so the hidden validation surface stays aligned with live content ids.
-- Keep `npm run validate` green so browser hooks and preview flows remain under executable regression coverage.
+- Keep `npm run validate` green so browser hooks, preview flows, and the fast unit-test suite remain under executable regression coverage.
 - Extend the separated session/runtime/debug modules instead of rebuilding a catch-all state file.
 
 ## 1. Replay and Highlight Moments

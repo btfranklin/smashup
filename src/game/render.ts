@@ -17,7 +17,7 @@ import type {
   SmokePuff,
 } from "./types";
 
-function phaseColor(phase: DamagePhase, base: string): string {
+export function getPhaseColor(phase: DamagePhase, base: string): string {
   switch (phase) {
     case "healthy":
       return base;
@@ -45,7 +45,7 @@ function drawMeter(
   ctx.fillText(label, x, y);
   ctx.fillStyle = "rgba(255, 240, 214, 0.16)";
   ctx.fillRect(x, y + 6, width, 9);
-  ctx.fillStyle = phaseColor(phase, fill);
+  ctx.fillStyle = getPhaseColor(phase, fill);
   ctx.fillRect(x, y + 6, Math.max(0, Math.min(width, width * value)), 9);
 }
 
@@ -708,12 +708,7 @@ export function renderGame(
     return;
   }
 
-  const shakeX =
-    Math.sin(state.tick * 0.8) * state.camera.shake * 0.5 +
-    state.camera.nudgeX * 0.7;
-  const shakeY =
-    Math.cos(state.tick * 0.9) * state.camera.shake * 0.3 +
-    state.camera.nudgeY * 0.7;
+  const { x: shakeX, y: shakeY } = getCameraOffset(state);
 
   ctx.save();
   ctx.translate(shakeX, shakeY);
@@ -737,4 +732,17 @@ export function renderGame(
   } else if (state.mode !== "running") {
     drawNonRunningOverlay(ctx, state.arena.width, state.arena.height);
   }
+}
+
+export function getCameraOffset(
+  state: Pick<GameState, "tick" | "camera">,
+): { x: number; y: number } {
+  return {
+    x:
+      Math.sin(state.tick * 0.8) * state.camera.shake * 0.5 +
+      state.camera.nudgeX * 0.7,
+    y:
+      Math.cos(state.tick * 0.9) * state.camera.shake * 0.3 +
+      state.camera.nudgeY * 0.7,
+  };
 }

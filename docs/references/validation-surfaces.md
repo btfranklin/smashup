@@ -20,10 +20,13 @@ This document is the durable reference for the repo's browser automation contrac
 - Preview mode uses the same content tables as live gameplay setup for presets and conditions.
 
 ## Expected Runtime Behavior
-- The runtime hook test starts a tournament, selects a preset, advances into gameplay, and inspects the running-state payload.
+- The runtime hook coverage starts a tournament, selects a preset, advances into gameplay, and inspects the running-state payload.
 - The running payload must include the selected preset, round metadata, player state, and current arena metadata.
 
 ## Enforcement
-- `tests/game-smoke.spec.ts` covers preview matrix alignment, invalid preview failures, and runtime hook availability.
+- `tests/preview.spec.ts` covers preview matrix alignment and invalid preview failures.
+- `tests/bootstrap.spec.ts` covers startup errors, browser hook installation, and deterministic stepping through tournament start.
+- `tests/render-game-to-text.spec.ts` covers payload shape and truncation without browser-driving.
 - `src/game/preview.ts` owns preview parsing and validation.
+- `scripts/check-test-coverage.mjs` keeps the fast suite coverage-gated as part of `npm run test:coverage`.
 - `npm run validate` is the supported end-to-end regression command for these surfaces.

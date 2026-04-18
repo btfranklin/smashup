@@ -40,12 +40,21 @@ function requireContains(relativePath, fragments, remediation) {
   "docs/LEGIBILITY-AUDIT.md",
   "docs/references/validation-surfaces.md",
   "docs/exec-plans/tech-debt-tracker.md",
+  "scripts/check-test-coverage.mjs",
+  "src/app/bootstrap.ts",
   "src/game/session.ts",
   "src/game/runtime.ts",
   "src/game/debug.ts",
   "src/game/preview.ts",
-  "tests/game-smoke.spec.ts",
+  "vitest.config.ts",
   "tests/audio-transitions.spec.ts",
+  "tests/bootstrap.spec.ts",
+  "tests/render-game-to-text.spec.ts",
+  "tests/helpers/fixtures.ts",
+  "tests/helpers/canvas-recorder.ts",
+  "tests/helpers/audio-stubs.ts",
+  "tests/helpers/dom-harness.ts",
+  "tests/helpers/payload-assertions.ts",
 ].forEach((file) =>
   requireFile(
     file,
@@ -56,6 +65,12 @@ function requireContains(relativePath, fragments, remediation) {
 if (fs.existsSync(repoPath("src/game/game.ts"))) {
   failures.push(
     "src/game/game.ts: legacy catch-all file should not exist. Extend session/runtime/debug modules instead of recreating the old god module.",
+  );
+}
+
+if (fs.existsSync(repoPath("playwright.config.ts"))) {
+  failures.push(
+    "playwright.config.ts: Playwright should not remain in the supported validation path after the Vitest migration.",
   );
 }
 
@@ -98,19 +113,51 @@ if (!scripts["check:repo"]) {
     'package.json: add a "check:repo" script that runs scripts/check-repo-legibility.mjs.',
   );
 }
-if (!scripts["test:e2e"]) {
+if (!scripts.test) {
   failures.push(
-    'package.json: add a "test:e2e" script so browser validation is executable rather than ad hoc.',
+    'package.json: add a "test" script that runs the Vitest suite.',
+  );
+}
+if (!scripts["test:unit"]) {
+  failures.push(
+    'package.json: add a "test:unit" script so fast validation is executable rather than ad hoc.',
+  );
+}
+if (!scripts["test:coverage"]) {
+  failures.push(
+    'package.json: add a "test:coverage" script so coverage-gated validation is executable rather than ad hoc.',
   );
 }
 if (
   typeof scripts.validate !== "string" ||
   !scripts.validate.includes("npm run check:repo") ||
-  !scripts.validate.includes("npm run test:e2e")
+  !scripts.validate.includes("npm run test:coverage")
 ) {
   failures.push(
-    'package.json: "validate" must run repo legibility checks and Playwright smoke coverage.',
+    'package.json: "validate" must run repo legibility checks and the Vitest coverage suite.',
   );
+}
+if (
+  typeof scripts["test:coverage"] !== "string" ||
+  !scripts["test:coverage"].includes("scripts/check-test-coverage.mjs")
+) {
+  failures.push(
+    'package.json: "test:coverage" must run the calibrated per-surface coverage check after Vitest.',
+  );
+}
+
+const devDependencies = packageJson.devDependencies ?? {};
+if (devDependencies["@playwright/test"] || devDependencies.playwright) {
+  failures.push(
+    "package.json: remove Playwright devDependencies from the supported validation workflow.",
+  );
+}
+for (const dependency of ["vitest", "jsdom", "@vitest/coverage-v8"]) {
+  if (!devDependencies[dependency]) {
+    failures.push(
+      `package.json: add ${dependency} as a devDependency for the fast validation suite.`,
+    );
+  }
 }
 
 if (failures.length > 0) {
@@ -122,5 +169,5 @@ if (failures.length > 0) {
 }
 
 console.log(
-  "Repo legibility check passed: docs map, validation scripts, and runtime module layout are in place.",
+  "Repo legibility check passed: docs map, Vitest validation scripts, and runtime module layout are in place.",
 );
