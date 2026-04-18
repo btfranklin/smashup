@@ -48,6 +48,10 @@ Latest validation
 - front-hit damage now separates medium and extreme impacts again (`damageSeverity` about `0.56` vs `1`)
 - front-into-rear hits are now much softer on the striker (`engine` about `0.99` after a 100-speed rear-end hit, `0.92` at 180-speed)
 - Preview screenshots were rechecked after the decal pass; the number now sits on the roof-center panel and is no longer covered by the windshield/cabin art.
+- Cooling was rebalanced again after user feedback that it had become too weak:
+- healthy off-throttle cooling now drops `overheat` from `0.5` to about `0.248` over eight seconds in a normal round
+- `hot_engines` still stays elevated at about `0.38` after five idle seconds from a `0.4` start
+- damaged-radiator sustained throttle in `hot_engines` still reaches terminal overheat
 
 Remaining roadmap
 - Only deferred items remain in `ROADMAP.md`: replay/highlight work and a light long-term meta layer.

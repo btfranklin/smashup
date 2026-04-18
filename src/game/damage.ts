@@ -264,7 +264,7 @@ export function updateSubsystemWear(
   const tuning = getThermalTuningForModifier(modifier);
   const throttle = Math.max(car.controls.forward, car.controls.reverse);
   const radiatorLoss = 1 - car.systems.radiator;
-  const overheatPersistence = car.systems.overheat * (0.015 + radiatorLoss * 0.03);
+  const overheatPersistence = car.systems.overheat * (0.0015 + radiatorLoss * 0.012);
   const heatRate =
     (
       throttle * (0.024 + radiatorLoss * 0.115) +
@@ -275,7 +275,7 @@ export function updateSubsystemWear(
   const coolRate =
     Math.max(
       0.004,
-      (0.006 + car.systems.radiator * 0.011 + (1 - throttle) * 0.0035 - throttle * 0.002) *
+      (0.01 + car.systems.radiator * 0.018 + (1 - throttle) * 0.004 - throttle * 0.002) *
         tuning.coolingScale,
     );
   car.systems.overheat = clamp01(
