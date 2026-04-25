@@ -87,10 +87,10 @@ describe("runtime flow", () => {
     expect(state.events).toEqual([]);
   });
 
-  it("emits the go cue during the last intro second and clears collisions while idle", () => {
+  it("emits the go cue once when the intro crosses the last second and clears collisions while idle", () => {
     const state = createRunningState();
     state.mode = "intro";
-    state.session.countdown = 0.8;
+    state.session.countdown = 1.05;
     state.recentCollisions = [
       {
         aId: 1,
@@ -105,7 +105,8 @@ describe("runtime flow", () => {
     ];
 
     advanceState(state, 0.1);
-    expect(state.events.some((event) => event.text === "Go!")).toBe(true);
+    advanceState(state, 0.1);
+    expect(state.events.filter((event) => event.text === "Go!")).toHaveLength(1);
 
     state.mode = "upgrade";
     advanceState(state, 0.1);

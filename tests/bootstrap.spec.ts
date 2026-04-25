@@ -333,4 +333,33 @@ describe("bootstrap and app controller", () => {
     expect(failed).toBeNull();
     expect(harness.appRoot.textContent).toContain("2D canvas context unavailable");
   });
+
+  it("destroys controller hooks and stops queued frame loops", () => {
+    const controller = createAppController({
+      appRoot: harness.appRoot,
+      nav: { ...window.navigator, webdriver: true } as Navigator,
+      requestAnimationFrame: harness.requestAnimationFrame,
+      performanceNow: harness.performanceNow,
+      createAudio: () => ({
+        ensureStarted: vi.fn().mockResolvedValue(undefined),
+        update: vi.fn(),
+      }),
+    });
+
+    expect(window.advanceTime).toBe(controller.advanceTime);
+    expect(window.render_game_to_text).toBeTypeOf("function");
+
+    harness.flushAnimationFrames(16);
+    expect(harness.requestAnimationFrame).toHaveBeenCalledTimes(2);
+
+    controller.destroy();
+    harness.flushAnimationFrames(32);
+
+    expect(harness.requestAnimationFrame).toHaveBeenCalledTimes(2);
+    expect(window.advanceTime).toBeUndefined();
+    expect(window.render_game_to_text).toBeUndefined();
+
+    controller.advanceTime(1000);
+    expect(controller.state.elapsed).toBe(0);
+  });
 });

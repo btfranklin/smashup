@@ -289,8 +289,9 @@ export function advanceState(state: GameState, dt: number): void {
   updateCamera(state, dt);
 
   if (state.mode === "intro") {
+    const previousCountdown = state.session.countdown;
     state.session.countdown = Math.max(0, state.session.countdown - dt);
-    if (state.session.countdown > 0.05 && state.session.countdown < 1.05) {
+    if (previousCountdown > 1 && state.session.countdown <= 1) {
       pushEvent(state, "Go!", "countdown", 1, 0.5);
     }
     if (state.session.countdown <= 0) {

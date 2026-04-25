@@ -186,6 +186,7 @@ export function createAppController({
   };
   const automatedStepping = Boolean(nav.webdriver);
   const teardown: Array<() => void> = [];
+  let destroyed = false;
 
   function renderMenuContent(force = false): void {
     if (state.mode === "car_preview") {
@@ -451,6 +452,9 @@ export function createAppController({
   let skipNextFrameCatchup = false;
 
   function advanceTime(ms: number): void {
+    if (destroyed) {
+      return;
+    }
     accumulator = 0;
     lastTime = performanceNow();
     skipNextFrameCatchup = true;
@@ -461,12 +465,21 @@ export function createAppController({
     present();
   }
 
+  function scheduleNextFrame(): void {
+    if (!destroyed) {
+      requestAnimationFrame(frameLoop);
+    }
+  }
+
   function frameLoop(now: number): void {
+    if (destroyed) {
+      return;
+    }
     if (automatedStepping) {
       lastTime = now;
       accumulator = 0;
       present();
-      requestAnimationFrame(frameLoop);
+      scheduleNextFrame();
       return;
     }
     if (skipNextFrameCatchup) {
@@ -474,7 +487,7 @@ export function createAppController({
       accumulator = 0;
       skipNextFrameCatchup = false;
       present();
-      requestAnimationFrame(frameLoop);
+      scheduleNextFrame();
       return;
     }
     const delta = Math.min(0.05, (now - lastTime) / 1000);
@@ -485,18 +498,19 @@ export function createAppController({
       accumulator -= fixedStep;
     }
     present();
-    requestAnimationFrame(frameLoop);
+    scheduleNextFrame();
   }
 
+  const renderGameToTextHook = () => renderGameToText(state);
   installBrowserHooks(win, {
     advanceTime,
-    renderGameToText: () => renderGameToText(state),
+    renderGameToText: renderGameToTextHook,
   });
 
   resizeCanvas();
   renderMenuContent(true);
   present();
-  requestAnimationFrame(frameLoop);
+  scheduleNextFrame();
 
   return {
     state,
@@ -510,7 +524,17 @@ export function createAppController({
     resizeCanvas,
     advanceTime,
     destroy: () => {
+      if (destroyed) {
+        return;
+      }
+      destroyed = true;
       teardown.forEach((cleanup) => cleanup());
+      if (win.advanceTime === advanceTime) {
+        delete win.advanceTime;
+      }
+      if (win.render_game_to_text === renderGameToTextHook) {
+        delete win.render_game_to_text;
+      }
     },
   };
 }
