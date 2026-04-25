@@ -50,6 +50,7 @@ export function resetRoundStats(state: GameState): void {
     knockoutReason: null,
     playerKnockouts: [],
     lastPlayerTargetId: null,
+    lastPlayerTargetElapsed: null,
     finalTwoAnnounced: false,
   };
 }
@@ -143,34 +144,65 @@ function registerCollisionDrama(state: GameState): void {
     return;
   }
 
-  const strongest = [...state.recentCollisions].sort(
-    (a, b) => b.severity - a.severity,
-  )[0];
-  if (strongest.severity > state.roundStats.biggestHitSeverity) {
+  let strongest = state.recentCollisions[0];
+  for (const collision of state.recentCollisions.slice(1)) {
+    if (
+      collision.damageSeverity > strongest.damageSeverity ||
+      (collision.damageSeverity === strongest.damageSeverity &&
+        collision.severity > strongest.severity)
+    ) {
+      strongest = collision;
+    }
+  }
+  if (
+    strongest.damageSeverity > 0 &&
+    strongest.damageSeverity > state.roundStats.biggestHitSeverity
+  ) {
     const a = getCarById(state, strongest.aId);
     const b = getCarById(state, strongest.bId);
-    state.roundStats.biggestHitSeverity = strongest.severity;
+    state.roundStats.biggestHitSeverity = strongest.damageSeverity;
     state.roundStats.biggestHitLabel =
       a && b ? `${a.label} into ${b.label}` : null;
+  }
+
+  let playerCollision = null;
+  for (const collision of state.recentCollisions) {
+    const playerHit =
+      collision.aId === state.playerId || collision.bId === state.playerId;
+    if (
+      playerHit &&
+      collision.damageSeverity > 0 &&
+      (!playerCollision ||
+        collision.damageSeverity > playerCollision.damageSeverity)
+    ) {
+      playerCollision = collision;
+    }
+  }
+  if (playerCollision) {
+    state.roundStats.lastPlayerTargetId =
+      playerCollision.aId === state.playerId
+        ? playerCollision.bId
+        : playerCollision.aId;
+    state.roundStats.lastPlayerTargetElapsed = state.elapsed;
   }
 
   const playerInvolved =
     strongest.aId === state.playerId || strongest.bId === state.playerId;
   const qualifiesForShake =
-    (playerInvolved && strongest.severity >= 0.84) ||
-    (!playerInvolved && strongest.severity >= 0.93);
+    (playerInvolved && strongest.damageSeverity >= 0.48) ||
+    (!playerInvolved && strongest.damageSeverity >= 0.62);
   if (qualifiesForShake) {
     const scale = playerInvolved ? 1 : 0.85;
     state.camera.shake = Math.max(
       state.camera.shake,
-      strongest.severity * 4.8 * scale,
+      strongest.damageSeverity * 4.8 * scale,
     );
     state.camera.nudgeX +=
-      strongest.normal.x * strongest.severity * 2.8 * scale;
+      strongest.normal.x * strongest.damageSeverity * 2.8 * scale;
     state.camera.nudgeY +=
-      strongest.normal.y * strongest.severity * 2.8 * scale;
+      strongest.normal.y * strongest.damageSeverity * 2.8 * scale;
   }
-  if (playerInvolved && strongest.severity >= 0.94) {
+  if (playerInvolved && strongest.damageSeverity >= 0.72) {
     state.camera.freezeTime = Math.max(state.camera.freezeTime, 0.02);
   }
   const strongestA = getCarById(state, strongest.aId);
@@ -178,9 +210,18 @@ function registerCollisionDrama(state: GameState): void {
   const hasDisabledParticipant = Boolean(
     strongestA?.disabled || strongestB?.disabled,
   );
-  if (strongest.severity > 0.82 && !hasDisabledParticipant) {
-    pushEvent(state, "Huge Hit!", "impact", strongest.severity, 1.2);
+  if (strongest.damageSeverity > 0.48 && !hasDisabledParticipant) {
+    pushEvent(state, "Huge Hit!", "impact", strongest.damageSeverity, 1.2);
   }
+}
+
+function hasRecentPlayerCredit(state: GameState, car: Car): boolean {
+  const creditElapsed = state.roundStats.lastPlayerTargetElapsed;
+  return (
+    state.roundStats.lastPlayerTargetId === car.id &&
+    creditElapsed !== null &&
+    state.elapsed - creditElapsed <= 4
+  );
 }
 
 function registerNewEliminations(
@@ -216,8 +257,13 @@ function registerNewEliminations(
         1,
         2.6,
       );
-    } else if (attackerId === state.playerId) {
-      state.roundStats.playerKnockouts.push(car.label);
+    } else if (
+      attackerId === state.playerId ||
+      (attackerId === null && hasRecentPlayerCredit(state, car))
+    ) {
+      if (!state.roundStats.playerKnockouts.includes(car.label)) {
+        state.roundStats.playerKnockouts.push(car.label);
+      }
       pushEvent(state, `You wrecked ${car.label}`, "result", 0.9, 2.2);
     } else {
       pushEvent(state, `${car.label} is done`, "warning", 0.66, 1.6);

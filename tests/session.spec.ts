@@ -76,6 +76,18 @@ describe("session flow", () => {
   it("applies pit upgrades and carries serviced condition into the next round", () => {
     const state = createInitialState();
     chooseStarterCar(state, "bulldozer");
+    state.session.lastRoundSummary = {
+      roundIndex: 1,
+      title: "Dust Bowl",
+      playerWon: true,
+      winnerLabel: "Player",
+      survivalTime: 12,
+      eliminatedByLabel: null,
+      playerKnockouts: ["Rimshot"],
+      biggestHitLabel: "Player into Rimshot",
+      biggestHitSeverity: 0.9,
+      knockoutReason: null,
+    };
     state.session.playerCondition = {
       systems: {
         engine: 0.4,
@@ -106,6 +118,8 @@ describe("session flow", () => {
     expect(state.cars[0].systems.radiator).toBeGreaterThan(0.35);
     expect(state.cars[0].body.front).toBeLessThan(0.4);
     expect(state.cars[0].lights.frontLeft).toBe(true);
+    expect(state.session.lastRoundSummary).toBeNull();
+    expect(state.roundStats.biggestHitSeverity).toBe(0);
   });
 
   it("applies round modifiers when preparing later heats", () => {

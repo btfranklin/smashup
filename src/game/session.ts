@@ -421,6 +421,7 @@ function prepareRound(state: GameState, roundIndex: number): void {
   state.pendingSystemEvents = [];
   state.camera = { shake: 0, nudgeX: 0, nudgeY: 0, freezeTime: 0 };
   state.session.countdown = 3.2;
+  state.session.lastRoundSummary = null;
   state.mode = "intro";
   state.tick = 0;
   state.smokePuffs = [];
@@ -492,6 +493,7 @@ export function createInitialState(): GameState {
       knockoutReason: null,
       playerKnockouts: [],
       lastPlayerTargetId: null,
+      lastPlayerTargetElapsed: null,
       finalTwoAnnounced: false,
     },
   };

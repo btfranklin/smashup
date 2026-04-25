@@ -23,6 +23,7 @@ describe("runtime flow", () => {
     resetRoundStats(state);
     expect(state.roundStats.biggestHitSeverity).toBe(0);
     expect(state.roundStats.playerKnockouts).toEqual([]);
+    expect(state.roundStats.lastPlayerTargetElapsed).toBeNull();
   });
 
   it("applies player controls only while running and alive", () => {
@@ -190,6 +191,30 @@ describe("runtime flow", () => {
     ).toBe(true);
   });
 
+  it("does not call low-damage bumper shoves huge hits", () => {
+    const state = createRunningState();
+    const player = getPlayerFixture(state);
+    const rival = createCarFixture({
+      id: 51,
+      x: player.x + 55,
+      y: player.y,
+      angle: 0,
+      vx: 0,
+      vy: 0,
+      label: "Rimshot",
+    });
+    player.vx = 100;
+    state.cars = [player, rival];
+
+    advanceState(state, 1 / 60);
+
+    expect(state.roundStats.biggestHitSeverity).toBeLessThan(0.48);
+    expect(state.camera.shake).toBe(0);
+    expect(state.events.some((event) => event.text === "Huge Hit!")).toBe(
+      false,
+    );
+  });
+
   it("transitions to round results with a win when the player outlasts everyone", () => {
     const state = createRunningState();
     const player = getPlayerFixture(state);
@@ -245,6 +270,35 @@ describe("runtime flow", () => {
     });
     player.vx = 220;
     state.cars = [player, rival];
+
+    advanceState(state, 1 / 60);
+
+    expect(state.roundStats.playerKnockouts).toContain("Scrapheap");
+    expect(state.events.some((event) => event.text.includes("wrecked"))).toBe(
+      true,
+    );
+  });
+
+  it("credits delayed knockouts from recent player damage", () => {
+    const state = createRunningState();
+    const player = getPlayerFixture(state);
+    const rival = createCarFixture({
+      id: 61,
+      x: player.x + 300,
+      y: player.y,
+      label: "Scrapheap",
+      systems: {
+        engine: 0.08,
+        radiator: 0.02,
+        transmission: 0.2,
+        steering: 0.2,
+        overheat: 1,
+      },
+      body: { front: 0.5, rear: 0.2, left: 0.1, right: 0.1 },
+    });
+    state.cars = [player, rival];
+    state.roundStats.lastPlayerTargetId = rival.id;
+    state.roundStats.lastPlayerTargetElapsed = state.elapsed - 1;
 
     advanceState(state, 1 / 60);
 

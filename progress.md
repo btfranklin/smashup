@@ -75,3 +75,11 @@ Latest validation
 
 Remaining roadmap
 - Only deferred items remain in `ROADMAP.md`: replay/highlight work and a light long-term meta layer.
+
+Current fix pass
+- Investigating user-reported derby flow issues around "Huge Hit!" copy, kill credit, and biggest-hit carryover.
+- Confirmed the hit event and biggest-hit summary were using raw collision severity, so moderate bumper shoves could read as huge despite low damage severity.
+- Confirmed knockout credit only looked at same-frame collisions, so delayed failures from recent player damage could miss player credit.
+- Confirmed round stats reset in `prepareRound`, but the previous `lastRoundSummary` stayed populated into the next round and could make debug/output surfaces look stale.
+- Fixed those by scoring impact callouts/summaries on damage severity, retaining a short recent-player-hit credit window for delayed KOs, and clearing stale round summaries when preparing a new heat.
+- `npm run validate` passes after the fix; in-app browser verification reached the Round 1 intro at `http://127.0.0.1:5173/` with only the pre-existing missing favicon request in the console.

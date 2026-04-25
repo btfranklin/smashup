@@ -308,6 +308,7 @@ export type GameState = {
     knockoutReason: string | null;
     playerKnockouts: string[];
     lastPlayerTargetId: number | null;
+    lastPlayerTargetElapsed: number | null;
     finalTwoAnnounced: boolean;
   };
 };
