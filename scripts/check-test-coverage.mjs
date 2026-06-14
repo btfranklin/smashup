@@ -14,6 +14,8 @@ if (!fs.existsSync(summaryPath)) {
 const summary = JSON.parse(fs.readFileSync(summaryPath, "utf8"));
 const failures = [];
 
+// Overall coverage keeps the full repo honest while allowing a few imperative
+// browser/runtime branches to remain below the pure-rule module floors.
 const overallThresholds = {
   lines: 93,
   statements: 93,
@@ -30,6 +32,9 @@ for (const [metric, threshold] of Object.entries(overallThresholds)) {
   }
 }
 
+// File thresholds are calibrated by surface: content/contracts and small rule
+// helpers stay near-complete, while bootstrap/runtime/rendering get explicit
+// floors that fit their browser and drawing branches.
 const fileThresholds = {
   "src/app/bootstrap.ts": {
     lines: 80,

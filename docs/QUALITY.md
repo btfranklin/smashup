@@ -9,11 +9,11 @@
 ## Mechanical Coverage
 - `npm run check:repo` enforces the agent map, docs presence, validation scripts, preview-source wiring, and the absence of the old `src/game/game.ts` catch-all.
 - `npm run test:coverage` verifies:
-- preview parsing matches source ids and fails visibly on invalid params
-- runtime/session/debug modules preserve the documented state contracts
-- browser hooks survive bootstrap and deterministic stepping in `jsdom`
-- audio transition, countdown, crash cooldown, and mix helpers behave deterministically
-- render and effect systems stay branch-covered without browser-driving
+  - preview parsing matches source ids and fails visibly on invalid params
+  - runtime/session/debug modules preserve the documented state contracts
+  - browser hooks survive bootstrap and deterministic stepping in `jsdom`
+  - audio transition, countdown, crash cooldown, and mix helpers behave deterministically
+  - render and effect systems stay branch-covered without browser-driving
 - `scripts/check-test-coverage.mjs` enforces calibrated per-surface thresholds so pure rule modules stay near-complete while imperative bootstrap/runtime wrappers still have explicit floors.
 
 ## When To Extend Validation

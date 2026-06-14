@@ -29,6 +29,21 @@ describe("bootstrap and app controller", () => {
     harness.cleanup();
   });
 
+  function createTestController(
+    options: Partial<Parameters<typeof createAppController>[0]> = {},
+  ) {
+    return createAppController({
+      appRoot: harness.appRoot,
+      requestAnimationFrame: harness.requestAnimationFrame,
+      performanceNow: harness.performanceNow,
+      createAudio: () => ({
+        ensureStarted: vi.fn().mockResolvedValue(undefined),
+        update: vi.fn(),
+      }),
+      ...options,
+    });
+  }
+
   it("renders a visible startup error for invalid preview params and does not install hooks", () => {
     window.history.replaceState(
       {},
@@ -49,15 +64,7 @@ describe("bootstrap and app controller", () => {
   });
 
   it("boots the normal app shell with frame, canvas, and menu", () => {
-    const controller = createAppController({
-      appRoot: harness.appRoot,
-      requestAnimationFrame: harness.requestAnimationFrame,
-      performanceNow: harness.performanceNow,
-      createAudio: () => ({
-        ensureStarted: vi.fn().mockResolvedValue(undefined),
-        update: vi.fn(),
-      }),
-    });
+    const controller = createTestController();
 
     expect(harness.appRoot.contains(controller.frame)).toBe(true);
     expect(controller.canvas.getAttribute("aria-label")).toContain("arena");
@@ -73,15 +80,7 @@ describe("bootstrap and app controller", () => {
       "/?preview=car&preset=bulldozer&scenario=critical",
     );
 
-    const controller = createAppController({
-      appRoot: harness.appRoot,
-      requestAnimationFrame: harness.requestAnimationFrame,
-      performanceNow: harness.performanceNow,
-      createAudio: () => ({
-        ensureStarted: vi.fn().mockResolvedValue(undefined),
-        update: vi.fn(),
-      }),
-    });
+    const controller = createTestController();
 
     expect(controller.state.mode).toBe("car_preview");
     expect(controller.menu.hidden).toBe(true);
@@ -90,15 +89,7 @@ describe("bootstrap and app controller", () => {
   });
 
   it("advances from menu to car select and then into the round intro", () => {
-    const controller = createAppController({
-      appRoot: harness.appRoot,
-      requestAnimationFrame: harness.requestAnimationFrame,
-      performanceNow: harness.performanceNow,
-      createAudio: () => ({
-        ensureStarted: vi.fn().mockResolvedValue(undefined),
-        update: vi.fn(),
-      }),
-    });
+    const controller = createTestController();
 
     harness.appRoot.querySelector<HTMLButtonElement>("#start-btn")?.click();
     expect(controller.state.mode).toBe("car_select");
@@ -110,16 +101,20 @@ describe("bootstrap and app controller", () => {
     expect(controller.state.session.playerBuild?.presetId).toBe("bulldozer");
   });
 
+  it("uses content-ordered preset number shortcuts while in car select", () => {
+    const controller = createTestController();
+
+    harness.appRoot.querySelector<HTMLButtonElement>("#start-btn")?.click();
+    document.dispatchEvent(new KeyboardEvent("keydown", { code: "Digit9" }));
+    expect(controller.state.mode).toBe("car_select");
+
+    document.dispatchEvent(new KeyboardEvent("keydown", { code: "Digit2" }));
+    expect(controller.state.mode).toBe("intro");
+    expect(controller.state.session.playerBuild?.presetId).toBe("darter");
+  });
+
   it("keeps advanceTime deterministic and installs render_game_to_text", () => {
-    const controller = createAppController({
-      appRoot: harness.appRoot,
-      requestAnimationFrame: harness.requestAnimationFrame,
-      performanceNow: harness.performanceNow,
-      createAudio: () => ({
-        ensureStarted: vi.fn().mockResolvedValue(undefined),
-        update: vi.fn(),
-      }),
-    });
+    const controller = createTestController();
 
     harness.appRoot.querySelector<HTMLButtonElement>("#start-btn")?.click();
     harness.appRoot
@@ -136,15 +131,7 @@ describe("bootstrap and app controller", () => {
   });
 
   it("recomputes canvas display size on resize", () => {
-    const controller = createAppController({
-      appRoot: harness.appRoot,
-      requestAnimationFrame: harness.requestAnimationFrame,
-      performanceNow: harness.performanceNow,
-      createAudio: () => ({
-        ensureStarted: vi.fn().mockResolvedValue(undefined),
-        update: vi.fn(),
-      }),
-    });
+    const controller = createTestController();
 
     harness.setContainerSize(600, 400);
     controller.resizeCanvas();
@@ -153,15 +140,7 @@ describe("bootstrap and app controller", () => {
   });
 
   it("routes fullscreen toggles through the frame and document APIs", () => {
-    const controller = createAppController({
-      appRoot: harness.appRoot,
-      requestAnimationFrame: harness.requestAnimationFrame,
-      performanceNow: harness.performanceNow,
-      createAudio: () => ({
-        ensureStarted: vi.fn().mockResolvedValue(undefined),
-        update: vi.fn(),
-      }),
-    });
+    const controller = createTestController();
     harness.attachFullscreenStub(controller.frame);
 
     document.dispatchEvent(new KeyboardEvent("keydown", { code: "KeyF" }));
@@ -174,15 +153,7 @@ describe("bootstrap and app controller", () => {
   });
 
   it("tracks keyboard input state through keydown and keyup", () => {
-    const controller = createAppController({
-      appRoot: harness.appRoot,
-      requestAnimationFrame: harness.requestAnimationFrame,
-      performanceNow: harness.performanceNow,
-      createAudio: () => ({
-        ensureStarted: vi.fn().mockResolvedValue(undefined),
-        update: vi.fn(),
-      }),
-    });
+    const controller = createTestController();
 
     document.dispatchEvent(new KeyboardEvent("keydown", { code: "KeyA" }));
     document.dispatchEvent(new KeyboardEvent("keydown", { code: "ArrowUp" }));
@@ -235,15 +206,7 @@ describe("bootstrap and app controller", () => {
   });
 
   it("renders round-results and upgrade flows through the menu", () => {
-    const controller = createAppController({
-      appRoot: harness.appRoot,
-      requestAnimationFrame: harness.requestAnimationFrame,
-      performanceNow: harness.performanceNow,
-      createAudio: () => ({
-        ensureStarted: vi.fn().mockResolvedValue(undefined),
-        update: vi.fn(),
-      }),
-    });
+    const controller = createTestController();
 
     harness.appRoot.querySelector<HTMLButtonElement>("#start-btn")?.click();
     harness.appRoot
@@ -277,15 +240,7 @@ describe("bootstrap and app controller", () => {
   });
 
   it("renders tournament-over flow and supports keyboard restart", () => {
-    const controller = createAppController({
-      appRoot: harness.appRoot,
-      requestAnimationFrame: harness.requestAnimationFrame,
-      performanceNow: harness.performanceNow,
-      createAudio: () => ({
-        ensureStarted: vi.fn().mockResolvedValue(undefined),
-        update: vi.fn(),
-      }),
-    });
+    const controller = createTestController();
 
     controller.state.mode = "tournament_over";
     controller.state.session.completedRounds = [
@@ -311,15 +266,8 @@ describe("bootstrap and app controller", () => {
   });
 
   it("handles automated stepping and startup failures from missing canvas support", () => {
-    const controller = createAppController({
-      appRoot: harness.appRoot,
+    const controller = createTestController({
       nav: { ...window.navigator, webdriver: true } as Navigator,
-      requestAnimationFrame: harness.requestAnimationFrame,
-      performanceNow: harness.performanceNow,
-      createAudio: () => ({
-        ensureStarted: vi.fn().mockResolvedValue(undefined),
-        update: vi.fn(),
-      }),
     });
     harness.flushAnimationFrames(16);
     expect(harness.requestAnimationFrame).toHaveBeenCalledTimes(2);
@@ -335,15 +283,8 @@ describe("bootstrap and app controller", () => {
   });
 
   it("destroys controller hooks and stops queued frame loops", () => {
-    const controller = createAppController({
-      appRoot: harness.appRoot,
+    const controller = createTestController({
       nav: { ...window.navigator, webdriver: true } as Navigator,
-      requestAnimationFrame: harness.requestAnimationFrame,
-      performanceNow: harness.performanceNow,
-      createAudio: () => ({
-        ensureStarted: vi.fn().mockResolvedValue(undefined),
-        update: vi.fn(),
-      }),
     });
 
     expect(window.advanceTime).toBe(controller.advanceTime);

@@ -7,185 +7,230 @@ import {
   getPlayerCar,
   getWinnerCar,
 } from "./selectors";
-import type { GameState } from "./types";
+import type { Car, GameState } from "./types";
 
-export function renderGameToText(state: GameState): string {
-  if (state.mode === "car_preview") {
-    const previewCar = getPlayerCar(state) ?? state.cars[0] ?? null;
-    return JSON.stringify({
-      mode: "car_preview",
-      preview: state.preview,
-      arena: {
-        width: state.arena.width,
-        height: state.arena.height,
-        coordinates: {
-          origin: "top-left",
-          xAxis: "right",
-          yAxis: "down",
+function fixed(value: number, digits: number): number {
+  return Number(value.toFixed(digits));
+}
+
+function serializeCoordinates() {
+  return {
+    origin: "top-left",
+    xAxis: "right",
+    yAxis: "down",
+  };
+}
+
+function serializePreviewCar(car: Car | null) {
+  return car
+    ? {
+        label: car.label,
+        presetId: car.presetId,
+        roofNumber: car.roofNumber,
+        systems: car.systems,
+        phases: car.phases,
+        body: car.body,
+        lights: car.lights,
+        disabled: car.disabled,
+      }
+    : null;
+}
+
+function serializePreviewEffects(state: GameState) {
+  return {
+    smokePuffs: state.smokePuffs.length,
+    smokePreview: state.smokePuffs.map((puff) => ({
+      x: fixed(puff.x, 1),
+      y: fixed(puff.y, 1),
+      size: fixed(puff.size, 1),
+      density: fixed(puff.density, 2),
+      flame: fixed(puff.flame, 2),
+    })),
+  };
+}
+
+function serializePreviewState(state: GameState) {
+  const previewCar = getPlayerCar(state) ?? state.cars[0] ?? null;
+  return {
+    mode: "car_preview",
+    preview: state.preview,
+    arena: {
+      width: state.arena.width,
+      height: state.arena.height,
+      coordinates: serializeCoordinates(),
+    },
+    car: serializePreviewCar(previewCar),
+    effects: serializePreviewEffects(state),
+  };
+}
+
+function serializeArena(state: GameState) {
+  return {
+    width: state.arena.width,
+    height: state.arena.height,
+    wallPadding: state.arena.wallPadding,
+    variant: state.arena.variant,
+    modifier: state.arena.modifier,
+    title: state.arena.title,
+    coordinates: serializeCoordinates(),
+    mudZones: state.arena.mudZones.map((zone) => ({
+      x: zone.x,
+      y: zone.y,
+      width: zone.width,
+      height: zone.height,
+      grip: zone.grip,
+    })),
+    objects: state.arena.objects.slice(0, 8).map((object) => ({
+      id: object.id,
+      kind: object.kind,
+      x: fixed(object.x, 1),
+      y: fixed(object.y, 1),
+    })),
+  };
+}
+
+function serializeSession(state: GameState) {
+  return {
+    roundNumber: state.session.roundIndex + 1,
+    totalRounds: state.session.totalRounds,
+    roundTitle: state.session.roundPlan?.title ?? null,
+    modifierLabel: state.session.roundPlan
+      ? getModifierSummary(state.session.roundPlan.modifier)
+      : null,
+    selectedPreset: state.session.playerBuild?.presetId ?? null,
+    completedRounds: state.session.completedRounds.map((round) => ({
+      roundIndex: round.roundIndex,
+      playerWon: round.playerWon,
+      winnerLabel: round.winnerLabel,
+    })),
+    countdown: fixed(state.session.countdown, 2),
+  };
+}
+
+function serializePlayer(car: Car | undefined) {
+  return car
+    ? {
+        id: car.id,
+        label: car.label,
+        presetId: car.presetId,
+        roofNumber: car.roofNumber,
+        x: fixed(car.x, 1),
+        y: fixed(car.y, 1),
+        angle: fixed(car.angle, 2),
+        velocity: {
+          x: fixed(car.vx, 1),
+          y: fixed(car.vy, 1),
         },
-      },
-      car: previewCar
-        ? {
-            label: previewCar.label,
-            presetId: previewCar.presetId,
-            roofNumber: previewCar.roofNumber,
-            systems: previewCar.systems,
-            phases: previewCar.phases,
-            body: previewCar.body,
-            lights: previewCar.lights,
-            disabled: previewCar.disabled,
-          }
-        : null,
-      effects: {
-        smokePuffs: state.smokePuffs.length,
-        smokePreview: state.smokePuffs.map((puff) => ({
-          x: Number(puff.x.toFixed(1)),
-          y: Number(puff.y.toFixed(1)),
-          size: Number(puff.size.toFixed(1)),
-          density: Number(puff.density.toFixed(2)),
-          flame: Number(puff.flame.toFixed(2)),
-        })),
-      },
-    });
-  }
+        signedSpeed: fixed(signedSpeedForCar(car), 1),
+        steerAngle: fixed(car.steerAngle, 3),
+        controls: car.controls,
+        systems: {
+          engine: fixed(car.systems.engine, 2),
+          radiator: fixed(car.systems.radiator, 2),
+          transmission: fixed(car.systems.transmission, 2),
+          steering: fixed(car.systems.steering, 2),
+          overheat: fixed(car.systems.overheat, 2),
+        },
+        phases: car.phases,
+        lights: car.lights,
+        disabled: car.disabled,
+        eliminationTime:
+          car.eliminationTime === null ? null : fixed(car.eliminationTime, 2),
+      }
+    : null;
+}
 
+function serializeOpponentCar(car: Car) {
+  return {
+    id: car.id,
+    label: car.label,
+    presetId: car.presetId,
+    roofNumber: car.roofNumber,
+    archetype: car.aiArchetype ? AI_ARCHETYPE_LABELS[car.aiArchetype] : null,
+    x: fixed(car.x, 1),
+    y: fixed(car.y, 1),
+    angle: fixed(car.angle, 2),
+    targetId: car.aiState.targetId,
+    disabled: car.disabled,
+    phases: car.phases,
+    visibleDamage: {
+      front: fixed(car.body.front, 2),
+      rear: fixed(car.body.rear, 2),
+      left: fixed(car.body.left, 2),
+      right: fixed(car.body.right, 2),
+      lights: car.lights,
+    },
+  };
+}
+
+function serializeRecentEvents(state: GameState) {
+  return state.events.slice(-4).map((event) => ({
+    text: event.text,
+    kind: event.kind,
+    ttl: fixed(event.ttl, 2),
+  }));
+}
+
+function serializeRecentCollisions(state: GameState) {
+  return state.recentCollisions.slice(-4).map((collision) => ({
+    aId: collision.aId,
+    bId: collision.bId,
+    severity: fixed(collision.severity, 2),
+    damageSeverity: fixed(collision.damageSeverity, 2),
+    zoneA: collision.zoneA,
+    zoneB: collision.zoneB,
+  }));
+}
+
+function serializeEffects(state: GameState) {
+  return {
+    smokePuffs: state.smokePuffs.length,
+    smokePreview: state.smokePuffs.slice(-6).map((puff) => ({
+      sourceCarId: puff.sourceCarId,
+      x: fixed(puff.x, 1),
+      y: fixed(puff.y, 1),
+      age: fixed(puff.age, 2),
+      size: fixed(puff.size, 1),
+      density: fixed(puff.density, 2),
+      flame: fixed(puff.flame, 2),
+    })),
+    debrisParticles: state.debrisParticles.length,
+    debrisPreview: getRecentDebrisSummary(state),
+    dustPuffs: state.dustPuffs.length,
+    camera: {
+      shake: fixed(state.camera.shake, 2),
+      nudgeX: fixed(state.camera.nudgeX, 2),
+      nudgeY: fixed(state.camera.nudgeY, 2),
+      freezeTime: fixed(state.camera.freezeTime, 3),
+    },
+  };
+}
+
+function serializeRunningState(state: GameState) {
   const player = getPlayerCar(state);
   const otherCars = [...state.cars]
     .filter((car) => !car.isPlayer)
     .sort((a, b) => a.id - b.id);
-  const payload = {
+  return {
     mode: state.mode,
-    arena: {
-      width: state.arena.width,
-      height: state.arena.height,
-      wallPadding: state.arena.wallPadding,
-      variant: state.arena.variant,
-      modifier: state.arena.modifier,
-      title: state.arena.title,
-      coordinates: {
-        origin: "top-left",
-        xAxis: "right",
-        yAxis: "down",
-      },
-      mudZones: state.arena.mudZones.map((zone) => ({
-        x: zone.x,
-        y: zone.y,
-        width: zone.width,
-        height: zone.height,
-        grip: zone.grip,
-      })),
-      objects: state.arena.objects.slice(0, 8).map((object) => ({
-        id: object.id,
-        kind: object.kind,
-        x: Number(object.x.toFixed(1)),
-        y: Number(object.y.toFixed(1)),
-      })),
-    },
-    session: {
-      roundNumber: state.session.roundIndex + 1,
-      totalRounds: state.session.totalRounds,
-      roundTitle: state.session.roundPlan?.title ?? null,
-      modifierLabel: state.session.roundPlan
-        ? getModifierSummary(state.session.roundPlan.modifier)
-        : null,
-      selectedPreset: state.session.playerBuild?.presetId ?? null,
-      completedRounds: state.session.completedRounds.map((round) => ({
-        roundIndex: round.roundIndex,
-        playerWon: round.playerWon,
-        winnerLabel: round.winnerLabel,
-      })),
-      countdown: Number(state.session.countdown.toFixed(2)),
-    },
-    player: player
-      ? {
-          id: player.id,
-          label: player.label,
-          presetId: player.presetId,
-          roofNumber: player.roofNumber,
-          x: Number(player.x.toFixed(1)),
-          y: Number(player.y.toFixed(1)),
-          angle: Number(player.angle.toFixed(2)),
-          velocity: {
-            x: Number(player.vx.toFixed(1)),
-            y: Number(player.vy.toFixed(1)),
-          },
-          signedSpeed: Number(signedSpeedForCar(player).toFixed(1)),
-          steerAngle: Number(player.steerAngle.toFixed(3)),
-          controls: player.controls,
-          systems: {
-            engine: Number(player.systems.engine.toFixed(2)),
-            radiator: Number(player.systems.radiator.toFixed(2)),
-            transmission: Number(player.systems.transmission.toFixed(2)),
-            steering: Number(player.systems.steering.toFixed(2)),
-            overheat: Number(player.systems.overheat.toFixed(2)),
-          },
-          phases: player.phases,
-          lights: player.lights,
-          disabled: player.disabled,
-          eliminationTime:
-            player.eliminationTime === null
-              ? null
-              : Number(player.eliminationTime.toFixed(2)),
-        }
-      : null,
-    cars: otherCars.map((car) => ({
-      id: car.id,
-      label: car.label,
-      presetId: car.presetId,
-      roofNumber: car.roofNumber,
-      archetype: car.aiArchetype ? AI_ARCHETYPE_LABELS[car.aiArchetype] : null,
-      x: Number(car.x.toFixed(1)),
-      y: Number(car.y.toFixed(1)),
-      angle: Number(car.angle.toFixed(2)),
-      targetId: car.aiState.targetId,
-      disabled: car.disabled,
-      phases: car.phases,
-      visibleDamage: {
-        front: Number(car.body.front.toFixed(2)),
-        rear: Number(car.body.rear.toFixed(2)),
-        left: Number(car.body.left.toFixed(2)),
-        right: Number(car.body.right.toFixed(2)),
-        lights: car.lights,
-      },
-    })),
+    arena: serializeArena(state),
+    session: serializeSession(state),
+    player: serializePlayer(player),
+    cars: otherCars.map(serializeOpponentCar),
     remainingDrivers: getActiveCars(state).length,
     winner: getWinnerCar(state)?.label ?? null,
     outlastedDrivers: getOutlastedDriverLabels(state),
-    recentEvents: state.events.slice(-4).map((event) => ({
-      text: event.text,
-      kind: event.kind,
-      ttl: Number(event.ttl.toFixed(2)),
-    })),
-    recentCollisions: state.recentCollisions.slice(-4).map((collision) => ({
-      aId: collision.aId,
-      bId: collision.bId,
-      severity: Number(collision.severity.toFixed(2)),
-      damageSeverity: Number(collision.damageSeverity.toFixed(2)),
-      zoneA: collision.zoneA,
-      zoneB: collision.zoneB,
-    })),
+    recentEvents: serializeRecentEvents(state),
+    recentCollisions: serializeRecentCollisions(state),
     roundSummary: state.session.lastRoundSummary,
-    effects: {
-      smokePuffs: state.smokePuffs.length,
-      smokePreview: state.smokePuffs.slice(-6).map((puff) => ({
-        sourceCarId: puff.sourceCarId,
-        x: Number(puff.x.toFixed(1)),
-        y: Number(puff.y.toFixed(1)),
-        age: Number(puff.age.toFixed(2)),
-        size: Number(puff.size.toFixed(1)),
-        density: Number(puff.density.toFixed(2)),
-        flame: Number(puff.flame.toFixed(2)),
-      })),
-      debrisParticles: state.debrisParticles.length,
-      debrisPreview: getRecentDebrisSummary(state),
-      dustPuffs: state.dustPuffs.length,
-      camera: {
-        shake: Number(state.camera.shake.toFixed(2)),
-        nudgeX: Number(state.camera.nudgeX.toFixed(2)),
-        nudgeY: Number(state.camera.nudgeY.toFixed(2)),
-        freezeTime: Number(state.camera.freezeTime.toFixed(3)),
-      },
-    },
+    effects: serializeEffects(state),
   };
-  return JSON.stringify(payload);
+}
+
+export function renderGameToText(state: GameState): string {
+  return JSON.stringify(
+    state.mode === "car_preview"
+      ? serializePreviewState(state)
+      : serializeRunningState(state),
+  );
 }

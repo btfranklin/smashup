@@ -18,11 +18,27 @@ import {
 import { updateSmokeEffects } from "./smoke";
 import type {
   Car,
+  CollisionEvent,
+  DamagePhase,
   EventMessage,
   GameState,
   RoundSummary,
   SystemName,
 } from "./types";
+
+const SYSTEM_EVENT_LABELS: Record<SystemName, string> = {
+  engine: "Engine Hurt",
+  radiator: "Radiator Hit",
+  transmission: "Transmission Slipping",
+  steering: "Steering Bent",
+};
+
+const SYSTEM_EVENT_EMPHASIS: Record<DamagePhase, number> = {
+  healthy: 0.62,
+  wounded: 0.62,
+  failing: 0.8,
+  critical: 1,
+};
 
 export function pushEvent(
   state: GameState,
@@ -41,9 +57,11 @@ export function pushEvent(
   state.events = state.events.slice(-8);
 }
 
-export function resetRoundStats(state: GameState): void {
-  state.roundStats = {
-    startElapsed: state.elapsed,
+export function createRoundStats(
+  startElapsed = 0,
+): GameState["roundStats"] {
+  return {
+    startElapsed,
     biggestHitSeverity: 0,
     biggestHitLabel: null,
     eliminatedById: null,
@@ -53,6 +71,10 @@ export function resetRoundStats(state: GameState): void {
     lastPlayerTargetElapsed: null,
     finalTwoAnnounced: false,
   };
+}
+
+export function resetRoundStats(state: GameState): void {
+  state.roundStats = createRoundStats(state.elapsed);
 }
 
 function getKnockoutReason(car: Car): string {
@@ -125,28 +147,23 @@ function refreshPhaseEvents(state: GameState, car: Car): void {
 
 function flushPendingSystemEvents(state: GameState): void {
   for (const entry of state.pendingSystemEvents.splice(0)) {
-    const name =
-      entry.system === "engine"
-        ? "Engine Hurt"
-        : entry.system === "radiator"
-          ? "Radiator Hit"
-          : entry.system === "transmission"
-            ? "Transmission Slipping"
-            : "Steering Bent";
-    const emphasis =
-      entry.phase === "critical" ? 1 : entry.phase === "failing" ? 0.8 : 0.62;
-    pushEvent(state, name, "system", emphasis, 2.2);
+    pushEvent(
+      state,
+      SYSTEM_EVENT_LABELS[entry.system],
+      "system",
+      SYSTEM_EVENT_EMPHASIS[entry.phase],
+      2.2,
+    );
   }
 }
 
-function registerCollisionDrama(state: GameState): void {
-  if (state.recentCollisions.length === 0) {
-    return;
-  }
-
-  let strongest = state.recentCollisions[0];
-  for (const collision of state.recentCollisions.slice(1)) {
+function getStrongestCollision(
+  collisions: CollisionEvent[],
+): CollisionEvent | null {
+  let strongest = collisions[0] ?? null;
+  for (const collision of collisions.slice(1)) {
     if (
+      strongest === null ||
       collision.damageSeverity > strongest.damageSeverity ||
       (collision.damageSeverity === strongest.damageSeverity &&
         collision.severity > strongest.severity)
@@ -154,6 +171,10 @@ function registerCollisionDrama(state: GameState): void {
       strongest = collision;
     }
   }
+  return strongest;
+}
+
+function recordStrongestHit(state: GameState, strongest: CollisionEvent): void {
   if (
     strongest.damageSeverity > 0 &&
     strongest.damageSeverity > state.roundStats.biggestHitSeverity
@@ -164,13 +185,19 @@ function registerCollisionDrama(state: GameState): void {
     state.roundStats.biggestHitLabel =
       a && b ? `${a.label} into ${b.label}` : null;
   }
+}
 
-  let playerCollision = null;
+function isPlayerCollision(state: GameState, collision: CollisionEvent): boolean {
+  return collision.aId === state.playerId || collision.bId === state.playerId;
+}
+
+function getStrongestPlayerCollision(
+  state: GameState,
+): CollisionEvent | null {
+  let playerCollision: CollisionEvent | null = null;
   for (const collision of state.recentCollisions) {
-    const playerHit =
-      collision.aId === state.playerId || collision.bId === state.playerId;
     if (
-      playerHit &&
+      isPlayerCollision(state, collision) &&
       collision.damageSeverity > 0 &&
       (!playerCollision ||
         collision.damageSeverity > playerCollision.damageSeverity)
@@ -178,16 +205,28 @@ function registerCollisionDrama(state: GameState): void {
       playerCollision = collision;
     }
   }
-  if (playerCollision) {
-    state.roundStats.lastPlayerTargetId =
-      playerCollision.aId === state.playerId
-        ? playerCollision.bId
-        : playerCollision.aId;
-    state.roundStats.lastPlayerTargetElapsed = state.elapsed;
-  }
+  return playerCollision;
+}
 
-  const playerInvolved =
-    strongest.aId === state.playerId || strongest.bId === state.playerId;
+function recordPlayerContactCredit(
+  state: GameState,
+  playerCollision: CollisionEvent | null,
+): void {
+  if (!playerCollision) {
+    return;
+  }
+  state.roundStats.lastPlayerTargetId =
+    playerCollision.aId === state.playerId
+      ? playerCollision.bId
+      : playerCollision.aId;
+  state.roundStats.lastPlayerTargetElapsed = state.elapsed;
+}
+
+function applyCollisionCameraDrama(
+  state: GameState,
+  strongest: CollisionEvent,
+): void {
+  const playerInvolved = isPlayerCollision(state, strongest);
   const qualifiesForShake =
     (playerInvolved && strongest.damageSeverity >= 0.48) ||
     (!playerInvolved && strongest.damageSeverity >= 0.62);
@@ -205,6 +244,12 @@ function registerCollisionDrama(state: GameState): void {
   if (playerInvolved && strongest.damageSeverity >= 0.72) {
     state.camera.freezeTime = Math.max(state.camera.freezeTime, 0.02);
   }
+}
+
+function announceImpactCallout(
+  state: GameState,
+  strongest: CollisionEvent,
+): void {
   const strongestA = getCarById(state, strongest.aId);
   const strongestB = getCarById(state, strongest.bId);
   const hasDisabledParticipant = Boolean(
@@ -213,6 +258,18 @@ function registerCollisionDrama(state: GameState): void {
   if (strongest.damageSeverity > 0.48 && !hasDisabledParticipant) {
     pushEvent(state, "Huge Hit!", "impact", strongest.damageSeverity, 1.2);
   }
+}
+
+function registerCollisionDrama(state: GameState): void {
+  const strongest = getStrongestCollision(state.recentCollisions);
+  if (!strongest) {
+    return;
+  }
+
+  recordStrongestHit(state, strongest);
+  recordPlayerContactCredit(state, getStrongestPlayerCollision(state));
+  applyCollisionCameraDrama(state, strongest);
+  announceImpactCallout(state, strongest);
 }
 
 function hasRecentPlayerCredit(state: GameState, car: Car): boolean {

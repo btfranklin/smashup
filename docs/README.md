@@ -7,6 +7,7 @@
 - [Operations](./OPERATIONS.md): setup, local runtime, validation commands, and artifact locations
 - [Quality](./QUALITY.md): golden rules, validation coverage, and recovery guidance
 - [Validation Surfaces](./references/validation-surfaces.md): preview endpoint and browser automation hooks
+- [Gameplay Tuning](./references/gameplay-tuning.md): intent behind physics, damage, AI, thermal, and spectacle rules
 - [Legibility Audit](./LEGIBILITY-AUDIT.md): current strengths, remaining gaps, and next leverage points
 
 ## Plans And Memory

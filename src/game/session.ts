@@ -9,7 +9,7 @@ import {
 } from "./content";
 import { cloneCondition, createFreshCondition } from "./conditions";
 import { getCarSystemPhases } from "./damage";
-import { pushEvent, resetRoundStats } from "./runtime";
+import { createRoundStats, pushEvent, resetRoundStats } from "./runtime";
 import type {
   AIArchetype,
   Car,
@@ -42,6 +42,7 @@ const AI_ROSTER: Array<{
   id: number;
   label: string;
   team: "left" | "right";
+  lineupIndex: number;
   presetId: CarPresetId;
   roofNumber: string;
   aiArchetype: AIArchetype;
@@ -52,6 +53,7 @@ const AI_ROSTER: Array<{
     id: 1,
     label: "Rimshot",
     team: "left",
+    lineupIndex: 0,
     presetId: "bulldozer",
     roofNumber: "14",
     aiArchetype: "bruiser",
@@ -62,6 +64,7 @@ const AI_ROSTER: Array<{
     id: 2,
     label: "Rustline",
     team: "left",
+    lineupIndex: 1,
     presetId: "backstab",
     roofNumber: "27",
     aiArchetype: "scavenger",
@@ -72,6 +75,7 @@ const AI_ROSTER: Array<{
     id: 3,
     label: "Sidewind",
     team: "left",
+    lineupIndex: 2,
     presetId: "darter",
     roofNumber: "08",
     aiArchetype: "circler",
@@ -82,6 +86,7 @@ const AI_ROSTER: Array<{
     id: 4,
     label: "Backlash",
     team: "right",
+    lineupIndex: 0,
     presetId: "bulldozer",
     roofNumber: "77",
     aiArchetype: "bruiser",
@@ -92,6 +97,7 @@ const AI_ROSTER: Array<{
     id: 5,
     label: "Gravelord",
     team: "right",
+    lineupIndex: 1,
     presetId: "darter",
     roofNumber: "11",
     aiArchetype: "circler",
@@ -102,6 +108,7 @@ const AI_ROSTER: Array<{
     id: 6,
     label: "Tarnish",
     team: "right",
+    lineupIndex: 2,
     presetId: "backstab",
     roofNumber: "56",
     aiArchetype: "panic_driver",
@@ -112,6 +119,7 @@ const AI_ROSTER: Array<{
     id: 7,
     label: "Mudlark",
     team: "right",
+    lineupIndex: 3,
     presetId: "backstab",
     roofNumber: "93",
     aiArchetype: "scavenger",
@@ -119,6 +127,32 @@ const AI_ROSTER: Array<{
     accent: "#b48bcb",
   },
 ];
+
+function createCameraState(): GameState["camera"] {
+  return { shake: 0, nudgeX: 0, nudgeY: 0, freezeTime: 0 };
+}
+
+function clearRoundRuntimeState(state: GameState): void {
+  state.winnerId = null;
+  state.outlastedDriverIds = [];
+  state.recentCollisions = [];
+  state.smokePuffs = [];
+  state.debrisParticles = [];
+  state.dustPuffs = [];
+  state.events = [];
+  state.pendingSystemEvents = [];
+  state.camera = createCameraState();
+  state.tick = 0;
+}
+
+function getAiLineupSlot(entry: (typeof AI_ROSTER)[number]): {
+  x: number;
+  y: number;
+} {
+  return entry.team === "left"
+    ? LEFT_AI_LINEUP[entry.lineupIndex]
+    : RIGHT_LINEUP[entry.lineupIndex];
+}
 
 function buildCar(
   id: number,
@@ -230,27 +264,22 @@ function createPreviewCars(state: GameState): Car[] {
     buildBonuses: build,
     condition: createFreshCondition(),
   });
-  const others = AI_ROSTER.map((entry, index) =>
-    buildCar(entry.id, {
+  const others = AI_ROSTER.map((entry) => {
+    const slot = getAiLineupSlot(entry);
+    return buildCar(entry.id, {
       label: entry.label,
       isPlayer: false,
       team: entry.team,
       presetId: entry.presetId,
       roofNumber: entry.roofNumber,
       aiArchetype: entry.aiArchetype,
-      x:
-        entry.team === "left"
-          ? LEFT_AI_LINEUP[index].x
-          : RIGHT_LINEUP[index - LEFT_AI_LINEUP.length].x,
-      y:
-        entry.team === "left"
-          ? LEFT_AI_LINEUP[index].y
-          : RIGHT_LINEUP[index - LEFT_AI_LINEUP.length].y,
+      x: slot.x,
+      y: slot.y,
       angle: entry.team === "left" ? Math.PI : 0,
       color: entry.color,
       accent: entry.accent,
-    }),
-  );
+    });
+  });
   return [player, ...others];
 }
 
@@ -305,48 +334,69 @@ function applyBuildUpgrade(
   }
 }
 
+function repairSystem(
+  condition: CarCondition,
+  system: keyof Omit<CarCondition["systems"], "overheat">,
+  amount: number,
+): void {
+  condition.systems[system] = Math.min(1, condition.systems[system] + amount);
+}
+
+function coolCondition(condition: CarCondition, amount: number): void {
+  condition.systems.overheat = Math.max(0, condition.systems.overheat - amount);
+}
+
+function repairBody(
+  condition: CarCondition,
+  zone: keyof CarCondition["body"],
+  amount: number,
+): void {
+  condition.body[zone] = Math.max(0, condition.body[zone] - amount);
+}
+
+function restoreAllLights(condition: CarCondition): void {
+  condition.lights.frontLeft = true;
+  condition.lights.frontRight = true;
+  condition.lights.rearLeft = true;
+  condition.lights.rearRight = true;
+}
+
 function serviceCondition(
   condition: CarCondition,
   upgradeId: SessionUpgradeId,
 ): CarCondition {
   const next = cloneCondition(condition);
   const baselineRepair = 0.08;
-  next.systems.engine = Math.min(1, next.systems.engine + baselineRepair);
-  next.systems.radiator = Math.min(1, next.systems.radiator + baselineRepair);
-  next.systems.transmission = Math.min(
-    1,
-    next.systems.transmission + baselineRepair,
-  );
-  next.systems.steering = Math.min(1, next.systems.steering + baselineRepair);
-  next.systems.overheat = Math.max(0, next.systems.overheat - 0.25);
-  next.body.front = Math.max(0, next.body.front - 0.06);
-  next.body.rear = Math.max(0, next.body.rear - 0.06);
-  next.body.left = Math.max(0, next.body.left - 0.06);
-  next.body.right = Math.max(0, next.body.right - 0.06);
+  repairSystem(next, "engine", baselineRepair);
+  repairSystem(next, "radiator", baselineRepair);
+  repairSystem(next, "transmission", baselineRepair);
+  repairSystem(next, "steering", baselineRepair);
+  coolCondition(next, 0.25);
+  repairBody(next, "front", 0.06);
+  repairBody(next, "rear", 0.06);
+  repairBody(next, "left", 0.06);
+  repairBody(next, "right", 0.06);
 
   switch (upgradeId) {
     case "pit_patch":
-      next.systems.engine = Math.min(1, next.systems.engine + 0.18);
-      next.systems.radiator = Math.min(1, next.systems.radiator + 0.22);
-      next.systems.transmission = Math.min(1, next.systems.transmission + 0.14);
-      next.body.front = Math.max(0, next.body.front - 0.14);
-      next.body.left = Math.max(0, next.body.left - 0.1);
-      next.body.right = Math.max(0, next.body.right - 0.1);
-      next.lights.frontLeft = true;
-      next.lights.frontRight = true;
-      next.lights.rearLeft = true;
-      next.lights.rearRight = true;
+      repairSystem(next, "engine", 0.18);
+      repairSystem(next, "radiator", 0.22);
+      repairSystem(next, "transmission", 0.14);
+      repairBody(next, "front", 0.14);
+      repairBody(next, "left", 0.1);
+      repairBody(next, "right", 0.1);
+      restoreAllLights(next);
       break;
     case "ram_rig":
-      next.systems.engine = Math.min(1, next.systems.engine + 0.08);
-      next.systems.transmission = Math.min(1, next.systems.transmission + 0.12);
-      next.body.front = Math.max(0, next.body.front - 0.08);
+      repairSystem(next, "engine", 0.08);
+      repairSystem(next, "transmission", 0.12);
+      repairBody(next, "front", 0.08);
       break;
     case "steering_clinic":
-      next.systems.steering = Math.min(1, next.systems.steering + 0.24);
-      next.systems.transmission = Math.min(1, next.systems.transmission + 0.08);
-      next.body.left = Math.max(0, next.body.left - 0.1);
-      next.body.right = Math.max(0, next.body.right - 0.1);
+      repairSystem(next, "steering", 0.24);
+      repairSystem(next, "transmission", 0.08);
+      repairBody(next, "left", 0.1);
+      repairBody(next, "right", 0.1);
       break;
   }
 
@@ -390,10 +440,7 @@ function prepareRound(state: GameState, roundIndex: number): void {
   });
 
   const others = AI_ROSTER.map((entry) => {
-    const slot =
-      entry.team === "left"
-        ? LEFT_AI_LINEUP[entry.id - 1]
-        : RIGHT_LINEUP[entry.id - 4];
+    const slot = getAiLineupSlot(entry);
     return buildCar(entry.id, {
       label: entry.label,
       isPlayer: false,
@@ -411,21 +458,10 @@ function prepareRound(state: GameState, roundIndex: number): void {
 
   state.cars = [player, ...others];
   state.playerId = 0;
-  state.winnerId = null;
-  state.outlastedDriverIds = [];
-  state.recentCollisions = [];
-  state.smokePuffs = [];
-  state.debrisParticles = [];
-  state.dustPuffs = [];
-  state.events = [];
-  state.pendingSystemEvents = [];
-  state.camera = { shake: 0, nudgeX: 0, nudgeY: 0, freezeTime: 0 };
+  clearRoundRuntimeState(state);
   state.session.countdown = 3.2;
   state.session.lastRoundSummary = null;
   state.mode = "intro";
-  state.tick = 0;
-  state.smokePuffs = [];
-  state.arena.objects = getArenaObjects(roundPlan.arenaVariant);
 
   if (roundPlan.modifier === "hot_engines") {
     for (const car of state.cars) {
@@ -483,19 +519,9 @@ export function createInitialState(): GameState {
     nextDustPuffId: 1,
     events: [],
     nextEventId: 1,
-    camera: { shake: 0, nudgeX: 0, nudgeY: 0, freezeTime: 0 },
+    camera: createCameraState(),
     pendingSystemEvents: [],
-    roundStats: {
-      startElapsed: 0,
-      biggestHitSeverity: 0,
-      biggestHitLabel: null,
-      eliminatedById: null,
-      knockoutReason: null,
-      playerKnockouts: [],
-      lastPlayerTargetId: null,
-      lastPlayerTargetElapsed: null,
-      finalTwoAnnounced: false,
-    },
+    roundStats: createRoundStats(),
   };
   state.cars = createPreviewCars(state);
   return state;
@@ -550,7 +576,7 @@ export function createCarPreviewState(
   state.outlastedDriverIds = [];
   state.recentCollisions = [];
   state.events = [];
-  state.camera = { shake: 0, nudgeX: 0, nudgeY: 0, freezeTime: 0 };
+  state.camera = createCameraState();
   state.debrisParticles = [];
   state.dustPuffs = [];
   state.nextSmokePuffId = 1;
@@ -568,29 +594,7 @@ export function createCarPreviewState(
 }
 
 export function restartState(state: GameState): GameState {
-  const fresh = createInitialState();
-  state.mode = fresh.mode;
-  state.arena = fresh.arena;
-  state.preview = null;
-  state.session = fresh.session;
-  state.cars = fresh.cars;
-  state.playerId = fresh.playerId;
-  state.tick = 0;
-  state.elapsed = 0;
-  state.winnerId = null;
-  state.outlastedDriverIds = [];
-  state.recentCollisions = [];
-  state.smokePuffs = [];
-  state.nextSmokePuffId = 1;
-  state.debrisParticles = [];
-  state.nextDebrisParticleId = 1;
-  state.dustPuffs = [];
-  state.nextDustPuffId = 1;
-  state.events = [];
-  state.nextEventId = 1;
-  state.camera = { shake: 0, nudgeX: 0, nudgeY: 0, freezeTime: 0 };
-  state.pendingSystemEvents = [];
-  resetRoundStats(state);
+  Object.assign(state, createInitialState());
   return state;
 }
 

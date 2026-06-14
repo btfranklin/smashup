@@ -33,12 +33,14 @@ function requireContains(relativePath, fragments, remediation) {
 
 [
   "AGENTS.md",
+  ".github/workflows/validate.yml",
   "docs/README.md",
   "docs/ARCHITECTURE.md",
   "docs/OPERATIONS.md",
   "docs/QUALITY.md",
   "docs/LEGIBILITY-AUDIT.md",
   "docs/references/validation-surfaces.md",
+  "docs/references/gameplay-tuning.md",
   "docs/exec-plans/tech-debt-tracker.md",
   "scripts/check-test-coverage.mjs",
   "src/app/bootstrap.ts",
@@ -82,6 +84,7 @@ requireContains(
     "docs/OPERATIONS.md",
     "docs/QUALITY.md",
     "docs/references/validation-surfaces.md",
+    "docs/references/gameplay-tuning.md",
   ],
   "AGENTS.md should stay a short map that routes the agent to deeper sources of truth.",
 );
@@ -93,6 +96,8 @@ requireContains(
     "./OPERATIONS.md",
     "./QUALITY.md",
     "./references/validation-surfaces.md",
+    "./references/gameplay-tuning.md",
+    "./LEGIBILITY-AUDIT.md",
     "./exec-plans/tech-debt-tracker.md",
     "../ROADMAP.md",
     "../progress.md",
@@ -104,6 +109,12 @@ requireContains(
   "src/game/preview.ts",
   ["CAR_PRESET_IDS", "CAR_PREVIEW_SCENARIO_IDS"],
   "Preview parsing must derive ids from src/game/content.ts instead of hardcoding duplicate allowlists.",
+);
+
+requireContains(
+  ".github/workflows/validate.yml",
+  ["pull_request:", "npm ci", "npm run validate"],
+  "CI should run the same install and validation path documented for local development.",
 );
 
 const packageJson = JSON.parse(read("package.json"));
@@ -131,10 +142,11 @@ if (!scripts["test:coverage"]) {
 if (
   typeof scripts.validate !== "string" ||
   !scripts.validate.includes("npm run check:repo") ||
+  !scripts.validate.includes("npm run build") ||
   !scripts.validate.includes("npm run test:coverage")
 ) {
   failures.push(
-    'package.json: "validate" must run repo legibility checks and the Vitest coverage suite.',
+    'package.json: "validate" must run repo legibility checks, the production build, and the Vitest coverage suite.',
   );
 }
 if (

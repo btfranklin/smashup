@@ -8,6 +8,7 @@ Start here before changing code.
 - `docs/OPERATIONS.md`: run, validate, and inspect the game locally
 - `docs/QUALITY.md`: golden rules, validation expectations, and recovery paths
 - `docs/references/validation-surfaces.md`: hidden preview contract and browser hook reference
+- `docs/references/gameplay-tuning.md`: intent behind physics, damage, AI, thermal, and spectacle tuning
 - `docs/LEGIBILITY-AUDIT.md`: current legibility strengths, gaps, and next investments
 - `ROADMAP.md`: product-facing deferred work
 - `progress.md`: current implementation state and recent validation notes

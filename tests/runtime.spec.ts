@@ -246,6 +246,40 @@ describe("runtime flow", () => {
     expect(state.events.some((event) => event.text.includes("final two"))).toBe(
       true,
     );
+
+    const finalTwoEvents = state.events.filter((event) =>
+      event.text.includes("final two"),
+    ).length;
+    advanceState(state, 1 / 60);
+    expect(
+      state.events.filter((event) => event.text.includes("final two")),
+    ).toHaveLength(finalTwoEvents);
+  });
+
+  it("announces field eliminations without player credit", () => {
+    const state = createRunningState();
+    const player = getPlayerFixture(state);
+    const rival = createCarFixture({
+      id: 62,
+      x: player.x + 300,
+      y: player.y,
+      label: "Scrapheap",
+      systems: {
+        engine: 0.04,
+        radiator: 0.5,
+        transmission: 0.5,
+        steering: 0.5,
+        overheat: 0,
+      },
+    });
+    state.cars = [player, rival];
+
+    advanceState(state, 1 / 60);
+
+    expect(state.roundStats.playerKnockouts).toEqual([]);
+    expect(state.events.some((event) => event.text === "Scrapheap is done")).toBe(
+      true,
+    );
   });
 
   it("records knockout credit when the player disables a rival", () => {

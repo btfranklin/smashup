@@ -1,4 +1,5 @@
 import {
+  CAR_PRESET_IDS,
   CAR_PRESETS,
   ROUND_PLANS,
   SESSION_UPGRADES,
@@ -158,6 +159,7 @@ export function createAppController({
   performanceNow = () => win.performance.now(),
 }: BootstrapOptions): AppController {
   const state = createStateForSearch(win.location.search);
+  const orderedCarPresets = CAR_PRESET_IDS.map((id) => CAR_PRESETS[id]);
   const audio = createAudio();
   const frame = doc.createElement("div");
   frame.className = "frame";
@@ -188,39 +190,26 @@ export function createAppController({
   const teardown: Array<() => void> = [];
   let destroyed = false;
 
-  function renderMenuContent(force = false): void {
-    if (state.mode === "car_preview") {
-      menu.dataset.mode = state.mode;
-      menu.innerHTML = "";
-      return;
-    }
-
-    if (!force && menu.dataset.mode === state.mode) {
-      return;
-    }
-    menu.dataset.mode = state.mode;
-
-    if (state.mode === "menu") {
-      menu.innerHTML = `
+  function renderMainMenu(): void {
+    menu.innerHTML = `
       <h1>Smashup<br />Derby</h1>
       <h2>Three rounds. Pick your ride. Survive the wreckage.</h2>
       <p>Choose a derby car, fight through three themed rounds, and patch the machine between fights.</p>
       <button class="primary-button" id="start-btn" type="button">Start Tournament</button>
       <p class="hint">Press Enter to begin, W/A/S/D or arrows to drive, F for fullscreen.</p>
     `;
-      menu
-        .querySelector<HTMLButtonElement>("#start-btn")
-        ?.addEventListener("click", () => {
-          beginCarSelect(state);
-          syncMenu();
-        });
-      return;
-    }
+    menu
+      .querySelector<HTMLButtonElement>("#start-btn")
+      ?.addEventListener("click", () => {
+        beginCarSelect(state);
+        syncMenu();
+      });
+  }
 
-    if (state.mode === "car_select") {
-      const cards = Object.values(CAR_PRESETS)
-        .map(
-          (preset, index) => `
+  function renderCarSelectMenu(): void {
+    const cards = orderedCarPresets
+      .map(
+        (preset, index) => `
           <button class="choice-card" data-preset-id="${preset.id}" ${index === 0 ? 'id="recommended-preset"' : ""} type="button">
             <span class="choice-kicker">${preset.subtitle}</span>
             <strong>${preset.title}</strong>
@@ -228,28 +217,27 @@ export function createAppController({
             <span>Mass ${preset.mass} | Reverse ${preset.reverseMaxSpeed} | Top ${preset.forwardMaxSpeed}</span>
           </button>
         `,
-        )
-        .join("");
-      menu.innerHTML = `
+      )
+      .join("");
+    menu.innerHTML = `
       <h1>Choose<br />Your Ride</h1>
       <h2>Pick a derby identity for the full three-round run.</h2>
       <div class="choice-grid">${cards}</div>
       <p class="hint">Heavier cars take punishment. Faster cars escape better. Backstab hits hardest in reverse.</p>
     `;
-      menu
-        .querySelectorAll<HTMLButtonElement>("[data-preset-id]")
-        .forEach((button) => {
-          button.addEventListener("click", () => {
-            chooseStarterCar(state, button.dataset.presetId as CarPresetId);
-            syncMenu();
-          });
+    menu
+      .querySelectorAll<HTMLButtonElement>("[data-preset-id]")
+      .forEach((button) => {
+        button.addEventListener("click", () => {
+          chooseStarterCar(state, button.dataset.presetId as CarPresetId);
+          syncMenu();
         });
-      return;
-    }
+      });
+  }
 
-    if (state.mode === "round_results") {
-      const summary = state.session.lastRoundSummary;
-      menu.innerHTML = `
+  function renderRoundResultsMenu(): void {
+    const summary = state.session.lastRoundSummary;
+    menu.innerHTML = `
       <h1>Round ${summary?.roundIndex ?? state.session.roundIndex + 1}<br />Result</h1>
       <h2>${summary?.playerWon ? "You survived this heat." : "Your run hit the wall."}</h2>
       <p>${summary?.playerWon ? `Winner: ${summary.winnerLabel ?? "Player"}.` : `Knocked out by: ${summary?.eliminatedByLabel ?? "the field"}.`}</p>
@@ -258,59 +246,57 @@ export function createAppController({
       <button class="primary-button" id="advance-btn" type="button">${summary?.playerWon && state.session.roundIndex < state.session.totalRounds - 1 ? "Pit Stop" : "Tournament Wrap-Up"}</button>
       <p class="hint">Survival time: ${summary?.survivalTime ?? 0}s.</p>
     `;
-      menu
-        .querySelector<HTMLButtonElement>("#advance-btn")
-        ?.addEventListener("click", () => {
-          advanceAfterRound(state);
-          syncMenu();
-        });
-      return;
-    }
+    menu
+      .querySelector<HTMLButtonElement>("#advance-btn")
+      ?.addEventListener("click", () => {
+        advanceAfterRound(state);
+        syncMenu();
+      });
+  }
 
-    if (state.mode === "upgrade") {
-      const nextPlan = ROUND_PLANS[state.session.roundIndex + 1];
-      const cards = Object.values(SESSION_UPGRADES)
-        .map(
-          (upgrade, index) => `
+  function renderUpgradeMenu(): void {
+    const nextPlan = ROUND_PLANS[state.session.roundIndex + 1];
+    const cards = Object.values(SESSION_UPGRADES)
+      .map(
+        (upgrade, index) => `
           <button class="choice-card" data-upgrade-id="${upgrade.id}" ${index === 0 ? 'id="recommended-upgrade"' : ""} type="button">
             <span class="choice-kicker">Pit Choice</span>
             <strong>${upgrade.title}</strong>
             <span>${upgrade.description}</span>
           </button>
         `,
-        )
-        .join("");
-      menu.innerHTML = `
+      )
+      .join("");
+    menu.innerHTML = `
       <h1>Pit<br />Choice</h1>
       <h2>Next up: ${nextPlan?.title ?? "Final Heat"}</h2>
       <p>Round ${state.session.roundIndex + 2} of ${state.session.totalRounds}. ${nextPlan ? getModifierSummary(nextPlan.modifier) : ""}.</p>
       <div class="choice-grid">${cards}</div>
       <p class="hint">One choice only. Damage carries forward, but the pit crew gives a small baseline repair either way.</p>
     `;
-      menu
-        .querySelectorAll<HTMLButtonElement>("[data-upgrade-id]")
-        .forEach((button) => {
-          button.addEventListener("click", () => {
-            applySessionUpgrade(
-              state,
-              button.dataset.upgradeId as SessionUpgradeId,
-            );
-            syncMenu();
-          });
+    menu
+      .querySelectorAll<HTMLButtonElement>("[data-upgrade-id]")
+      .forEach((button) => {
+        button.addEventListener("click", () => {
+          applySessionUpgrade(
+            state,
+            button.dataset.upgradeId as SessionUpgradeId,
+          );
+          syncMenu();
         });
-      return;
-    }
+      });
+  }
 
-    if (state.mode === "tournament_over") {
-      const winner = getWinnerCar(state);
-      const playerLost = getPlayerCar(state)?.disabled ?? false;
-      const rounds = state.session.completedRounds
-        .map(
-          (round) =>
-            `<li>Round ${round.roundIndex}: ${round.title} - ${round.playerWon ? "Win" : `Out by ${round.eliminatedByLabel ?? "the field"}`}</li>`,
-        )
-        .join("");
-      menu.innerHTML = `
+  function renderTournamentOverMenu(): void {
+    const winner = getWinnerCar(state);
+    const playerLost = getPlayerCar(state)?.disabled ?? false;
+    const rounds = state.session.completedRounds
+      .map(
+        (round) =>
+          `<li>Round ${round.roundIndex}: ${round.title} - ${round.playerWon ? "Win" : `Out by ${round.eliminatedByLabel ?? "the field"}`}</li>`,
+      )
+      .join("");
+    menu.innerHTML = `
       <h1>Tournament<br />Over</h1>
       <h2>${
         playerLost
@@ -328,12 +314,36 @@ export function createAppController({
       <button class="primary-button" id="start-btn" type="button">Restart Tournament</button>
       <p class="hint">Press R or click restart.</p>
     `;
-      menu
-        .querySelector<HTMLButtonElement>("#start-btn")
-        ?.addEventListener("click", () => {
-          restartState(state);
-          renderMenuContent(true);
-        });
+    menu
+      .querySelector<HTMLButtonElement>("#start-btn")
+      ?.addEventListener("click", () => {
+        restartState(state);
+        renderMenuContent(true);
+      });
+  }
+
+  function renderMenuContent(force = false): void {
+    if (state.mode === "car_preview") {
+      menu.dataset.mode = state.mode;
+      menu.innerHTML = "";
+      return;
+    }
+
+    if (!force && menu.dataset.mode === state.mode) {
+      return;
+    }
+    menu.dataset.mode = state.mode;
+
+    if (state.mode === "menu") {
+      renderMainMenu();
+    } else if (state.mode === "car_select") {
+      renderCarSelectMenu();
+    } else if (state.mode === "round_results") {
+      renderRoundResultsMenu();
+    } else if (state.mode === "upgrade") {
+      renderUpgradeMenu();
+    } else if (state.mode === "tournament_over") {
+      renderTournamentOverMenu();
     }
   }
 
@@ -389,16 +399,12 @@ export function createAppController({
     if (event.code === "KeyF") {
       toggleFullscreen();
     }
-    if (event.code === "Digit1" && state.mode === "car_select") {
-      chooseStarterCar(state, "bulldozer");
-      syncMenu();
-    }
-    if (event.code === "Digit2" && state.mode === "car_select") {
-      chooseStarterCar(state, "darter");
-      syncMenu();
-    }
-    if (event.code === "Digit3" && state.mode === "car_select") {
-      chooseStarterCar(state, "backstab");
+    const presetShortcut = /^Digit([1-9])$/.exec(event.code);
+    const preset = presetShortcut
+      ? orderedCarPresets[Number(presetShortcut[1]) - 1]
+      : null;
+    if (preset && state.mode === "car_select") {
+      chooseStarterCar(state, preset.id);
       syncMenu();
     }
     if (
