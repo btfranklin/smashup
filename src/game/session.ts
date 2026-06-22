@@ -34,6 +34,7 @@ function clearRoundRuntimeState(state: GameState): void {
   state.recentCollisions = [];
   state.smokePuffs = [];
   state.debrisParticles = [];
+  state.carFragments = [];
   state.dustPuffs = [];
   state.events = [];
   state.pendingSystemEvents = [];
@@ -152,6 +153,8 @@ export function createInitialState(): GameState {
     nextSmokePuffId: 1,
     debrisParticles: [],
     nextDebrisParticleId: 1,
+    carFragments: [],
+    nextCarFragmentId: 1,
     dustPuffs: [],
     nextDustPuffId: 1,
     events: [],
@@ -205,6 +208,7 @@ export function createCarPreviewState(
   state.events = [];
   state.camera = createCameraState();
   state.debrisParticles = [];
+  state.carFragments = [];
   state.dustPuffs = [];
   state.nextSmokePuffId = 1;
   state.smokePuffs = scenario.smoke

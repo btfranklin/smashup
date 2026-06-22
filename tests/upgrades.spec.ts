@@ -1,10 +1,24 @@
 import { describe, expect, it } from "vitest";
 
 import { createDefaultPlayerBuild } from "../src/game/content";
+import { createFreshFrame } from "../src/game/deformation";
 import { applyBuildUpgrade, serviceCondition } from "../src/game/upgrades";
 import type { CarCondition } from "../src/game/types";
 
 function damagedCondition(): CarCondition {
+  const frame = createFreshFrame(92, 56);
+  frame.vertices[0].x -= 12;
+  frame.crush.front = 0.45;
+  frame.scars.push({
+    id: 1,
+    x: 42,
+    y: -8,
+    angle: 0.2,
+    length: 18,
+    depth: 0.7,
+    width: 3,
+  });
+  frame.nextScarId = 2;
   return {
     systems: {
       engine: 0.4,
@@ -25,6 +39,7 @@ function damagedCondition(): CarCondition {
       rearLeft: false,
       rearRight: false,
     },
+    frame,
   };
 }
 
@@ -53,6 +68,7 @@ describe("upgrade mechanics", () => {
     expect(condition.systems.engine).toBe(0.4);
     expect(condition.body.front).toBe(0.4);
     expect(condition.lights.frontLeft).toBe(false);
+    expect(condition.frame?.crush.front).toBeCloseTo(0.45);
 
     expect(serviced.systems.engine).toBeCloseTo(0.66);
     expect(serviced.systems.radiator).toBeCloseTo(0.65);
@@ -69,6 +85,10 @@ describe("upgrade mechanics", () => {
       rearLeft: true,
       rearRight: true,
     });
+    expect(serviced.frame?.crush.front).toBeLessThan(0.45);
+    expect(serviced.frame?.vertices[0].x).toBeGreaterThan(
+      condition.frame?.vertices[0].x ?? -Infinity,
+    );
   });
 
   it("applies service differences for drivetrain and steering upgrades", () => {

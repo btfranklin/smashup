@@ -488,29 +488,54 @@ export function resolveCarCollisions(cars: Car[]): CollisionEvent[] {
             y: (pointOnA.y + pointOnB.y) * 0.5,
           };
           if (damageSeverity > 0) {
-            applyImpactDamage(
+            const damageTakenA = damageSeverity * damageScaleForZones(zoneA, zoneB);
+            const damageTakenB = damageSeverity * damageScaleForZones(zoneB, zoneA);
+            const deformationA = applyImpactDamage(
               a,
               pointOnA,
-              damageSeverity * damageScaleForZones(zoneA, zoneB),
+              damageTakenA,
               { x: -normal.x, y: -normal.y },
             );
-            applyImpactDamage(
+            const deformationB = applyImpactDamage(
               b,
               pointOnB,
-              damageSeverity * damageScaleForZones(zoneB, zoneA),
+              damageTakenB,
               normal,
             );
+            collisions.push({
+              aId: a.id,
+              bId: b.id,
+              point,
+              pointA: pointOnA,
+              pointB: pointOnB,
+              normal,
+              severity,
+              damageSeverity,
+              damageTakenA,
+              damageTakenB,
+              zoneA,
+              zoneB,
+              deformationA,
+              deformationB,
+            });
+          } else {
+            collisions.push({
+              aId: a.id,
+              bId: b.id,
+              point,
+              pointA: pointOnA,
+              pointB: pointOnB,
+              normal,
+              severity,
+              damageSeverity,
+              damageTakenA: 0,
+              damageTakenB: 0,
+              zoneA,
+              zoneB,
+              deformationA: 0,
+              deformationB: 0,
+            });
           }
-          collisions.push({
-            aId: a.id,
-            bId: b.id,
-            point,
-            normal,
-            severity,
-            damageSeverity,
-            zoneA,
-            zoneB,
-          });
         }
       }
     }

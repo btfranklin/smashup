@@ -1,4 +1,5 @@
 import { cloneCondition } from "./conditions";
+import { repairCarFrame } from "./deformation";
 import type { CarCondition, PlayerBuild, SessionUpgradeId } from "./types";
 
 export function applyBuildUpgrade(
@@ -63,6 +64,7 @@ export function serviceCondition(
   repairBody(next, "rear", 0.06);
   repairBody(next, "left", 0.06);
   repairBody(next, "right", 0.06);
+  next.frame = repairCarFrame(next.frame, 0.12);
 
   switch (upgradeId) {
     case "pit_patch":
@@ -72,18 +74,21 @@ export function serviceCondition(
       repairBody(next, "front", 0.14);
       repairBody(next, "left", 0.1);
       repairBody(next, "right", 0.1);
+      next.frame = repairCarFrame(next.frame, 0.28);
       restoreAllLights(next);
       break;
     case "ram_rig":
       repairSystem(next, "engine", 0.08);
       repairSystem(next, "transmission", 0.12);
       repairBody(next, "front", 0.08);
+      next.frame = repairCarFrame(next.frame, 0.12);
       break;
     case "steering_clinic":
       repairSystem(next, "steering", 0.24);
       repairSystem(next, "transmission", 0.08);
       repairBody(next, "left", 0.1);
       repairBody(next, "right", 0.1);
+      next.frame = repairCarFrame(next.frame, 0.18);
       break;
   }
 

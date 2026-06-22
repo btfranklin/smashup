@@ -1,3 +1,4 @@
+import { cloneCarFrame } from "./deformation";
 import type { Car, CarCondition } from "./types";
 
 export function createFreshCondition(): CarCondition {
@@ -21,6 +22,7 @@ export function createFreshCondition(): CarCondition {
       rearLeft: true,
       rearRight: true,
     },
+    frame: null,
   };
 }
 
@@ -29,15 +31,17 @@ export function cloneCondition(condition: CarCondition): CarCondition {
     systems: { ...condition.systems },
     body: { ...condition.body },
     lights: { ...condition.lights },
+    frame: condition.frame ? cloneCarFrame(condition.frame) : null,
   };
 }
 
 export function captureCarCondition(
-  car: Pick<Car, "systems" | "body" | "lights">,
+  car: Pick<Car, "systems" | "body" | "lights" | "frame">,
 ): CarCondition {
   return {
     systems: { ...car.systems },
     body: { ...car.body },
     lights: { ...car.lights },
+    frame: cloneCarFrame(car.frame),
   };
 }

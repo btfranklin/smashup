@@ -216,13 +216,17 @@ describe("damage model", () => {
     expect(car.disabled).toBe(true);
   });
 
-  it("does nothing to disabled cars during wear and impact updates", () => {
+  it("keeps disabled-car gameplay damage stable while allowing visual frame impacts", () => {
     const car = createCarFixture({ disabled: true });
-    const before = JSON.stringify(car);
+    const beforeSystems = JSON.stringify(car.systems);
+    const beforeBody = JSON.stringify(car.body);
+    const beforeFrame = JSON.stringify(car.frame);
 
     updateSubsystemWear(car, 1, "none");
     applyImpactDamage(car, { x: car.x, y: car.y }, 1, { x: 1, y: 0 });
 
-    expect(JSON.stringify(car)).toBe(before);
+    expect(JSON.stringify(car.systems)).toBe(beforeSystems);
+    expect(JSON.stringify(car.body)).toBe(beforeBody);
+    expect(JSON.stringify(car.frame)).not.toBe(beforeFrame);
   });
 });

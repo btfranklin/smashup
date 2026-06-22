@@ -189,4 +189,34 @@ describe("physics", () => {
     expect(medium.damageSeverity).toBeGreaterThan(0);
     expect(extreme.damageSeverity).toBeGreaterThan(medium.damageSeverity);
   });
+
+  it("records visible collisions below the gameplay damage threshold", () => {
+    const striker = createCarFixture({
+      id: 21,
+      x: 500,
+      y: 500,
+      angle: 0,
+      vx: 32,
+      vy: 0,
+    });
+    const target = createCarFixture({
+      id: 22,
+      x: 558,
+      y: 500,
+      angle: 0,
+      vx: 0,
+      vy: 0,
+    });
+
+    const collision = resolveCarCollisions([striker, target])[0];
+
+    expect(collision.severity).toBeGreaterThan(0);
+    expect(collision.damageSeverity).toBe(0);
+    expect(collision.damageTakenA).toBe(0);
+    expect(collision.damageTakenB).toBe(0);
+    expect(collision.deformationA).toBe(0);
+    expect(collision.deformationB).toBe(0);
+    expect(collision.pointA).toMatchObject({ x: expect.any(Number) });
+    expect(collision.pointB).toMatchObject({ x: expect.any(Number) });
+  });
 });

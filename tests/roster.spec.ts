@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { CAR_PRESETS, createDefaultPlayerBuild } from "../src/game/content";
 import { createFreshCondition } from "../src/game/conditions";
+import { createFreshFrame } from "../src/game/deformation";
 import {
   createCarPreviewCar,
   createMenuPreviewCars,
@@ -72,6 +73,26 @@ describe("roster and car construction", () => {
     expect(condition.systems.radiator).toBe(0.4);
     expect(condition.body.front).toBe(0.3);
     expect(condition.lights.frontLeft).toBe(false);
+  });
+
+  it("carries persisted frame state without reseeding synthetic body damage", () => {
+    const build = createDefaultPlayerBuild("bulldozer");
+    const condition = createFreshCondition();
+    condition.body.front = 0.5;
+    condition.frame = createFreshFrame(
+      CAR_PRESETS.bulldozer.length,
+      CAR_PRESETS.bulldozer.width,
+    );
+    condition.frame.crush.front = 0.12;
+    condition.frame.vertices[0].x -= 6;
+
+    const player = createRoundCars(build, condition)[0];
+
+    expect(player.frame).not.toBe(condition.frame);
+    expect(player.frame.crush.front).toBeCloseTo(0.12);
+    expect(player.frame.vertices[0].x).toBeCloseTo(
+      condition.frame.vertices[0].x,
+    );
   });
 
   it("creates car preview cars from preset labels, condition, and disabled state", () => {

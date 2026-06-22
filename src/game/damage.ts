@@ -1,4 +1,5 @@
 import { clamp01 } from "./math";
+import { applyFrameImpact } from "./deformation";
 import type {
   Car,
   DamagePhase,
@@ -175,16 +176,23 @@ export function applyImpactDamage(
   point: Vec2,
   severity: number,
   receivedImpulseDirection: Vec2,
-): void {
-  if (car.disabled) {
-    return;
-  }
-
+): number {
   const scaled = Math.max(0, severity);
   const zone = impactZoneForPoint(car, point);
   const local = getLocalImpact(car, point);
   const side = local.side;
   const localDirection = getLocalDirection(car, receivedImpulseDirection);
+  const frameDeformation = applyFrameImpact(
+    car,
+    { x: local.forward, y: local.side },
+    scaled,
+    zone,
+    { x: localDirection.forward, y: localDirection.side },
+  );
+  if (car.disabled) {
+    return frameDeformation;
+  }
+
   const zoneDirectness =
     zone === "front"
       ? Math.max(0, -localDirection.forward)
@@ -267,12 +275,13 @@ export function applyImpactDamage(
 
   if (catastrophicFrontHit) {
     disableCar(car);
-    return;
+    return frameDeformation;
   }
 
   if (getKnockoutCause(car)) {
     disableCar(car);
   }
+  return frameDeformation;
 }
 
 export function updateSubsystemWear(

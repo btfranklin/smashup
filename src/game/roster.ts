@@ -4,6 +4,11 @@ import {
 } from "./content";
 import { cloneCondition, createFreshCondition } from "./conditions";
 import { getCarSystemPhases } from "./damage";
+import {
+  cloneCarFrame,
+  createFreshFrame,
+  seedFrameFromBodyDamage,
+} from "./deformation";
 import type {
   AIArchetype,
   Car,
@@ -164,6 +169,9 @@ function buildCar(
     ...condition.systems,
     radiator: Math.min(1, condition.systems.radiator + cooling),
   };
+  const frame = condition.frame
+    ? cloneCarFrame(condition.frame)
+    : createFreshFrame(preset.length, preset.width);
   const car: Car = {
     id,
     label: options.label,
@@ -206,6 +214,7 @@ function buildCar(
       steering: "healthy",
     },
     body: { ...condition.body },
+    frame,
     lights: { ...condition.lights },
     disabled: false,
     eliminationTime: null,
@@ -218,6 +227,9 @@ function buildCar(
     smokeTimer: 0,
     smokeBurstCount: 0,
   };
+  if (!condition.frame) {
+    seedFrameFromBodyDamage(car);
+  }
   car.phases = getCarSystemPhases(car);
   return car;
 }

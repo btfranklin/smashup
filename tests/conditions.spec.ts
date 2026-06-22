@@ -29,6 +29,7 @@ describe("condition helpers", () => {
         rearLeft: true,
         rearRight: true,
       },
+      frame: null,
     });
   });
 
@@ -38,10 +39,12 @@ describe("condition helpers", () => {
     copy.systems.engine = 0.4;
     copy.body.front = 0.3;
     copy.lights.frontLeft = false;
+    copy.frame = null;
 
     expect(original.systems.engine).toBe(1);
     expect(original.body.front).toBe(0);
     expect(original.lights.frontLeft).toBe(true);
+    expect(original.frame).toBeNull();
   });
 
   it("captures a car snapshot into a portable condition object", () => {
@@ -66,6 +69,10 @@ describe("condition helpers", () => {
       systems: car.systems,
       body: car.body,
       lights: car.lights,
+      frame: car.frame,
     });
+    const captured = captureCarCondition(car);
+    expect(captured.frame).not.toBe(car.frame);
+    expect(captured.frame?.vertices[0]).toEqual(car.frame.vertices[0]);
   });
 });

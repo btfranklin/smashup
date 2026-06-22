@@ -75,11 +75,17 @@ describe("runtime flow", () => {
         aId: 1,
         bId: 2,
         point: { x: 0, y: 0 },
+        pointA: { x: -6, y: 0 },
+        pointB: { x: 6, y: 0 },
         normal: { x: 1, y: 0 },
         severity: 0.9,
         damageSeverity: 0.8,
+        damageTakenA: 0.3,
+        damageTakenB: 0.8,
         zoneA: "front",
         zoneB: "rear",
+        deformationA: 0.08,
+        deformationB: 0.09,
       },
     ];
 

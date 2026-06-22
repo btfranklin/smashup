@@ -78,11 +78,17 @@ describe("renderGameToText", () => {
         aId: player.id,
         bId: state.cars[1].id,
         point: { x: 0, y: 0 },
+        pointA: { x: -6, y: 0 },
+        pointB: { x: 6, y: 0 },
         normal: { x: 1, y: 0 },
         severity: 0.876,
         damageSeverity: 0.543,
+        damageTakenA: 0.2,
+        damageTakenB: 0.54,
         zoneA: "front",
         zoneB: "rear",
+        deformationA: 0.08,
+        deformationB: 0.09,
       },
     ];
 

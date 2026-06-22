@@ -112,14 +112,40 @@ describe("render orchestration", () => {
     expect(textCalls).toContain("Warn");
     expect(textCalls).toContain("System");
     expect(textCalls).toContain("Result");
-    const outlineIndex = canvas.operations.findIndex(
-      (entry) => entry.type === "strokeRect",
-    );
+    const contourStrokes = canvas.find("stroke");
     const smokeIndex = canvas.operations.findIndex(
       (entry) => entry.type === "createRadialGradient",
     );
-    expect(outlineIndex).toBeGreaterThanOrEqual(0);
-    expect(smokeIndex).toBeGreaterThan(outlineIndex);
+    expect(contourStrokes.length).toBeGreaterThan(0);
+    expect(smokeIndex).toBeGreaterThan(0);
+  });
+
+  it("renders deformed car bodies and persistent fragments as polygon paths", () => {
+    const canvas = createCanvasRecorder();
+    const state = createRunningState();
+    state.carFragments.push({
+      id: 1,
+      sourceCarId: state.playerId,
+      x: 300,
+      y: 300,
+      vx: 0,
+      vy: 0,
+      radius: 5,
+      mass: 20,
+      rotation: 0.2,
+      spin: 0,
+      color: "#446688",
+      edgeColor: "#111111",
+      points: [
+        { x: -4, y: -3 },
+        { x: 5, y: -2 },
+        { x: 1, y: 4 },
+      ],
+    });
+
+    renderGame(canvas.ctx, state);
+
+    expect(canvas.count("lineTo")).toBeGreaterThan(30);
   });
 
   it("renders intro overlays with the countdown and title", () => {

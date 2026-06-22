@@ -73,15 +73,47 @@ export type BodyState = {
   right: number;
 };
 
+export type FrameVertex = {
+  id: string;
+  baseX: number;
+  baseY: number;
+  x: number;
+  y: number;
+  stiffness: number;
+};
+
+export type CrumpleScar = {
+  id: number;
+  x: number;
+  y: number;
+  angle: number;
+  length: number;
+  depth: number;
+  width: number;
+};
+
+export type CarFrameState = {
+  vertices: FrameVertex[];
+  scars: CrumpleScar[];
+  crush: BodyState;
+  nextScarId: number;
+};
+
 export type CollisionEvent = {
   aId: number;
   bId: number;
   point: Vec2;
+  pointA: Vec2;
+  pointB: Vec2;
   normal: Vec2;
   severity: number;
   damageSeverity: number;
+  damageTakenA: number;
+  damageTakenB: number;
   zoneA: DamageZone;
   zoneB: DamageZone;
+  deformationA: number;
+  deformationB: number;
 };
 
 export type SmokePuff = {
@@ -110,6 +142,22 @@ export type DebrisParticle = {
   rotation: number;
   spin: number;
   tone: number;
+};
+
+export type CarFragment = {
+  id: number;
+  sourceCarId: number;
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  radius: number;
+  mass: number;
+  rotation: number;
+  spin: number;
+  color: string;
+  edgeColor: string;
+  points: Vec2[];
 };
 
 export type DustPuff = {
@@ -176,6 +224,7 @@ export type CarCondition = {
   systems: SystemsState;
   body: BodyState;
   lights: LightState;
+  frame?: CarFrameState | null;
 };
 
 export type RoundPlan = {
@@ -259,6 +308,7 @@ export type Car = {
   systems: SystemsState;
   phases: SystemPhaseState;
   body: BodyState;
+  frame: CarFrameState;
   lights: LightState;
   disabled: boolean;
   eliminationTime: number | null;
@@ -302,6 +352,8 @@ export type GameState = {
   nextSmokePuffId: number;
   debrisParticles: DebrisParticle[];
   nextDebrisParticleId: number;
+  carFragments: CarFragment[];
+  nextCarFragmentId: number;
   dustPuffs: DustPuff[];
   nextDustPuffId: number;
   events: EventMessage[];

@@ -2,6 +2,11 @@ import { updateAi } from "./ai";
 import { captureCarCondition } from "./conditions";
 import { getKnockoutCause, getCarSystemPhases } from "./damage";
 import { spawnImpactDebris, updateDebrisEffects } from "./debris";
+import {
+  pushCarFragments,
+  spawnCarFragments,
+  updateCarFragments,
+} from "./fragments";
 import { spawnCollisionDust, spawnSlipDust, updateDustEffects } from "./dust";
 import { pushEvent } from "./events";
 import {
@@ -350,6 +355,7 @@ export function advanceState(state: GameState, dt: number): void {
   }
 
   updateDebrisEffects(state, dt);
+  updateCarFragments(state, dt);
   updateSmokeEffects(state, dt);
   updateDustEffects(state, dt);
   updateEventFeed(state, dt);
@@ -416,6 +422,8 @@ export function advanceState(state: GameState, dt: number): void {
   state.recentCollisions = resolveCarCollisions(state.cars);
   registerCollisionDrama(state);
   spawnImpactDebris(state);
+  spawnCarFragments(state);
+  pushCarFragments(state);
   spawnCollisionDust(state);
   spawnSlipDust(state);
 

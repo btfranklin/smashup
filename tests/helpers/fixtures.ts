@@ -1,5 +1,6 @@
 import { CAR_PRESETS } from "../../src/game/content";
 import { createFreshCondition } from "../../src/game/conditions";
+import { createFreshFrame } from "../../src/game/deformation";
 import { createInitialState, chooseStarterCar } from "../../src/game/session";
 import type { Car, CollisionEvent, GameState, CarPresetId } from "../../src/game/types";
 
@@ -53,6 +54,7 @@ export function createCarFixture(
       steering: "healthy",
     },
     body: overrides.body ?? { ...condition.body },
+    frame: overrides.frame ?? createFreshFrame(preset.length, preset.width),
     lights: overrides.lights ?? { ...condition.lights },
     disabled: overrides.disabled ?? false,
     eliminationTime: overrides.eliminationTime ?? null,
@@ -75,11 +77,17 @@ export function createCollisionFixture(
     aId: overrides.aId ?? 1,
     bId: overrides.bId ?? 2,
     point: overrides.point ?? { x: 500, y: 500 },
+    pointA: overrides.pointA ?? overrides.point ?? { x: 494, y: 500 },
+    pointB: overrides.pointB ?? overrides.point ?? { x: 506, y: 500 },
     normal: overrides.normal ?? { x: 1, y: 0 },
     severity: overrides.severity ?? 0.8,
     damageSeverity: overrides.damageSeverity ?? 0.6,
+    damageTakenA: overrides.damageTakenA ?? overrides.damageSeverity ?? 0.6,
+    damageTakenB: overrides.damageTakenB ?? overrides.damageSeverity ?? 0.6,
     zoneA: overrides.zoneA ?? "front",
     zoneB: overrides.zoneB ?? "rear",
+    deformationA: overrides.deformationA ?? 0.08,
+    deformationB: overrides.deformationB ?? 0.1,
   };
 }
 

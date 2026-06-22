@@ -1,5 +1,7 @@
 import { AI_ARCHETYPE_LABELS, getModifierSummary } from "./content";
 import { getRecentDebrisSummary } from "./debris";
+import { summarizeFrameDamage } from "./deformation";
+import { getRecentFragmentSummary } from "./fragments";
 import { signedSpeedForCar } from "./math";
 import {
   getActiveCars,
@@ -30,6 +32,7 @@ function serializePreviewCar(car: Car | null) {
         systems: car.systems,
         phases: car.phases,
         body: car.body,
+        frameDamage: summarizeFrameDamage(car.frame),
         lights: car.lights,
         disabled: car.disabled,
       }
@@ -133,6 +136,7 @@ function serializePlayer(car: Car | undefined) {
         },
         phases: car.phases,
         lights: car.lights,
+        frameDamage: summarizeFrameDamage(car.frame),
         disabled: car.disabled,
         eliminationTime:
           car.eliminationTime === null ? null : fixed(car.eliminationTime, 2),
@@ -159,6 +163,7 @@ function serializeOpponentCar(car: Car) {
       left: fixed(car.body.left, 2),
       right: fixed(car.body.right, 2),
       lights: car.lights,
+      frameDamage: summarizeFrameDamage(car.frame),
     },
   };
 }
@@ -177,6 +182,8 @@ function serializeRecentCollisions(state: GameState) {
     bId: collision.bId,
     severity: fixed(collision.severity, 2),
     damageSeverity: fixed(collision.damageSeverity, 2),
+    damageTakenA: fixed(collision.damageTakenA, 2),
+    damageTakenB: fixed(collision.damageTakenB, 2),
     zoneA: collision.zoneA,
     zoneB: collision.zoneB,
   }));
@@ -196,6 +203,8 @@ function serializeEffects(state: GameState) {
     })),
     debrisParticles: state.debrisParticles.length,
     debrisPreview: getRecentDebrisSummary(state),
+    carFragments: state.carFragments.length,
+    fragmentPreview: getRecentFragmentSummary(state),
     dustPuffs: state.dustPuffs.length,
     camera: {
       shake: fixed(state.camera.shake, 2),

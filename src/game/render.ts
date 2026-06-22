@@ -8,6 +8,7 @@ import {
 import type {
   ArenaObject,
   Car,
+  CarFragment,
   DamagePhase,
   DebrisParticle,
   DustPuff,
@@ -173,15 +174,16 @@ function drawLight(
   color: string,
 ): void {
   ctx.save();
-  ctx.fillStyle = active ? color : "rgba(25, 20, 18, 0.75)";
+  ctx.translate(x, y);
+  ctx.fillStyle = active ? color : "rgba(25, 20, 18, 0.82)";
   ctx.beginPath();
-  ctx.arc(x, y, 7, 0, Math.PI * 2);
+  ctx.ellipse(0, 0, 3.2, 5.2, 0, 0, Math.PI * 2);
   ctx.fill();
   if (active) {
     ctx.shadowColor = color;
-    ctx.shadowBlur = 16;
+    ctx.shadowBlur = 8;
     ctx.beginPath();
-    ctx.arc(x, y, 3.5, 0, Math.PI * 2);
+    ctx.ellipse(0, 0, 1.6, 2.8, 0, 0, Math.PI * 2);
     ctx.fill();
   }
   ctx.restore();
@@ -294,6 +296,38 @@ function drawDebrisParticles(
   ctx.restore();
 }
 
+function drawCarFragments(
+  ctx: CanvasRenderingContext2D,
+  fragments: CarFragment[],
+): void {
+  if (fragments.length === 0) {
+    return;
+  }
+
+  ctx.save();
+  for (const fragment of fragments) {
+    ctx.save();
+    ctx.translate(fragment.x, fragment.y);
+    ctx.rotate(fragment.rotation);
+    ctx.fillStyle = fragment.color;
+    ctx.strokeStyle = fragment.edgeColor;
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    fragment.points.forEach((point, index) => {
+      if (index === 0) {
+        ctx.moveTo(point.x, point.y);
+      } else {
+        ctx.lineTo(point.x, point.y);
+      }
+    });
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    ctx.restore();
+  }
+  ctx.restore();
+}
+
 function drawDustPuffs(ctx: CanvasRenderingContext2D, puffs: DustPuff[]): void {
   if (puffs.length === 0) {
     return;
@@ -313,24 +347,34 @@ function drawDustPuffs(ctx: CanvasRenderingContext2D, puffs: DustPuff[]): void {
 
 function traceCarBodyPath(ctx: CanvasRenderingContext2D, car: Car): void {
   ctx.beginPath();
-  ctx.roundRect(
-    -car.length * 0.49,
-    -car.width * 0.48,
-    car.length * 0.98,
-    car.width * 0.96,
-    16,
-  );
+  const [first, ...rest] = car.frame.vertices;
+  ctx.moveTo(first.x, first.y);
+  for (const vertex of rest) {
+    ctx.lineTo(vertex.x, vertex.y);
+  }
+  ctx.closePath();
 }
 
-function traceRoofPanelPath(ctx: CanvasRenderingContext2D): void {
+function traceRoofPanelPath(ctx: CanvasRenderingContext2D, car: Car): void {
+  const crush = car.frame.crush;
+  const skew = (crush.left - crush.right) * 5;
+  const frontShorten = crush.front * 3;
+  const rearShorten = crush.rear * 2;
+  const widthLoss = Math.max(crush.left, crush.right) * 3.5;
   ctx.beginPath();
-  ctx.roundRect(-12, -17, 24, 34, 9);
+  ctx.moveTo(12 - frontShorten, -16 + widthLoss + skew);
+  ctx.lineTo(15 - frontShorten, 0);
+  ctx.lineTo(12 - frontShorten, 16 - widthLoss + skew);
+  ctx.lineTo(-13 + rearShorten, 15 - widthLoss - skew);
+  ctx.lineTo(-16 + rearShorten, 0);
+  ctx.lineTo(-13 + rearShorten, -15 + widthLoss - skew);
+  ctx.closePath();
 }
 
 function drawRoofNumberDecal(ctx: CanvasRenderingContext2D, car: Car): void {
   const fontSize = Math.max(12, Math.min(18, car.length * 0.18));
   ctx.save();
-  traceRoofPanelPath(ctx);
+  traceRoofPanelPath(ctx, car);
   ctx.clip();
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
@@ -342,6 +386,85 @@ function drawRoofNumberDecal(ctx: CanvasRenderingContext2D, car: Car): void {
     : "rgba(246, 236, 220, 0.9)";
   ctx.strokeText(car.roofNumber, 0, 0);
   ctx.fillText(car.roofNumber, 0, 0);
+  ctx.restore();
+}
+
+function drawPanelSeams(ctx: CanvasRenderingContext2D, car: Car): void {
+  const halfWidth = car.width * 0.46;
+  ctx.save();
+  traceCarBodyPath(ctx, car);
+  ctx.clip();
+  ctx.strokeStyle = "rgba(28, 21, 18, 0.46)";
+  ctx.lineWidth = 1.4;
+  ctx.beginPath();
+  ctx.moveTo(car.length * 0.24 - car.frame.crush.front * 10, -halfWidth * 0.78);
+  ctx.lineTo(car.length * 0.18 - car.frame.crush.front * 12, halfWidth * 0.78);
+  ctx.moveTo(-car.length * 0.24 + car.frame.crush.rear * 8, -halfWidth * 0.7);
+  ctx.lineTo(-car.length * 0.18 + car.frame.crush.rear * 10, halfWidth * 0.7);
+  ctx.moveTo(-car.length * 0.02, -halfWidth * 0.86 + car.frame.crush.left * 7);
+  ctx.lineTo(0, halfWidth * 0.86 - car.frame.crush.right * 7);
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawExposedCrush(ctx: CanvasRenderingContext2D, car: Car): void {
+  const halfLength = car.length * 0.5;
+  const halfWidth = car.width * 0.48;
+  ctx.save();
+  traceCarBodyPath(ctx, car);
+  ctx.clip();
+  const front = Math.max(car.body.front, car.frame.crush.front);
+  const rear = Math.max(car.body.rear, car.frame.crush.rear);
+  if (front > 0.28) {
+    const depth = 8 + front * 22;
+    ctx.fillStyle = `rgba(24, 21, 19, ${0.2 + front * 0.34})`;
+    ctx.beginPath();
+    ctx.moveTo(halfLength - depth, -halfWidth * 0.68);
+    ctx.lineTo(halfLength + 4, -halfWidth * 0.42);
+    ctx.lineTo(halfLength + 4, halfWidth * 0.42);
+    ctx.lineTo(halfLength - depth * 0.78, halfWidth * 0.7);
+    ctx.closePath();
+    ctx.fill();
+  }
+  if (rear > 0.32) {
+    const depth = 7 + rear * 19;
+    ctx.fillStyle = `rgba(29, 25, 22, ${0.16 + rear * 0.3})`;
+    ctx.beginPath();
+    ctx.moveTo(-halfLength + depth, -halfWidth * 0.6);
+    ctx.lineTo(-halfLength - 4, -halfWidth * 0.36);
+    ctx.lineTo(-halfLength - 4, halfWidth * 0.36);
+    ctx.lineTo(-halfLength + depth * 0.82, halfWidth * 0.62);
+    ctx.closePath();
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
+function drawCrumpleScars(ctx: CanvasRenderingContext2D, car: Car): void {
+  if (car.frame.scars.length === 0) {
+    return;
+  }
+  ctx.save();
+  traceCarBodyPath(ctx, car);
+  ctx.clip();
+  ctx.lineCap = "round";
+  for (const scar of car.frame.scars) {
+    const half = scar.length * 0.5;
+    const dx = Math.cos(scar.angle) * half;
+    const dy = Math.sin(scar.angle) * half;
+    ctx.strokeStyle = `rgba(22, 18, 16, ${0.2 + scar.depth * 0.48})`;
+    ctx.lineWidth = scar.width;
+    ctx.beginPath();
+    ctx.moveTo(scar.x - dx, scar.y - dy);
+    ctx.lineTo(scar.x + dx, scar.y + dy);
+    ctx.stroke();
+    ctx.strokeStyle = `rgba(221, 207, 184, ${0.08 + scar.depth * 0.12})`;
+    ctx.lineWidth = Math.max(0.8, scar.width * 0.36);
+    ctx.beginPath();
+    ctx.moveTo(scar.x - dx * 0.7 + dy * 0.12, scar.y - dy * 0.7 - dx * 0.12);
+    ctx.lineTo(scar.x + dx * 0.45 + dy * 0.12, scar.y + dy * 0.45 - dx * 0.12);
+    ctx.stroke();
+  }
   ctx.restore();
 }
 
@@ -418,10 +541,12 @@ function drawDamageScrapes(ctx: CanvasRenderingContext2D, car: Car): void {
   }
 
   ctx.restore();
+  drawCrumpleScars(ctx, car);
 }
 
-function drawFrontWheels(ctx: CanvasRenderingContext2D, car: Car): void {
-  const wheelX = 18;
+function drawWheels(ctx: CanvasRenderingContext2D, car: Car): void {
+  const frontWheelX = car.length * 0.2;
+  const rearWheelX = -car.length * 0.28;
   const wheelY = 22;
   const wheelWidth = 16;
   const wheelHeight = 7;
@@ -430,7 +555,7 @@ function drawFrontWheels(ctx: CanvasRenderingContext2D, car: Car): void {
 
   for (const side of [-1, 1]) {
     ctx.save();
-    ctx.translate(wheelX, wheelY * side);
+    ctx.translate(frontWheelX, wheelY * side);
     ctx.rotate(car.steerAngle * 0.9);
     ctx.fillRect(
       -wheelWidth * 0.5,
@@ -439,9 +564,25 @@ function drawFrontWheels(ctx: CanvasRenderingContext2D, car: Car): void {
       wheelHeight,
     );
     ctx.restore();
+    ctx.fillRect(
+      rearWheelX - wheelWidth * 0.5,
+      wheelY * side - wheelHeight * 0.5,
+      wheelWidth,
+      wheelHeight,
+    );
   }
 
   ctx.restore();
+}
+
+function getBodyEdge(car: Car): { front: number; rear: number } {
+  return car.frame.vertices.reduce(
+    (edges, vertex) => ({
+      front: Math.max(edges.front, vertex.x),
+      rear: Math.min(edges.rear, vertex.x),
+    }),
+    { front: -Infinity, rear: Infinity },
+  );
 }
 
 export function drawCar(
@@ -455,32 +596,58 @@ export function drawCar(
   ctx.save();
   ctx.translate(car.x, car.y);
   ctx.rotate(car.angle);
+  if (showPlayerOutline && car.isPlayer) {
+    ctx.save();
+    ctx.strokeStyle = "rgba(255, 244, 218, 0.72)";
+    ctx.lineWidth = 7;
+    ctx.shadowColor = "rgba(255, 229, 176, 0.42)";
+    ctx.shadowBlur = 12;
+    traceCarBodyPath(ctx, car);
+    ctx.stroke();
+    ctx.restore();
+  }
 
-  const bodyGradient = ctx.createLinearGradient(-45, 0, 45, 0);
-  bodyGradient.addColorStop(0, "#2d2018");
-  bodyGradient.addColorStop(0.14, car.color);
-  bodyGradient.addColorStop(0.86, car.accent);
-  bodyGradient.addColorStop(1, "#221712");
+  const bodyGradient = ctx.createLinearGradient(
+    -car.length * 0.5,
+    0,
+    car.length * 0.5,
+    0,
+  );
+  bodyGradient.addColorStop(0, car.disabled ? "#4b443e" : "#2d2520");
+  bodyGradient.addColorStop(0.18, car.disabled ? "#6f665f" : car.color);
+  bodyGradient.addColorStop(0.72, car.disabled ? "#6a6058" : car.accent);
+  bodyGradient.addColorStop(1, car.disabled ? "#3b3530" : "#221712");
   ctx.fillStyle = car.disabled ? "#6f665f" : bodyGradient;
   traceCarBodyPath(ctx, car);
   ctx.fill();
+  drawExposedCrush(ctx, car);
 
   ctx.fillStyle =
     car.phases.engine === "critical" || car.disabled
-      ? "rgba(88, 82, 78, 0.88)"
-      : "rgba(248, 232, 213, 0.82)";
-  traceRoofPanelPath(ctx);
+      ? "rgba(63, 61, 58, 0.9)"
+      : "rgba(118, 142, 150, 0.72)";
+  traceRoofPanelPath(ctx, car);
   ctx.fill();
 
-  ctx.fillStyle = car.disabled ? "#60544e" : "#2b1910";
+  ctx.fillStyle = car.disabled ? "#48423d" : "rgba(34, 28, 24, 0.9)";
   ctx.beginPath();
-  ctx.roundRect(16, -18, 18, 36, 7);
+  ctx.moveTo(car.length * 0.17 - car.frame.crush.front * 12, -17);
+  ctx.lineTo(car.length * 0.36 - car.frame.crush.front * 18, -12);
+  ctx.lineTo(car.length * 0.34 - car.frame.crush.front * 20, 12);
+  ctx.lineTo(car.length * 0.16 - car.frame.crush.front * 12, 17);
+  ctx.closePath();
   ctx.fill();
 
-  ctx.fillStyle = "rgba(255, 244, 233, 0.35)";
+  ctx.fillStyle = "rgba(210, 229, 232, 0.28)";
   ctx.beginPath();
-  ctx.roundRect(-7, -15, 7, 30, 4);
+  ctx.moveTo(-7, -14);
+  ctx.lineTo(2, -12);
+  ctx.lineTo(1, 12);
+  ctx.lineTo(-8, 14);
+  ctx.closePath();
   ctx.fill();
+
+  drawPanelSeams(ctx, car);
 
   ctx.strokeStyle = car.disabled ? "#3a3430" : "rgba(30, 17, 10, 0.78)";
   ctx.lineWidth = 3;
@@ -489,18 +656,13 @@ export function drawCar(
 
   drawDamageScrapes(ctx, car);
   drawRoofNumberDecal(ctx, car);
-  drawFrontWheels(ctx, car);
+  drawWheels(ctx, car);
 
-  drawLight(ctx, 36, -15, car.lights.frontLeft, "#ffe9ac");
-  drawLight(ctx, 36, 15, car.lights.frontRight, "#ffe9ac");
-  drawLight(ctx, -36, -15, car.lights.rearLeft, "#ff6245");
-  drawLight(ctx, -36, 15, car.lights.rearRight, "#ff6245");
-
-  if (showPlayerOutline && car.isPlayer) {
-    ctx.strokeStyle = "rgba(255, 245, 220, 0.82)";
-    ctx.lineWidth = 3;
-    ctx.strokeRect(-46, -30, 92, 60);
-  }
+  const edges = getBodyEdge(car);
+  drawLight(ctx, edges.front - 6, -15, car.lights.frontLeft, "#ffe9ac");
+  drawLight(ctx, edges.front - 6, 15, car.lights.frontRight, "#ffe9ac");
+  drawLight(ctx, edges.rear + 6, -14, car.lights.rearLeft, "#ff6245");
+  drawLight(ctx, edges.rear + 6, 14, car.lights.rearRight, "#ff6245");
 
   ctx.restore();
 }
@@ -716,6 +878,7 @@ export function renderGame(
   for (const object of state.arena.objects) {
     drawArenaObject(ctx, object);
   }
+  drawCarFragments(ctx, state.carFragments);
   drawDustPuffs(ctx, state.dustPuffs);
   drawDebrisParticles(ctx, state.debrisParticles);
   for (const car of state.cars) {
