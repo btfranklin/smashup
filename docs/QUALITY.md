@@ -7,7 +7,7 @@
 - Documentation and repo navigation are part of correctness. When commands, boundaries, or validation surfaces change, update `AGENTS.md` and `docs/`.
 
 ## Mechanical Coverage
-- `npm run check:repo` enforces the agent map, docs presence, validation scripts, preview-source wiring, and the absence of the old `src/game/game.ts` catch-all.
+- `npm run check:repo` enforces the agent map, public entrypoints, docs presence, validation scripts, preview-source wiring, ignored artifact hygiene, and the absence of the old `src/game/game.ts` catch-all.
 - `npm run test:coverage` verifies:
   - preview parsing matches source ids and fails visibly on invalid params
   - runtime/session/debug modules preserve the documented state contracts

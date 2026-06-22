@@ -32,6 +32,8 @@ function requireContains(relativePath, fragments, remediation) {
 }
 
 [
+  "README.md",
+  "LICENSE",
   "AGENTS.md",
   ".github/workflows/validate.yml",
   "docs/README.md",
@@ -79,12 +81,14 @@ if (fs.existsSync(repoPath("playwright.config.ts"))) {
 requireContains(
   "AGENTS.md",
   [
+    "README.md",
     "docs/README.md",
     "docs/ARCHITECTURE.md",
     "docs/OPERATIONS.md",
     "docs/QUALITY.md",
     "docs/references/validation-surfaces.md",
     "docs/references/gameplay-tuning.md",
+    "LICENSE",
   ],
   "AGENTS.md should stay a short map that routes the agent to deeper sources of truth.",
 );
@@ -92,17 +96,56 @@ requireContains(
 requireContains(
   "docs/README.md",
   [
+    "../README.md",
     "./ARCHITECTURE.md",
     "./OPERATIONS.md",
     "./QUALITY.md",
     "./references/validation-surfaces.md",
     "./references/gameplay-tuning.md",
     "./LEGIBILITY-AUDIT.md",
+    "../LICENSE",
     "./exec-plans/tech-debt-tracker.md",
     "../ROADMAP.md",
     "../progress.md",
   ],
   "docs/README.md must index the deeper docs and existing planning memory.",
+);
+
+requireContains(
+  "README.md",
+  [
+    "## Quick Start",
+    "## Controls",
+    "## Development",
+    "## Project Layout",
+    "## Automation Surfaces",
+    "## License",
+  ],
+  "README.md should remain the public front door with setup, controls, validation, automation surfaces, and license guidance.",
+);
+
+requireContains(
+  "LICENSE",
+  ["MIT License", "Copyright (c) 2026 B.T. Franklin"],
+  "LICENSE should preserve the public MIT license terms used by this project.",
+);
+
+requireContains(
+  ".gitignore",
+  [
+    "# OS metadata",
+    ".DS_Store",
+    "# Node / tooling",
+    "node_modules/",
+    "# Build / coverage outputs",
+    "dist/",
+    "coverage/",
+    "# Local inspection captures",
+    "output/",
+    "# Local env files",
+    ".env.*",
+  ],
+  ".gitignore should keep local cruft, generated artifacts, inspection captures, and env files out of the repo.",
 );
 
 requireContains(
@@ -119,6 +162,11 @@ requireContains(
 
 const packageJson = JSON.parse(read("package.json"));
 const scripts = packageJson.scripts ?? {};
+if (packageJson.license !== "MIT") {
+  failures.push(
+    'package.json: set "license" to "MIT" so package metadata matches LICENSE.',
+  );
+}
 if (!scripts["check:repo"]) {
   failures.push(
     'package.json: add a "check:repo" script that runs scripts/check-repo-legibility.mjs.',
@@ -181,5 +229,5 @@ if (failures.length > 0) {
 }
 
 console.log(
-  "Repo legibility check passed: docs map, Vitest validation scripts, and runtime module layout are in place.",
+  "Repo legibility check passed: public entrypoints, docs map, Vitest validation scripts, ignored artifact hygiene, and runtime module layout are in place.",
 );

@@ -1,5 +1,33 @@
-node_modules/
-dist/
-coverage/
-output/
+# OS metadata
 .DS_Store
+Thumbs.db
+
+# Editors / IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Node / tooling
+node_modules/
+.npm/
+
+# Build / coverage outputs
+dist/
+build/
+coverage/
+.vitest/
+
+# Local inspection captures
+output/
+
+# Local env files
+.env
+.env.*

@@ -23,7 +23,7 @@ See [Validation Surfaces](./references/validation-surfaces.md) for the contract 
 
 ## Artifact Locations
 - `dist/`: Vite production build output
-- `output/web-game/`: manual or skill-driven browser inspection captures
+- `output/`: ignored local browser/manual inspection captures; treat these as disposable validation residue unless a future doc explicitly promotes one into a checked-in reference artifact
 - `coverage/`: coverage output when generated locally by Vitest
 - `progress.md`: running implementation notes and validation outcomes
 

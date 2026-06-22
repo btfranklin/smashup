@@ -3,6 +3,7 @@
 Start here before changing code.
 
 ## Repo Map
+- `README.md`: public project overview, controls, setup, and validation summary
 - `docs/README.md`: index of the repo-local system of record
 - `docs/ARCHITECTURE.md`: gameplay/runtime boundaries and where new logic belongs
 - `docs/OPERATIONS.md`: run, validate, and inspect the game locally
@@ -10,6 +11,7 @@ Start here before changing code.
 - `docs/references/validation-surfaces.md`: hidden preview contract and browser hook reference
 - `docs/references/gameplay-tuning.md`: intent behind physics, damage, AI, thermal, and spectacle tuning
 - `docs/LEGIBILITY-AUDIT.md`: current legibility strengths, gaps, and next investments
+- `LICENSE`: public license terms
 - `ROADMAP.md`: product-facing deferred work
 - `progress.md`: current implementation state and recent validation notes
 

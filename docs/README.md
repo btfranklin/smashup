@@ -3,12 +3,14 @@
 `docs/` is the repo-local system of record for non-trivial repository knowledge. Start here when you need to understand where logic lives, how to run the game, or what invariants must stay enforced.
 
 ## Core Docs
+- [Public README](../README.md): user-facing overview, controls, setup, and validation summary
 - [Architecture](./ARCHITECTURE.md): top-level module map, boundaries, and change guidance
 - [Operations](./OPERATIONS.md): setup, local runtime, validation commands, and artifact locations
 - [Quality](./QUALITY.md): golden rules, validation coverage, and recovery guidance
 - [Validation Surfaces](./references/validation-surfaces.md): preview endpoint and browser automation hooks
 - [Gameplay Tuning](./references/gameplay-tuning.md): intent behind physics, damage, AI, thermal, and spectacle rules
 - [Legibility Audit](./LEGIBILITY-AUDIT.md): current strengths, remaining gaps, and next leverage points
+- [License](../LICENSE): MIT license terms
 
 ## Plans And Memory
 - [Tech Debt Tracker](./exec-plans/tech-debt-tracker.md): prioritized follow-on cleanup and legibility work
