@@ -194,4 +194,23 @@ describe("session flow", () => {
     advanceAfterRound(state);
     expect(state.mode).toBe("tournament_over");
   });
+
+  it("keeps mode unchanged when advancing without a round summary", () => {
+    const state = createInitialState();
+    beginCarSelect(state);
+
+    advanceAfterRound(state);
+
+    expect(state.mode).toBe("car_select");
+  });
+
+  it("ignores upgrade selection until a player condition exists", () => {
+    const state = createInitialState();
+
+    applySessionUpgrade(state, "pit_patch");
+
+    expect(state.mode).toBe("menu");
+    expect(state.session.playerBuild).toBeNull();
+    expect(state.session.roundIndex).toBe(0);
+  });
 });

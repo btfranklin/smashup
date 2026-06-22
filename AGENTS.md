@@ -13,24 +13,29 @@ Start here before changing code.
 - `docs/LEGIBILITY-AUDIT.md`: current legibility strengths, gaps, and next investments
 - `LICENSE`: public license terms
 - `ROADMAP.md`: product-facing deferred work
-- `progress.md`: current implementation state and recent validation notes
+- `docs/exec-plans/tech-debt-tracker.md`: technical future-work tracker
 
 ## Common Commands
 - `npm run dev`: start the local Vite app
 - `npm run check:repo`: verify the repo map, docs, and architecture guardrails
+- `npm run typecheck`: run TypeScript without emitting files
 - `npm run test:unit`: run the fast Vitest suite once
 - `npm run test:coverage`: run the coverage-gated Vitest suite plus the per-surface coverage check
-- `npm run validate`: repo checks + build + Vitest coverage
+- `npm run validate`: repo checks + typecheck + build + Vitest coverage
 
 ## Task Routing
-- Gameplay flow, roster setup, round transitions: `src/game/session.ts`
-- Per-frame simulation, event feed, eliminations: `src/game/runtime.ts`
+- Gameplay flow and round transitions: `src/game/session.ts`
+- Roster setup and car construction: `src/game/roster.ts`
+- Upgrade effects and condition servicing: `src/game/upgrades.ts`
+- Per-round stat lifecycle: `src/game/roundStats.ts`
+- Event feed appends: `src/game/events.ts`
+- Per-frame simulation, event expiration, eliminations: `src/game/runtime.ts`
 - Text/debug payloads for automation: `src/game/debug.ts`
 - Preview URL parsing and contract errors: `src/game/preview.ts`
 - Browser bootstrap, menus, and browser hook wiring: `src/app/bootstrap.ts`
 - Thin browser entrypoint and CSS import: `src/main.ts`
 
 ## Working Rules
-- Do not reintroduce `src/game/game.ts`; extend the split session/runtime/debug modules instead.
+- Do not rebuild a catch-all gameplay module; extend the dedicated split modules instead.
 - Keep preview ids sourced from `src/game/content.ts`; do not hardcode duplicate allowlists in the bootstrap path.
 - Treat `docs/` as the durable system of record for architecture, operations, and quality expectations. Update docs when commands, boundaries, or validation surfaces change.

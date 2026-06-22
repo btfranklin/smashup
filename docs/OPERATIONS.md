@@ -1,14 +1,18 @@
 # Operations
 
 ## Setup
+- Use Node `26.x`, matching the validated local and CI runtime.
 - Install dependencies with `npm install`.
 - Start the game locally with `npm run dev`.
+- To mirror CI locally from a clean checkout, run `npm ci && npm run validate`.
 
 ## Validation Commands
 - `npm run check:repo`
-  Verifies the repo map, required docs, validation scripts, and the post-refactor game module layout.
+  Verifies the repo map, required docs, validation scripts, and positive module/documentation surfaces.
+- `npm run typecheck`
+  Runs TypeScript against `src`, `tests`, and `vitest.config.ts` without emitting files.
 - `npm run validate`
-  Runs `check:repo`, production build, and the coverage-gated Vitest suite.
+  Runs `check:repo`, typecheck, production build, and the coverage-gated Vitest suite.
 - `npm run test:unit`
   Runs the fast Vitest suite once without coverage instrumentation.
 - `npm run test:coverage`
@@ -25,7 +29,6 @@ See [Validation Surfaces](./references/validation-surfaces.md) for the contract 
 - `dist/`: Vite production build output
 - `output/`: ignored local browser/manual inspection captures; treat these as disposable validation residue unless a future doc explicitly promotes one into a checked-in reference artifact
 - `coverage/`: coverage output when generated locally by Vitest
-- `progress.md`: running implementation notes and validation outcomes
 
 ## Failure Recovery
 - If `check:repo` fails, read the remediation text first; it tells you which file or link drifted.

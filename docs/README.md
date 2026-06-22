@@ -15,13 +15,16 @@
 ## Plans And Memory
 - [Tech Debt Tracker](./exec-plans/tech-debt-tracker.md): prioritized follow-on cleanup and legibility work
 - [Roadmap](../ROADMAP.md): deferred product-facing work
-- [Progress Log](../progress.md): current implementation state and recent validation notes
 
 ## Code Map
 - `src/app/bootstrap.ts`: browser bootstrap, menus, startup errors, and runtime hooks
 - `src/main.ts`: thin browser entrypoint and CSS import
 - `src/game/session.ts`: state creation, preview state, and round/tournament progression
-- `src/game/runtime.ts`: per-frame advancement, eliminations, events, and camera updates
+- `src/game/roster.ts`: lineup data and car construction helpers
+- `src/game/upgrades.ts`: upgrade bonuses and condition servicing
+- `src/game/roundStats.ts`: round stat defaults and reset lifecycle
+- `src/game/events.ts`: event-feed appends and capping
+- `src/game/runtime.ts`: per-frame advancement, eliminations, event expiration, and camera updates
 - `src/game/debug.ts`: `render_game_to_text()` payload
 - `src/game/render.ts`: canvas drawing
 - `tests/`: Vitest unit coverage, jsdom bootstrap coverage, and deterministic transition checks

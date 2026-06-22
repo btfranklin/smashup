@@ -23,6 +23,9 @@ describe("content contracts", () => {
     expect(CAR_PREVIEW_SCENARIO_IDS).toEqual(
       Object.keys(CAR_PREVIEW_SCENARIOS),
     );
+    for (const [id, preset] of Object.entries(CAR_PRESETS)) {
+      expect(preset.id).toBe(id);
+    }
     expect(new Set(CAR_PRESET_IDS).size).toBe(CAR_PRESET_IDS.length);
     expect(new Set(CAR_PREVIEW_SCENARIO_IDS).size).toBe(
       CAR_PREVIEW_SCENARIO_IDS.length,
@@ -90,8 +93,8 @@ describe("content contracts", () => {
       "ram_rig",
       "steering_clinic",
     ]);
-    Object.values(SESSION_UPGRADES).forEach((upgrade) => {
-      expect(upgrade.id).toBeTruthy();
+    Object.entries(SESSION_UPGRADES).forEach(([id, upgrade]) => {
+      expect(upgrade.id).toBe(id);
       expect(upgrade.title.length).toBeGreaterThan(0);
       expect(upgrade.description.length).toBeGreaterThan(0);
     });

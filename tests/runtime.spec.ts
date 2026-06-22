@@ -1,31 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import {
-  advanceState,
-  applyPlayerControls,
-  pushEvent,
-  resetRoundStats,
-} from "../src/game/runtime";
+import { advanceState, applyPlayerControls } from "../src/game/runtime";
 import { createCarFixture, createRunningState, createStateFixture, getPlayerFixture } from "./helpers/fixtures";
 
 describe("runtime flow", () => {
-  it("caps the event feed and resets round stats", () => {
-    const state = createStateFixture();
-    for (let index = 0; index < 10; index += 1) {
-      pushEvent(state, `event-${index}`, "warning");
-    }
-
-    expect(state.events).toHaveLength(8);
-    expect(state.events[0]?.text).toBe("event-2");
-
-    state.roundStats.biggestHitSeverity = 1;
-    state.roundStats.playerKnockouts.push("Rival");
-    resetRoundStats(state);
-    expect(state.roundStats.biggestHitSeverity).toBe(0);
-    expect(state.roundStats.playerKnockouts).toEqual([]);
-    expect(state.roundStats.lastPlayerTargetElapsed).toBeNull();
-  });
-
   it("applies player controls only while running and alive", () => {
     const state = createRunningState();
     const player = getPlayerFixture(state);

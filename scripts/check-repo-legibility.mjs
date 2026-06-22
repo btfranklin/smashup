@@ -35,6 +35,7 @@ function requireContains(relativePath, fragments, remediation) {
   "README.md",
   "LICENSE",
   "AGENTS.md",
+  "ROADMAP.md",
   ".github/workflows/validate.yml",
   "docs/README.md",
   "docs/ARCHITECTURE.md",
@@ -46,13 +47,23 @@ function requireContains(relativePath, fragments, remediation) {
   "docs/exec-plans/tech-debt-tracker.md",
   "scripts/check-test-coverage.mjs",
   "src/app/bootstrap.ts",
+  "src/vite-env.d.ts",
+  "src/game/events.ts",
+  "src/game/roundStats.ts",
+  "src/game/roster.ts",
+  "src/game/upgrades.ts",
   "src/game/session.ts",
   "src/game/runtime.ts",
   "src/game/debug.ts",
   "src/game/preview.ts",
   "vitest.config.ts",
+  "tests/events.spec.ts",
+  "tests/round-stats.spec.ts",
+  "tests/roster.spec.ts",
+  "tests/upgrades.spec.ts",
   "tests/audio-transitions.spec.ts",
   "tests/bootstrap.spec.ts",
+  "tests/content.spec.ts",
   "tests/render-game-to-text.spec.ts",
   "tests/helpers/fixtures.ts",
   "tests/helpers/canvas-recorder.ts",
@@ -66,18 +77,6 @@ function requireContains(relativePath, fragments, remediation) {
   ),
 );
 
-if (fs.existsSync(repoPath("src/game/game.ts"))) {
-  failures.push(
-    "src/game/game.ts: legacy catch-all file should not exist. Extend session/runtime/debug modules instead of recreating the old god module.",
-  );
-}
-
-if (fs.existsSync(repoPath("playwright.config.ts"))) {
-  failures.push(
-    "playwright.config.ts: Playwright should not remain in the supported validation path after the Vitest migration.",
-  );
-}
-
 requireContains(
   "AGENTS.md",
   [
@@ -88,6 +87,8 @@ requireContains(
     "docs/QUALITY.md",
     "docs/references/validation-surfaces.md",
     "docs/references/gameplay-tuning.md",
+    "docs/exec-plans/tech-debt-tracker.md",
+    "ROADMAP.md",
     "LICENSE",
   ],
   "AGENTS.md should stay a short map that routes the agent to deeper sources of truth.",
@@ -106,9 +107,8 @@ requireContains(
     "../LICENSE",
     "./exec-plans/tech-debt-tracker.md",
     "../ROADMAP.md",
-    "../progress.md",
   ],
-  "docs/README.md must index the deeper docs and existing planning memory.",
+  "docs/README.md must index the deeper docs and future-work artifacts.",
 );
 
 requireContains(
@@ -187,14 +187,20 @@ if (!scripts["test:coverage"]) {
     'package.json: add a "test:coverage" script so coverage-gated validation is executable rather than ad hoc.',
   );
 }
+if (!scripts.typecheck) {
+  failures.push(
+    'package.json: add a "typecheck" script that runs TypeScript without emitting files.',
+  );
+}
 if (
   typeof scripts.validate !== "string" ||
   !scripts.validate.includes("npm run check:repo") ||
+  !scripts.validate.includes("npm run typecheck") ||
   !scripts.validate.includes("npm run build") ||
   !scripts.validate.includes("npm run test:coverage")
 ) {
   failures.push(
-    'package.json: "validate" must run repo legibility checks, the production build, and the Vitest coverage suite.',
+    'package.json: "validate" must run repo legibility checks, typecheck, the production build, and the Vitest coverage suite.',
   );
 }
 if (
@@ -212,7 +218,12 @@ if (devDependencies["@playwright/test"] || devDependencies.playwright) {
     "package.json: remove Playwright devDependencies from the supported validation workflow.",
   );
 }
-for (const dependency of ["vitest", "jsdom", "@vitest/coverage-v8"]) {
+for (const dependency of [
+  "@types/node",
+  "vitest",
+  "jsdom",
+  "@vitest/coverage-v8",
+]) {
   if (!devDependencies[dependency]) {
     failures.push(
       `package.json: add ${dependency} as a devDependency for the fast validation suite.`,
@@ -229,5 +240,5 @@ if (failures.length > 0) {
 }
 
 console.log(
-  "Repo legibility check passed: public entrypoints, docs map, Vitest validation scripts, ignored artifact hygiene, and runtime module layout are in place.",
+  "Repo legibility check passed: public entrypoints, docs map, TypeScript/Vitest validation scripts, and ignored artifact hygiene are in place.",
 );

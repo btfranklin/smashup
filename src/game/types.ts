@@ -210,6 +210,18 @@ export type SessionState = {
   countdown: number;
 };
 
+export type RoundStats = {
+  startElapsed: number;
+  biggestHitSeverity: number;
+  biggestHitLabel: string | null;
+  eliminatedById: number | null;
+  knockoutReason: string | null;
+  playerKnockouts: string[];
+  lastPlayerTargetId: number | null;
+  lastPlayerTargetElapsed: number | null;
+  finalTwoAnnounced: boolean;
+};
+
 export type Car = {
   id: number;
   label: string;
@@ -300,15 +312,5 @@ export type GameState = {
     system: SystemName;
     phase: DamagePhase;
   }>;
-  roundStats: {
-    startElapsed: number;
-    biggestHitSeverity: number;
-    biggestHitLabel: string | null;
-    eliminatedById: number | null;
-    knockoutReason: string | null;
-    playerKnockouts: string[];
-    lastPlayerTargetId: number | null;
-    lastPlayerTargetElapsed: number | null;
-    finalTwoAnnounced: boolean;
-  };
+  roundStats: RoundStats;
 };

@@ -11,10 +11,12 @@
     "check:repo": "node scripts/check-repo-legibility.mjs",
     "test": "vitest",
     "test:unit": "vitest run",
+    "typecheck": "tsc --noEmit",
     "test:coverage": "vitest run --coverage && node scripts/check-test-coverage.mjs",
-    "validate": "npm run check:repo && npm run build && npm run test:coverage"
+    "validate": "npm run check:repo && npm run typecheck && npm run build && npm run test:coverage"
   },
   "devDependencies": {
+    "@types/node": ">=26.0.0",
     "@vitest/coverage-v8": ">=4.1.9",
     "jsdom": ">=29.1.1",
     "typescript": ">=6.0.3",

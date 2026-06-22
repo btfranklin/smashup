@@ -120,9 +120,15 @@ describe("bootstrap and app controller", () => {
     harness.appRoot
       .querySelector<HTMLButtonElement>('[data-preset-id="bulldozer"]')
       ?.click();
-    window.advanceTime(3500);
+    const advanceTime = window.advanceTime;
+    const renderGameToText = window.render_game_to_text;
+    if (!advanceTime || !renderGameToText) {
+      throw new Error("Browser hooks missing from test controller.");
+    }
 
-    const payload = parsePayload(window.render_game_to_text());
+    advanceTime(3500);
+
+    const payload = parsePayload(renderGameToText());
     expect(controller.state.mode).toBe("running");
     expect(payload.mode).toBe("running");
     expect((payload.session as { selectedPreset: string }).selectedPreset).toBe(
@@ -196,7 +202,11 @@ describe("bootstrap and app controller", () => {
       advanceTime: vi.fn(),
       renderGameToText: () => "{}",
     });
-    expect(window.render_game_to_text()).toBe("{}");
+    const renderGameToText = window.render_game_to_text;
+    if (!renderGameToText) {
+      throw new Error("Render text hook missing after hook installation.");
+    }
+    expect(renderGameToText()).toBe("{}");
 
     renderStartupError(harness.appRoot, "Broken");
     expect(harness.appRoot.textContent).toContain("Broken");

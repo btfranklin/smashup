@@ -96,6 +96,12 @@ const fileThresholds = {
     functions: 100,
     branches: 90,
   },
+  "src/game/events.ts": {
+    lines: 100,
+    statements: 100,
+    functions: 100,
+    branches: 100,
+  },
   "src/game/math.ts": {
     lines: 100,
     statements: 100,
@@ -120,6 +126,18 @@ const fileThresholds = {
     functions: 100,
     branches: 90,
   },
+  "src/game/roster.ts": {
+    lines: 100,
+    statements: 100,
+    functions: 100,
+    branches: 100,
+  },
+  "src/game/roundStats.ts": {
+    lines: 100,
+    statements: 100,
+    functions: 100,
+    branches: 100,
+  },
   "src/game/runtime.ts": {
     lines: 90,
     statements: 90,
@@ -143,6 +161,12 @@ const fileThresholds = {
     statements: 100,
     functions: 100,
     branches: 100,
+  },
+  "src/game/upgrades.ts": {
+    lines: 97,
+    statements: 97,
+    functions: 100,
+    branches: 80,
   },
 };
 

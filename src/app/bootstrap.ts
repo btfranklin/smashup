@@ -179,6 +179,7 @@ export function createAppController({
   if (!ctx) {
     throw new Error("2D canvas context unavailable.");
   }
+  const renderContext: CanvasRenderingContext2D = ctx;
 
   const input: InputState = {
     left: false,
@@ -448,7 +449,7 @@ export function createAppController({
   }
 
   function present(): void {
-    renderGame(ctx, state);
+    renderGame(renderContext, state);
     syncMenu();
   }
 

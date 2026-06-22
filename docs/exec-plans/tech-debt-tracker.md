@@ -4,8 +4,7 @@
 
 | Priority | Area | Debt | Next Concrete Step |
 | --- | --- | --- | --- |
-| P1 | Session setup | `src/game/session.ts` still mixes progression logic with car/roster factory details. | Extract roster/build helpers into a dedicated module before replay/meta work expands state setup. |
-| P2 | Design decision memory | Larger architectural tradeoffs still live mostly in roadmap/progress narrative. | Add a lightweight decision log once there is a second durable tradeoff to preserve. |
+| P2 | Design decision memory | Larger architectural tradeoffs still live mostly in roadmap and tech-debt notes. | Add a lightweight decision log once there is a second durable tradeoff to preserve. |
 | P2 | Visual smoke workflow | UI polish depends on human inspection plus unit-level render coverage, with no committed browser screenshot smoke path. | Add an optional browser smoke command if future UI changes start producing review-only regressions. |
 
 ## Rule

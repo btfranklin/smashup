@@ -101,10 +101,8 @@ export function createDomHarness() {
         configurable: true,
         value: originalRect,
       });
-      delete (document as Document & { fullscreenElement?: Element | null })
-        .fullscreenElement;
-      delete (document as Document & { exitFullscreen?: () => Promise<void> })
-        .exitFullscreen;
+      Reflect.deleteProperty(document, "fullscreenElement");
+      Reflect.deleteProperty(document, "exitFullscreen");
     },
   };
 }

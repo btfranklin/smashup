@@ -3,6 +3,7 @@ import { captureCarCondition } from "./conditions";
 import { getKnockoutCause, getCarSystemPhases } from "./damage";
 import { spawnImpactDebris, updateDebrisEffects } from "./debris";
 import { spawnCollisionDust, spawnSlipDust, updateDustEffects } from "./dust";
+import { pushEvent } from "./events";
 import {
   resolveArenaObjectInteractions,
   resolveCarCollisions,
@@ -20,7 +21,6 @@ import type {
   Car,
   CollisionEvent,
   DamagePhase,
-  EventMessage,
   GameState,
   RoundSummary,
   SystemName,
@@ -40,43 +40,6 @@ const SYSTEM_EVENT_EMPHASIS: Record<DamagePhase, number> = {
   critical: 1,
 };
 
-export function pushEvent(
-  state: GameState,
-  text: string,
-  kind: EventMessage["kind"],
-  emphasis = 0.6,
-  ttl = 2.2,
-): void {
-  state.events.push({
-    id: state.nextEventId++,
-    text,
-    kind,
-    ttl,
-    emphasis,
-  });
-  state.events = state.events.slice(-8);
-}
-
-export function createRoundStats(
-  startElapsed = 0,
-): GameState["roundStats"] {
-  return {
-    startElapsed,
-    biggestHitSeverity: 0,
-    biggestHitLabel: null,
-    eliminatedById: null,
-    knockoutReason: null,
-    playerKnockouts: [],
-    lastPlayerTargetId: null,
-    lastPlayerTargetElapsed: null,
-    finalTwoAnnounced: false,
-  };
-}
-
-export function resetRoundStats(state: GameState): void {
-  state.roundStats = createRoundStats(state.elapsed);
-}
-
 function getKnockoutReason(car: Car): string {
   const cause = getKnockoutCause(car);
   switch (cause) {
@@ -91,12 +54,13 @@ function getKnockoutReason(car: Car): string {
     case "body_collapse":
       return "Body Folded";
     default: {
-      const ordered: Array<[SystemName, number]> = [
+      const systems: Array<[SystemName, number]> = [
         ["engine", car.systems.engine],
         ["radiator", car.systems.radiator],
         ["transmission", car.systems.transmission],
         ["steering", car.systems.steering],
-      ].sort((a, b) => a[1] - b[1]);
+      ];
+      const ordered = systems.sort((a, b) => a[1] - b[1]);
       const weakest = ordered[0][0];
       return weakest === "steering" ? "Steering Folded" : "Engine Failure";
     }
