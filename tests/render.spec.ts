@@ -40,6 +40,26 @@ describe("render orchestration", () => {
     ).not.toThrow();
   });
 
+  it("draws axles and tires below the deformed car body", () => {
+    const canvas = createCanvasRecorder();
+
+    drawCar(canvas.ctx, createCarFixture({ isPlayer: true }));
+
+    const firstFillRect = canvas.operations.findIndex(
+      (entry) => entry.type === "fillRect",
+    );
+    const bodyGradient = canvas.operations.findIndex(
+      (entry) => entry.type === "createLinearGradient",
+    );
+    const axleRects = canvas
+      .find("fillRect")
+      .filter((entry) => Number(entry.args[2]) === 4);
+
+    expect(firstFillRect).toBeGreaterThanOrEqual(0);
+    expect(bodyGradient).toBeGreaterThan(firstFillRect);
+    expect(axleRects).toHaveLength(2);
+  });
+
   it("renders preview mode without HUD and event-feed overlays", () => {
     const canvas = createCanvasRecorder();
     const state = createCarPreviewState("bulldozer", "critical");

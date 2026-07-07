@@ -16,3 +16,4 @@ Progress:
 - Final `npm run validate` passes after artifact cleanup and render refinements.
 - Reduced car-fragment spawn counts and changed fragment spawning to use per-car damage taken rather than global collision severity alone.
 - Cut car-fragment emission roughly in half again by raising local damage/deformation thresholds and lowered per-hit counts; constrained frame deformation so vertices cannot expand beyond their original hull positions.
+- Moved wheels and black axles into an undercarriage pass below the deformed body, so damaged panels can reveal them instead of tires drawing on top.

@@ -544,13 +544,25 @@ function drawDamageScrapes(ctx: CanvasRenderingContext2D, car: Car): void {
   drawCrumpleScars(ctx, car);
 }
 
-function drawWheels(ctx: CanvasRenderingContext2D, car: Car): void {
+function drawUndercarriage(ctx: CanvasRenderingContext2D, car: Car): void {
   const frontWheelX = car.length * 0.2;
   const rearWheelX = -car.length * 0.28;
-  const wheelY = 22;
+  const wheelY = car.width * 0.48;
   const wheelWidth = 16;
-  const wheelHeight = 7;
+  const wheelHeight = 8;
+  const axleWidth = 4;
   ctx.save();
+
+  ctx.fillStyle = car.disabled ? "#201c19" : "#11100f";
+  for (const axleX of [frontWheelX, rearWheelX]) {
+    ctx.fillRect(
+      axleX - axleWidth * 0.5,
+      -wheelY,
+      axleWidth,
+      wheelY * 2,
+    );
+  }
+
   ctx.fillStyle = car.disabled ? "#3f3a36" : "#1f1510";
 
   for (const side of [-1, 1]) {
@@ -607,6 +619,8 @@ export function drawCar(
     ctx.restore();
   }
 
+  drawUndercarriage(ctx, car);
+
   const bodyGradient = ctx.createLinearGradient(
     -car.length * 0.5,
     0,
@@ -656,7 +670,6 @@ export function drawCar(
 
   drawDamageScrapes(ctx, car);
   drawRoofNumberDecal(ctx, car);
-  drawWheels(ctx, car);
 
   const edges = getBodyEdge(car);
   drawLight(ctx, edges.front - 6, -15, car.lights.frontLeft, "#ffe9ac");
