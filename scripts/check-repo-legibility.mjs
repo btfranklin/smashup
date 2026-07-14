@@ -46,6 +46,7 @@ function requireContains(relativePath, fragments, remediation) {
   "docs/references/gameplay-tuning.md",
   "docs/exec-plans/tech-debt-tracker.md",
   "scripts/check-test-coverage.mjs",
+  "playwright.config.ts",
   "src/app/bootstrap.ts",
   "src/vite-env.d.ts",
   "src/game/events.ts",
@@ -70,6 +71,12 @@ function requireContains(relativePath, fragments, remediation) {
   "tests/helpers/audio-stubs.ts",
   "tests/helpers/dom-harness.ts",
   "tests/helpers/payload-assertions.ts",
+  "tests/browser/app-flow.spec.ts",
+  "tests/browser/audio-lifecycle.spec.ts",
+  "tests/browser/canvas-lifecycle.spec.ts",
+  "tests/browser/controller-fixture.html",
+  "tests/browser/controller-fixture.ts",
+  "tests/browser/fixtures.ts",
 ].forEach((file) =>
   requireFile(
     file,
@@ -156,7 +163,12 @@ requireContains(
 
 requireContains(
   ".github/workflows/validate.yml",
-  ["pull_request:", "npm ci", "npm run validate"],
+  [
+    "pull_request:",
+    "npm ci",
+    "npx playwright install --with-deps chromium",
+    "npm run validate",
+  ],
   "CI should run the same install and validation path documented for local development.",
 );
 
@@ -197,10 +209,11 @@ if (
   !scripts.validate.includes("npm run check:repo") ||
   !scripts.validate.includes("npm run typecheck") ||
   !scripts.validate.includes("npm run build") ||
-  !scripts.validate.includes("npm run test:coverage")
+  !scripts.validate.includes("npm run test:coverage") ||
+  !scripts.validate.includes("npm run test:browser")
 ) {
   failures.push(
-    'package.json: "validate" must run repo legibility checks, typecheck, the production build, and the Vitest coverage suite.',
+    'package.json: "validate" must run repo legibility checks, typecheck, the production build, Vitest coverage, and the real-browser suite.',
   );
 }
 if (
@@ -212,10 +225,16 @@ if (
   );
 }
 
-const devDependencies = packageJson.devDependencies ?? {};
-if (devDependencies["@playwright/test"] || devDependencies.playwright) {
+if (!scripts["test:browser"]) {
   failures.push(
-    "package.json: remove Playwright devDependencies from the supported validation workflow.",
+    'package.json: add a "test:browser" script so Chromium integration coverage is executable rather than ad hoc.',
+  );
+}
+
+const devDependencies = packageJson.devDependencies ?? {};
+if (!devDependencies["@playwright/test"]) {
+  failures.push(
+    "package.json: add @playwright/test as a devDependency for the supported Chromium integration suite.",
   );
 }
 for (const dependency of [
@@ -240,5 +259,5 @@ if (failures.length > 0) {
 }
 
 console.log(
-  "Repo legibility check passed: public entrypoints, docs map, TypeScript/Vitest validation scripts, and ignored artifact hygiene are in place.",
+  "Repo legibility check passed: public entrypoints, docs map, TypeScript/Vitest/Chromium validation scripts, and ignored artifact hygiene are in place.",
 );

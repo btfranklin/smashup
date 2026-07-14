@@ -39,7 +39,7 @@ export type InputState = {
   reverse: boolean;
 };
 
-export type AudioDriver = Pick<AudioManager, "ensureStarted" | "update">;
+export type AudioDriver = Pick<AudioManager, "ensureStarted" | "update" | "destroy">;
 
 export type AppController = {
   state: GameState;
@@ -52,7 +52,7 @@ export type AppController = {
   syncMenu: () => void;
   resizeCanvas: () => void;
   advanceTime: (ms: number) => void;
-  destroy: () => void;
+  destroy: () => Promise<void>;
 };
 
 export type BootstrapOptions = {
@@ -366,7 +366,9 @@ export function createAppController({
   }
 
   function activateAudio(): void {
-    void audio.ensureStarted();
+    void audio.ensureStarted().catch((error: unknown) => {
+      console.error("Unable to start audio.", error);
+    });
   }
 
   function toggleFullscreen(): void {
@@ -530,7 +532,7 @@ export function createAppController({
     syncMenu,
     resizeCanvas,
     advanceTime,
-    destroy: () => {
+    destroy: async () => {
       if (destroyed) {
         return;
       }
@@ -542,6 +544,7 @@ export function createAppController({
       if (win.render_game_to_text === renderGameToTextHook) {
         delete win.render_game_to_text;
       }
+      await audio.destroy();
     },
   };
 }

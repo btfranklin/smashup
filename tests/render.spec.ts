@@ -10,7 +10,7 @@ import { createCarPreviewState } from "../src/game/session";
 import { createCanvasRecorder } from "./helpers/canvas-recorder";
 import { createCarFixture, createRunningState } from "./helpers/fixtures";
 
-describe("render orchestration", () => {
+describe("Canvas command orchestration", () => {
   it("derives phase colors and camera offsets", () => {
     expect(getPhaseColor("healthy", "#123")).toBe("#123");
     expect(getPhaseColor("wounded", "#123")).toBe("#e0c15b");
@@ -28,7 +28,7 @@ describe("render orchestration", () => {
     });
   });
 
-  it("draws active and disabled cars without throwing", () => {
+  it("emits car commands for active and disabled states without throwing", () => {
     const canvas = createCanvasRecorder();
     expect(() =>
       drawCar(canvas.ctx, createCarFixture({ isPlayer: true })),
@@ -40,7 +40,7 @@ describe("render orchestration", () => {
     ).not.toThrow();
   });
 
-  it("draws axles and tires below the deformed car body", () => {
+  it("orders axle and tire commands below the deformed car body", () => {
     const canvas = createCanvasRecorder();
 
     drawCar(canvas.ctx, createCarFixture({ isPlayer: true }));
@@ -60,7 +60,7 @@ describe("render orchestration", () => {
     expect(axleRects).toHaveLength(2);
   });
 
-  it("renders preview mode without HUD and event-feed overlays", () => {
+  it("omits HUD and event-feed commands in preview mode", () => {
     const canvas = createCanvasRecorder();
     const state = createCarPreviewState("bulldozer", "critical");
 
@@ -74,7 +74,7 @@ describe("render orchestration", () => {
     expect(canvas.count("scale")).toBeGreaterThan(0);
   });
 
-  it("renders running mode with HUD, event feed, and smoke layered over the arena", () => {
+  it("orders running HUD, event-feed, and smoke commands over the arena", () => {
     const canvas = createCanvasRecorder();
     const state = createRunningState();
     state.arena.variant = "junkyard";
@@ -140,7 +140,7 @@ describe("render orchestration", () => {
     expect(smokeIndex).toBeGreaterThan(0);
   });
 
-  it("renders deformed car bodies and persistent fragments as polygon paths", () => {
+  it("emits polygon paths for deformed bodies and persistent fragments", () => {
     const canvas = createCanvasRecorder();
     const state = createRunningState();
     state.carFragments.push({
@@ -168,7 +168,7 @@ describe("render orchestration", () => {
     expect(canvas.count("lineTo")).toBeGreaterThan(30);
   });
 
-  it("renders intro overlays with the countdown and title", () => {
+  it("emits intro overlay commands with the countdown and title", () => {
     const canvas = createCanvasRecorder();
     const state = createRunningState();
     state.mode = "intro";
@@ -183,7 +183,7 @@ describe("render orchestration", () => {
     expect(textCalls).toContain("3");
   });
 
-  it("renders a non-running overlay outside intro", () => {
+  it("emits a non-running overlay outside intro", () => {
     const canvas = createCanvasRecorder();
     const state = createRunningState();
     state.mode = "round_results";
@@ -197,7 +197,7 @@ describe("render orchestration", () => {
     ]);
   });
 
-  it("renders mud zones when present in the arena", () => {
+  it("emits gradient and rounded-rectangle commands for mud zones", () => {
     const canvas = createCanvasRecorder();
     const state = createRunningState();
     state.arena.variant = "mud_pit";

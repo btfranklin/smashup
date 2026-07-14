@@ -170,6 +170,8 @@ export class AudioManager {
 
   private engineNoiseFilter: BiquadFilterNode | null = null;
 
+  private engineNoiseLoop: AudioBufferSourceNode | null = null;
+
   private noiseBuffer: AudioBuffer | null = null;
 
   private skidGain: GainNode | null = null;
@@ -240,10 +242,40 @@ export class AudioManager {
       noiseLoop.connect(this.engineNoiseFilter);
       noiseLoop.connect(this.skidFilter);
       noiseLoop.start();
+      this.engineNoiseLoop = noiseLoop;
     }
 
     if (this.ctx.state === "suspended") {
       await this.ctx.resume();
+    }
+  }
+
+  async destroy(): Promise<void> {
+    const ctx = this.ctx;
+    if (!ctx) {
+      return;
+    }
+
+    this.ctx = null;
+    this.engineOsc?.stop();
+    this.engineSub?.stop();
+    this.engineNoiseLoop?.stop();
+    this.master = null;
+    this.engineGain = null;
+    this.engineOsc = null;
+    this.engineSub = null;
+    this.engineNoiseGain = null;
+    this.engineNoiseFilter = null;
+    this.engineNoiseLoop = null;
+    this.noiseBuffer = null;
+    this.skidGain = null;
+    this.skidFilter = null;
+    this.crashCooldownTicks = 0;
+    this.lastMode = "menu";
+    this.lastIntroCount = 0;
+
+    if (ctx.state !== "closed") {
+      await ctx.close();
     }
   }
 

@@ -12,5 +12,5 @@
     "lib": ["ESNext", "DOM", "DOM.Iterable"],
     "types": ["node"]
   },
-  "include": ["src", "tests", "vitest.config.ts"]
+  "include": ["src", "tests", "playwright.config.ts", "vitest.config.ts"]
 }

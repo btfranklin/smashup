@@ -25,8 +25,11 @@ This document is the durable reference for the repo's browser automation contrac
 
 ## Enforcement
 - `tests/preview.spec.ts` covers preview matrix alignment and invalid preview failures.
-- `tests/bootstrap.spec.ts` covers startup errors, browser hook installation, and deterministic stepping through tournament start.
+- `tests/bootstrap.spec.ts` covers jsdom controller wiring, supplied-platform routing, and deterministic stepping through tournament start.
 - `tests/render-game-to-text.spec.ts` covers payload shape and truncation without browser-driving.
+- `tests/browser/app-flow.spec.ts` covers served-app boot, live hooks, and trusted pointer/keyboard flow in Chromium.
+- `tests/browser/canvas-lifecycle.spec.ts` covers native Canvas painting plus real resize, fullscreen, and RAF behavior.
+- `tests/browser/audio-lifecycle.spec.ts` covers native AudioContext activation, suspended-context resume, disposal, and controller ownership transfer.
 - `src/game/preview.ts` owns preview parsing and validation.
 - `scripts/check-test-coverage.mjs` keeps the fast suite coverage-gated as part of `npm run test:coverage`.
-- `npm run validate` is the supported end-to-end regression command for these surfaces.
+- `npm run validate` combines the static, unit/controller, production-build, coverage, and Chromium integration layers for these surfaces.

@@ -14,7 +14,7 @@ import {
   getLatestAudioContext,
 } from "./helpers/audio-stubs";
 
-describe("audio model and manager", () => {
+describe("audio derivation and fake-graph orchestration", () => {
   beforeEach(() => {
     FakeAudioContext.instances.length = 0;
     Object.defineProperty(window, "AudioContext", {
@@ -105,7 +105,7 @@ describe("audio model and manager", () => {
     expect(bursts[0].level).toBeGreaterThan(0.03);
   });
 
-  it("starts audio only once and resumes a suspended context", async () => {
+  it("creates one fake graph and requests resume once", async () => {
     class SuspendedAudioContext extends FakeAudioContext {
       constructor() {
         super();
@@ -128,12 +128,28 @@ describe("audio model and manager", () => {
     expect(ctx.resumeCalls).toBe(1);
   });
 
+  it("stops the persistent fake graph and closes its context on destroy", async () => {
+    const manager = new AudioManager();
+    await manager.ensureStarted();
+    const ctx = getLatestAudioContext();
+
+    await manager.destroy();
+    await manager.destroy();
+
+    expect(ctx.oscillators.every((oscillator) => oscillator.stoppedAt.length === 1)).toBe(
+      true,
+    );
+    expect(ctx.bufferSources[0]?.stoppedAt).toHaveLength(1);
+    expect(ctx.closeCalls).toBe(1);
+    expect(ctx.state).toBe("closed");
+  });
+
   it("tolerates update before initialization", () => {
     const manager = new AudioManager();
     expect(() => manager.update(createRunningState())).not.toThrow();
   });
 
-  it("fires the finish melody exactly once for the round-results transition", async () => {
+  it("schedules one finish melody for a single transition", async () => {
     const manager = new AudioManager();
     await manager.ensureStarted();
 
@@ -151,7 +167,7 @@ describe("audio model and manager", () => {
     expect(ctx.oscillators.length).toBe(afterFirstFinish);
   });
 
-  it("only plays countdown tones when the intro count changes", async () => {
+  it("does not schedule duplicate countdown voices", async () => {
     const manager = new AudioManager();
     await manager.ensureStarted();
     const state = createRunningState();
@@ -171,7 +187,7 @@ describe("audio model and manager", () => {
     expect(ctx.oscillators.length).toBeGreaterThan(afterFirstTone);
   });
 
-  it("respects crash cooldowns between updates", async () => {
+  it("throttles crash-burst scheduling", async () => {
     const manager = new AudioManager();
     await manager.ensureStarted();
     const state = createRunningState();

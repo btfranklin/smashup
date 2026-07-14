@@ -21,7 +21,8 @@ Start here before changing code.
 - `npm run typecheck`: run TypeScript without emitting files
 - `npm run test:unit`: run the fast Vitest suite once
 - `npm run test:coverage`: run the coverage-gated Vitest suite plus the per-surface coverage check
-- `npm run validate`: repo checks + typecheck + build + Vitest coverage
+- `npm run test:browser`: run the focused real-Chromium integration suite
+- `npm run validate`: repo checks + typecheck + build + Vitest coverage + Chromium integration
 
 ## Task Routing
 - Gameplay flow and round transitions: `src/game/session.ts`

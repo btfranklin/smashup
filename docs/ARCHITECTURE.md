@@ -34,4 +34,4 @@ Smashup Derby is a browser-only Vite + TypeScript + canvas game with one authori
 - Changing roster construction belongs in `src/game/roster.ts`.
 - Changing upgrade mechanics belongs in `src/game/upgrades.ts`, while labels and descriptions stay in `src/game/content.ts`.
 - Changing how a running round behaves belongs in `src/game/runtime.ts` plus the relevant simulation module.
-- Changing the hidden preview URL, startup errors, or browser hooks requires updates to `docs/references/validation-surfaces.md`, `tests/preview.spec.ts`, `tests/bootstrap.spec.ts`, and `docs/QUALITY.md`.
+- Changing the hidden preview URL, startup errors, or browser hooks requires updates to `docs/references/validation-surfaces.md`, `tests/preview.spec.ts`, `tests/bootstrap.spec.ts`, the relevant `tests/browser/` spec, and `docs/QUALITY.md`.

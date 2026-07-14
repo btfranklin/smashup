@@ -15,33 +15,39 @@ import {
 import { createDomHarness } from "./helpers/dom-harness";
 import { parsePayload } from "./helpers/payload-assertions";
 
-describe("bootstrap and app controller", () => {
+describe("jsdom bootstrap and app-controller contract", () => {
   let harness: ReturnType<typeof createDomHarness>;
+  let controllers: Array<ReturnType<typeof createAppController>>;
 
   beforeEach(() => {
     delete window.advanceTime;
     delete window.render_game_to_text;
     window.history.replaceState({}, "", "/");
     harness = createDomHarness();
+    controllers = [];
   });
 
-  afterEach(() => {
+  afterEach(async () => {
+    await Promise.all(controllers.map((controller) => controller.destroy()));
     harness.cleanup();
   });
 
   function createTestController(
     options: Partial<Parameters<typeof createAppController>[0]> = {},
   ) {
-    return createAppController({
+    const controller = createAppController({
       appRoot: harness.appRoot,
       requestAnimationFrame: harness.requestAnimationFrame,
       performanceNow: harness.performanceNow,
       createAudio: () => ({
         ensureStarted: vi.fn().mockResolvedValue(undefined),
         update: vi.fn(),
+        destroy: vi.fn().mockResolvedValue(undefined),
       }),
       ...options,
     });
+    controllers.push(controller);
+    return controller;
   }
 
   it("renders a visible startup error for invalid preview params and does not install hooks", () => {
@@ -136,7 +142,7 @@ describe("bootstrap and app controller", () => {
     );
   });
 
-  it("recomputes canvas display size on resize", () => {
+  it("applies canvas display size from the supplied rectangle", () => {
     const controller = createTestController();
 
     harness.setContainerSize(600, 400);
@@ -145,7 +151,7 @@ describe("bootstrap and app controller", () => {
     expect(controller.canvas.style.height).toBe("360px");
   });
 
-  it("routes fullscreen toggles through the frame and document APIs", () => {
+  it("routes fullscreen calls from supplied stub state", () => {
     const controller = createTestController();
     harness.attachFullscreenStub(controller.frame);
 
@@ -178,6 +184,25 @@ describe("bootstrap and app controller", () => {
       forward: false,
       reverse: false,
     });
+  });
+
+  it("reports rejected audio activation without an unhandled promise", async () => {
+    const activationError = new Error("Audio activation failed.");
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    createTestController({
+      createAudio: () => ({
+        ensureStarted: vi.fn().mockRejectedValue(activationError),
+        update: vi.fn(),
+        destroy: vi.fn().mockResolvedValue(undefined),
+      }),
+    });
+
+    document.dispatchEvent(new Event("pointerdown"));
+
+    await vi.waitFor(() => {
+      expect(consoleError).toHaveBeenCalledWith("Unable to start audio.", activationError);
+    });
+    consoleError.mockRestore();
   });
 
   it("keeps the small bootstrap helpers table-testable", () => {
@@ -275,13 +300,13 @@ describe("bootstrap and app controller", () => {
     expect(controller.state.mode).toBe("menu");
   });
 
-  it("handles automated stepping and startup failures from missing canvas support", () => {
+  it("handles automated stepping and startup failures from missing canvas support", async () => {
     const controller = createTestController({
       nav: { ...window.navigator, webdriver: true } as Navigator,
     });
     harness.flushAnimationFrames(16);
     expect(harness.requestAnimationFrame).toHaveBeenCalledTimes(2);
-    controller.destroy();
+    await controller.destroy();
 
     Object.defineProperty(HTMLCanvasElement.prototype, "getContext", {
       configurable: true,
@@ -292,7 +317,7 @@ describe("bootstrap and app controller", () => {
     expect(harness.appRoot.textContent).toContain("2D canvas context unavailable");
   });
 
-  it("destroys controller hooks and stops queued frame loops", () => {
+  it("stops rescheduling through injected RAF after destroy", async () => {
     const controller = createTestController({
       nav: { ...window.navigator, webdriver: true } as Navigator,
     });
@@ -303,7 +328,7 @@ describe("bootstrap and app controller", () => {
     harness.flushAnimationFrames(16);
     expect(harness.requestAnimationFrame).toHaveBeenCalledTimes(2);
 
-    controller.destroy();
+    await controller.destroy();
     harness.flushAnimationFrames(32);
 
     expect(harness.requestAnimationFrame).toHaveBeenCalledTimes(2);

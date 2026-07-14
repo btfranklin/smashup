@@ -27,7 +27,7 @@
 - `src/game/runtime.ts`: per-frame advancement, eliminations, event expiration, and camera updates
 - `src/game/debug.ts`: `render_game_to_text()` payload
 - `src/game/render.ts`: canvas drawing
-- `tests/`: Vitest unit coverage, jsdom bootstrap coverage, and deterministic transition checks
+- `tests/`: Vitest rule/controller coverage plus focused real-browser boot, Canvas, lifecycle, and Web Audio checks
 
 ## Maintenance Rule
 When repo navigation, commands, or validation surfaces change, update this index and the linked deep docs in the same change.

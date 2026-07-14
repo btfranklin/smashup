@@ -36,14 +36,16 @@ Open the local Vite URL shown in the terminal, usually `http://localhost:5173/`.
 Validated local and CI runtime: Node `26.x`.
 
 ```bash
-npm ci && npm run validate
+npm ci
+npx playwright install chromium
 npm run typecheck
 npm run build
 npm run test:unit
+npm run test:browser
 npm run validate
 ```
 
-`npm run validate` is the main regression command. It runs the repo legibility check, typecheck, builds the production bundle, runs the coverage-gated Vitest suite, and verifies calibrated per-surface coverage thresholds.
+`npm run validate` is the main regression command. It runs the repo legibility check, typecheck, builds the production bundle, runs the coverage-gated Vitest suite, verifies calibrated per-surface coverage thresholds, and exercises the focused Chromium integration suite. Install Chromium once with `npx playwright install chromium` before running browser validation locally.
 
 ## Project Layout
 
@@ -57,7 +59,7 @@ npm run validate
 - `src/game/runtime.ts`: per-frame simulation, event expiration, eliminations, and camera updates
 - `src/game/debug.ts`: `window.render_game_to_text()` payload generation
 - `src/game/render.ts`: canvas drawing
-- `tests/`: Vitest unit coverage, jsdom bootstrap coverage, and deterministic transition checks
+- `tests/`: Vitest rule/controller coverage plus focused real-browser boot, Canvas, lifecycle, and Web Audio checks
 - `docs/`: architecture, operations, quality, and validation-surface references
 
 ## Automation Surfaces

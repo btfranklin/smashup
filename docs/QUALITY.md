@@ -16,10 +16,16 @@
   - browser hooks survive bootstrap and deterministic stepping in `jsdom`
   - audio transition, countdown, crash cooldown, and mix helpers behave deterministically
   - render and effect systems stay branch-covered without browser-driving
+- `npm run test:browser` verifies in real Chromium:
+  - the served application boots and accepts pointer and keyboard menu/gameplay input
+  - native Canvas 2D paints normal and representative preview states without page, console, or request errors
+  - browser resize, fullscreen, and requestAnimationFrame lifecycles remain functional
+  - native Web Audio starts under user activation, resumes from suspension, and closes during controller teardown/recreation
 - `scripts/check-test-coverage.mjs` enforces calibrated per-surface thresholds so pure rule modules stay near-complete while imperative bootstrap/runtime wrappers still have explicit floors.
 
 ## When To Extend Validation
 - Add or update Vitest coverage when a change affects the preview URL contract, startup errors, browser hooks, round-start flow, or documented tuning regressions.
+- Add or update focused browser coverage only when a change affects native DOM, Canvas, layout/fullscreen/RAF, Web Audio, or controller ownership behavior.
 - Extend `check:repo` for required docs, command wiring, or positive module surfaces. Do not add checks whose only purpose is proving a removed file or old implementation has not returned.
 
 ## Recovery Guidance
