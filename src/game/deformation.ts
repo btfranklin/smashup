@@ -31,6 +31,35 @@ const FRAME_VERTEX_DEFS: Array<{
   { id: "front-tip-right", x: 0.5, y: 0.21, stiffness: 0.44 },
 ];
 
+const MIRRORED_FRAME_VERTEX_IDS: ReadonlyArray<readonly [string, string]> = [
+  ["front-tip-left", "front-tip-right"],
+  ["front-left-corner", "front-right-corner"],
+  ["left-front-fender", "right-front-fender"],
+  ["left-door-front", "right-door-front"],
+  ["left-door-rear", "right-door-rear"],
+  ["rear-left-corner", "rear-right-corner"],
+  ["rear-tip-left", "rear-tip-right"],
+];
+
+const FRONT_END_VERTEX_IDS = [
+  "front-tip-left",
+  "front-left-corner",
+  "front-right-corner",
+  "front-tip-right",
+] as const;
+
+const REAR_END_VERTEX_IDS = [
+  "rear-left-corner",
+  "rear-tip-left",
+  "rear-tip-right",
+  "rear-right-corner",
+] as const;
+
+// Damage and scars keep accumulating after the shell reaches these visual limits.
+const MIN_FRAME_AXIS_RETENTION = 0.58;
+const MAX_MIRRORED_RAIL_SKEW = 0.14;
+const MAX_END_PROFILE_SPREAD = 0.07;
+
 function cloneBodyState(body: BodyState): BodyState {
   return {
     front: body.front,
@@ -65,11 +94,16 @@ export function createFreshFrame(length: number, width: number): CarFrameState {
   };
 }
 
-function clampTowardCenter(value: number, base: number): number {
+function clampTowardCenter(
+  value: number,
+  base: number,
+  minimumRetention: number,
+): number {
+  const innerLimit = base * minimumRetention;
   if (base >= 0) {
-    return clamp(value, 0, base);
+    return clamp(value, innerLimit, base);
   }
-  return clamp(value, base, 0);
+  return clamp(value, base, innerLimit);
 }
 
 function constrainFrameVertex(vertex: FrameVertex, length: number, width: number): void {
@@ -77,8 +111,69 @@ function constrainFrameVertex(vertex: FrameVertex, length: number, width: number
   const halfWidth = width * 0.5;
   vertex.x = clamp(vertex.x, -halfLength * 0.98, halfLength * 0.98);
   vertex.y = clamp(vertex.y, -halfWidth * 0.98, halfWidth * 0.98);
-  vertex.x = clampTowardCenter(vertex.x, vertex.baseX);
-  vertex.y = clampTowardCenter(vertex.y, vertex.baseY);
+  vertex.x = clampTowardCenter(
+    vertex.x,
+    vertex.baseX,
+    MIN_FRAME_AXIS_RETENTION,
+  );
+  vertex.y = clampTowardCenter(
+    vertex.y,
+    vertex.baseY,
+    MIN_FRAME_AXIS_RETENTION,
+  );
+}
+
+function constrainMirroredPair(
+  first: FrameVertex,
+  second: FrameVertex,
+  axis: "x" | "y",
+  maximumDifference: number,
+): void {
+  const firstMagnitude = Math.abs(first[axis]);
+  const secondMagnitude = Math.abs(second[axis]);
+  const minimumMagnitude =
+    Math.max(firstMagnitude, secondMagnitude) - maximumDifference;
+
+  if (firstMagnitude < minimumMagnitude) {
+    const sign = axis === "x" ? Math.sign(first.baseX) : Math.sign(first.baseY);
+    first[axis] = minimumMagnitude * sign;
+  }
+  if (secondMagnitude < minimumMagnitude) {
+    const sign = axis === "x" ? Math.sign(second.baseX) : Math.sign(second.baseY);
+    second[axis] = minimumMagnitude * sign;
+  }
+}
+
+function keepFrontTipAheadOfCorner(
+  verticesById: ReadonlyMap<string, FrameVertex>,
+  tipId: string,
+  cornerId: string,
+): void {
+  const tip = verticesById.get(tipId);
+  const corner = verticesById.get(cornerId);
+  if (tip && corner) {
+    tip.x = Math.max(tip.x, corner.x);
+  }
+}
+
+function constrainEndProfile(
+  verticesById: ReadonlyMap<string, FrameVertex>,
+  vertexIds: readonly string[],
+  maximumDifference: number,
+): void {
+  const vertices = vertexIds
+    .map((id) => verticesById.get(id))
+    .filter((vertex): vertex is FrameVertex => vertex !== undefined);
+  const outermostMagnitude = Math.max(
+    ...vertices.map((vertex) => Math.abs(vertex.x)),
+  );
+  const minimumMagnitude = outermostMagnitude - maximumDifference;
+
+  for (const vertex of vertices) {
+    if (Math.abs(vertex.x) < minimumMagnitude) {
+      vertex.x = minimumMagnitude * Math.sign(vertex.baseX);
+    }
+  }
 }
 
 function constrainFrameShape(
@@ -89,6 +184,50 @@ function constrainFrameShape(
   for (const vertex of frame.vertices) {
     constrainFrameVertex(vertex, length, width);
   }
+
+  const verticesById = new Map(
+    frame.vertices.map((vertex) => [vertex.id, vertex]),
+  );
+  for (const [firstId, secondId] of MIRRORED_FRAME_VERTEX_IDS) {
+    const first = verticesById.get(firstId);
+    const second = verticesById.get(secondId);
+    if (!first || !second) {
+      continue;
+    }
+    constrainMirroredPair(
+      first,
+      second,
+      "x",
+      length * MAX_MIRRORED_RAIL_SKEW,
+    );
+    constrainMirroredPair(
+      first,
+      second,
+      "y",
+      width * MAX_MIRRORED_RAIL_SKEW,
+    );
+  }
+
+  keepFrontTipAheadOfCorner(
+    verticesById,
+    "front-tip-left",
+    "front-left-corner",
+  );
+  keepFrontTipAheadOfCorner(
+    verticesById,
+    "front-tip-right",
+    "front-right-corner",
+  );
+  constrainEndProfile(
+    verticesById,
+    FRONT_END_VERTEX_IDS,
+    length * MAX_END_PROFILE_SPREAD,
+  );
+  constrainEndProfile(
+    verticesById,
+    REAR_END_VERTEX_IDS,
+    length * MAX_END_PROFILE_SPREAD,
+  );
 }
 
 function zoneAxis(zone: DamageZone): Vec2 {

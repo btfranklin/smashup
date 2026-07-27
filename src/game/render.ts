@@ -371,6 +371,25 @@ function traceRoofPanelPath(ctx: CanvasRenderingContext2D, car: Car): void {
   ctx.closePath();
 }
 
+function traceHoodPanelPath(ctx: CanvasRenderingContext2D, car: Car): void {
+  const frontCrush = car.frame.crush.front;
+  ctx.beginPath();
+  ctx.moveTo(car.length * 0.17 - frontCrush * 12, -17);
+  ctx.lineTo(car.length * 0.36 - frontCrush * 18, -12);
+  ctx.lineTo(car.length * 0.34 - frontCrush * 20, 12);
+  ctx.lineTo(car.length * 0.16 - frontCrush * 12, 17);
+  ctx.closePath();
+}
+
+function traceWindshieldPath(ctx: CanvasRenderingContext2D): void {
+  ctx.beginPath();
+  ctx.moveTo(-7, -14);
+  ctx.lineTo(2, -12);
+  ctx.lineTo(1, 12);
+  ctx.lineTo(-8, 14);
+  ctx.closePath();
+}
+
 function drawRoofNumberDecal(ctx: CanvasRenderingContext2D, car: Car): void {
   const fontSize = Math.max(12, Math.min(18, car.length * 0.18));
   ctx.save();
@@ -391,18 +410,84 @@ function drawRoofNumberDecal(ctx: CanvasRenderingContext2D, car: Car): void {
 
 function drawPanelSeams(ctx: CanvasRenderingContext2D, car: Car): void {
   const halfWidth = car.width * 0.46;
+  const crush = car.frame.crush;
+  const leftBodyEdge = -halfWidth + crush.left * 7;
+  const rightBodyEdge = halfWidth - crush.right * 7;
+  const leftCabinEdge = -15 + crush.left * 4;
+  const rightCabinEdge = 15 - crush.right * 4;
+  const frontDoorX = car.length * 0.08 - crush.front * 4;
+  const rearDoorX = -car.length * 0.16 + crush.rear * 4;
+
   ctx.save();
   traceCarBodyPath(ctx, car);
   ctx.clip();
   ctx.strokeStyle = "rgba(28, 21, 18, 0.46)";
-  ctx.lineWidth = 1.4;
+  ctx.lineWidth = 1.25;
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+
+  traceRoofPanelPath(ctx, car);
+  ctx.stroke();
+  traceHoodPanelPath(ctx, car);
+  ctx.stroke();
+
   ctx.beginPath();
-  ctx.moveTo(car.length * 0.24 - car.frame.crush.front * 10, -halfWidth * 0.78);
-  ctx.lineTo(car.length * 0.18 - car.frame.crush.front * 12, halfWidth * 0.78);
-  ctx.moveTo(-car.length * 0.24 + car.frame.crush.rear * 8, -halfWidth * 0.7);
-  ctx.lineTo(-car.length * 0.18 + car.frame.crush.rear * 10, halfWidth * 0.7);
-  ctx.moveTo(-car.length * 0.02, -halfWidth * 0.86 + car.frame.crush.left * 7);
-  ctx.lineTo(0, halfWidth * 0.86 - car.frame.crush.right * 7);
+  ctx.moveTo(frontDoorX + 2, leftBodyEdge);
+  ctx.lineTo(frontDoorX, leftCabinEdge);
+  ctx.moveTo(frontDoorX, rightCabinEdge);
+  ctx.lineTo(frontDoorX + 2, rightBodyEdge);
+  ctx.moveTo(rearDoorX - 2, leftBodyEdge);
+  ctx.lineTo(rearDoorX, leftCabinEdge);
+  ctx.moveTo(rearDoorX, rightCabinEdge);
+  ctx.lineTo(rearDoorX - 2, rightBodyEdge);
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawPresetCharacterLines(
+  ctx: CanvasRenderingContext2D,
+  car: Car,
+): void {
+  const frontCrush = car.frame.crush.front;
+  const rearCrush = car.frame.crush.rear;
+
+  ctx.save();
+  traceCarBodyPath(ctx, car);
+  ctx.clip();
+  ctx.strokeStyle = car.disabled ? "rgba(174, 164, 151, 0.42)" : car.accent;
+  ctx.lineWidth = 2.2;
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  ctx.beginPath();
+
+  switch (car.presetId) {
+    case "bulldozer": {
+      const start = car.length * 0.2 - frontCrush * 9;
+      const end = car.length * 0.41 - frontCrush * 18;
+      ctx.moveTo(start, -6);
+      ctx.lineTo(end, -6);
+      ctx.moveTo(start, 6);
+      ctx.lineTo(end, 6);
+      break;
+    }
+    case "darter": {
+      const start = car.length * 0.16 - frontCrush * 8;
+      const point = car.length * 0.41 - frontCrush * 18;
+      ctx.moveTo(start, -8);
+      ctx.lineTo(point, 0);
+      ctx.lineTo(start, 8);
+      break;
+    }
+    case "backstab": {
+      const start = -car.length * 0.2 + rearCrush * 7;
+      const point = -car.length * 0.42 + rearCrush * 17;
+      ctx.moveTo(start, -9);
+      ctx.lineTo(point, 0);
+      ctx.lineTo(start, 9);
+      break;
+    }
+  }
+
   ctx.stroke();
   ctx.restore();
 }
@@ -644,24 +729,15 @@ export function drawCar(
   ctx.fill();
 
   ctx.fillStyle = car.disabled ? "#48423d" : "rgba(34, 28, 24, 0.9)";
-  ctx.beginPath();
-  ctx.moveTo(car.length * 0.17 - car.frame.crush.front * 12, -17);
-  ctx.lineTo(car.length * 0.36 - car.frame.crush.front * 18, -12);
-  ctx.lineTo(car.length * 0.34 - car.frame.crush.front * 20, 12);
-  ctx.lineTo(car.length * 0.16 - car.frame.crush.front * 12, 17);
-  ctx.closePath();
+  traceHoodPanelPath(ctx, car);
   ctx.fill();
 
   ctx.fillStyle = "rgba(210, 229, 232, 0.28)";
-  ctx.beginPath();
-  ctx.moveTo(-7, -14);
-  ctx.lineTo(2, -12);
-  ctx.lineTo(1, 12);
-  ctx.lineTo(-8, 14);
-  ctx.closePath();
+  traceWindshieldPath(ctx);
   ctx.fill();
 
   drawPanelSeams(ctx, car);
+  drawPresetCharacterLines(ctx, car);
 
   ctx.strokeStyle = car.disabled ? "#3a3430" : "rgba(30, 17, 10, 0.78)";
   ctx.lineWidth = 3;

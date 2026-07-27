@@ -40,6 +40,35 @@ describe("Canvas command orchestration", () => {
     ).not.toThrow();
   });
 
+  it("draws a distinct character line for each car preset", () => {
+    const cases = [
+      {
+        presetId: "bulldozer" as const,
+        expectedStart: (length: number) => [length * 0.2, -6],
+      },
+      {
+        presetId: "darter" as const,
+        expectedStart: (length: number) => [length * 0.16, -8],
+      },
+      {
+        presetId: "backstab" as const,
+        expectedStart: (length: number) => [-length * 0.2, -9],
+      },
+    ];
+
+    for (const { presetId, expectedStart } of cases) {
+      const canvas = createCanvasRecorder();
+      const car = createCarFixture({}, presetId);
+
+      drawCar(canvas.ctx, car, { showPlayerOutline: false });
+
+      expect(canvas.operations).toContainEqual({
+        type: "moveTo",
+        args: expectedStart(car.length),
+      });
+    }
+  });
+
   it("orders axle and tire commands below the deformed car body", () => {
     const canvas = createCanvasRecorder();
 

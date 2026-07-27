@@ -4,6 +4,16 @@ import { applyImpactDamage } from "../src/game/damage";
 import { applyFrameImpact, summarizeFrameDamage } from "../src/game/deformation";
 import { createCarFixture } from "./helpers/fixtures";
 
+const MIRRORED_VERTEX_IDS = [
+  ["front-tip-left", "front-tip-right"],
+  ["front-left-corner", "front-right-corner"],
+  ["left-front-fender", "right-front-fender"],
+  ["left-door-front", "right-door-front"],
+  ["left-door-rear", "right-door-rear"],
+  ["rear-left-corner", "rear-right-corner"],
+  ["rear-tip-left", "rear-tip-right"],
+] as const;
+
 function vertex(car: ReturnType<typeof createCarFixture>, id: string) {
   const found = car.frame.vertices.find((candidate) => candidate.id === id);
   if (!found) {
@@ -20,6 +30,55 @@ describe("car frame deformation", () => {
       expect(Math.abs(point.x)).toBeLessThanOrEqual(car.length * 0.5 + 0.001);
       expect(Math.abs(point.y)).toBeLessThanOrEqual(car.width * 0.5 + 0.001);
     }
+  }
+
+  function expectFrameToKeepCarLikeProportions(
+    car: ReturnType<typeof createCarFixture>,
+  ) {
+    for (const point of car.frame.vertices) {
+      expect(Math.abs(point.x)).toBeGreaterThanOrEqual(
+        Math.abs(point.baseX) * 0.57,
+      );
+      expect(Math.abs(point.y)).toBeGreaterThanOrEqual(
+        Math.abs(point.baseY) * 0.57,
+      );
+    }
+
+    for (const [firstId, secondId] of MIRRORED_VERTEX_IDS) {
+      const first = vertex(car, firstId);
+      const second = vertex(car, secondId);
+      expect(Math.abs(Math.abs(first.x) - Math.abs(second.x))).toBeLessThanOrEqual(
+        car.length * 0.141,
+      );
+      expect(Math.abs(Math.abs(first.y) - Math.abs(second.y))).toBeLessThanOrEqual(
+        car.width * 0.141,
+      );
+    }
+
+    const frontProfile = [
+      vertex(car, "front-tip-left").x,
+      vertex(car, "front-left-corner").x,
+      vertex(car, "front-right-corner").x,
+      vertex(car, "front-tip-right").x,
+    ];
+    const rearProfile = [
+      vertex(car, "rear-left-corner").x,
+      vertex(car, "rear-tip-left").x,
+      vertex(car, "rear-tip-right").x,
+      vertex(car, "rear-right-corner").x,
+    ].map(Math.abs);
+    expect(Math.max(...frontProfile) - Math.min(...frontProfile)).toBeLessThanOrEqual(
+      car.length * 0.071,
+    );
+    expect(Math.max(...rearProfile) - Math.min(...rearProfile)).toBeLessThanOrEqual(
+      car.length * 0.071,
+    );
+    expect(vertex(car, "front-tip-left").x).toBeGreaterThanOrEqual(
+      vertex(car, "front-left-corner").x,
+    );
+    expect(vertex(car, "front-tip-right").x).toBeGreaterThanOrEqual(
+      vertex(car, "front-right-corner").x,
+    );
   }
 
   it("crumples front, rear, left, and right frame vertices inward from local impacts", () => {
@@ -91,7 +150,7 @@ describe("car frame deformation", () => {
     expectFrameWithinOriginalHull(car);
   });
 
-  it("keeps repeated extreme impacts inside the original car hull", () => {
+  it("keeps repeated extreme impacts inside a recognizable car-shaped envelope", () => {
     const car = createCarFixture();
 
     for (let index = 0; index < 16; index += 1) {
@@ -116,6 +175,28 @@ describe("car frame deformation", () => {
     }
 
     expectFrameWithinOriginalHull(car);
+    expectFrameToKeepCarLikeProportions(car);
+  });
+
+  it("caps a localized crumple before one body rail collapses into a point", () => {
+    const car = createCarFixture();
+    const impactPoint = {
+      x: car.length * 0.5,
+      y: car.width * 0.42,
+    };
+
+    for (let index = 0; index < 24; index += 1) {
+      applyFrameImpact(car, impactPoint, 1, "front", { x: 1, y: 0 });
+    }
+
+    const leftTip = vertex(car, "front-tip-left");
+    const rightTip = vertex(car, "front-tip-right");
+    expect(rightTip.x).toBeLessThan(rightTip.baseX);
+    expect(rightTip.x).toBeGreaterThanOrEqual(rightTip.baseX * 0.58);
+    expect(Math.abs(leftTip.x - rightTip.x)).toBeLessThanOrEqual(
+      car.length * 0.141,
+    );
+    expectFrameToKeepCarLikeProportions(car);
   });
 
   it("can visually deform disabled cars without applying more gameplay damage", () => {
