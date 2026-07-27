@@ -12,8 +12,11 @@ describe("round stats helpers", () => {
       eliminatedById: null,
       knockoutReason: null,
       playerKnockouts: [],
+      strongestPlayerHitSeverity: 0,
       lastPlayerTargetId: null,
       lastPlayerTargetElapsed: null,
+      lastPlayerTargetSeverity: 0,
+      strongestPlayerKnockoutSeverity: 0,
       finalTwoAnnounced: false,
     });
   });
@@ -23,8 +26,11 @@ describe("round stats helpers", () => {
     state.roundStats.biggestHitSeverity = 1;
     state.roundStats.biggestHitLabel = "Player into Rimshot";
     state.roundStats.playerKnockouts.push("Rimshot");
+    state.roundStats.strongestPlayerHitSeverity = 0.8;
     state.roundStats.lastPlayerTargetId = 7;
     state.roundStats.lastPlayerTargetElapsed = 16;
+    state.roundStats.lastPlayerTargetSeverity = 0.7;
+    state.roundStats.strongestPlayerKnockoutSeverity = 0.7;
     state.roundStats.finalTwoAnnounced = true;
 
     resetRoundStats(state);
@@ -36,8 +42,11 @@ describe("round stats helpers", () => {
       eliminatedById: null,
       knockoutReason: null,
       playerKnockouts: [],
+      strongestPlayerHitSeverity: 0,
       lastPlayerTargetId: null,
       lastPlayerTargetElapsed: null,
+      lastPlayerTargetSeverity: 0,
+      strongestPlayerKnockoutSeverity: 0,
       finalTwoAnnounced: false,
     });
   });

@@ -2,7 +2,11 @@ import { describe, expect, it } from "vitest";
 
 import { createDefaultPlayerBuild } from "../src/game/content";
 import { createFreshFrame } from "../src/game/deformation";
-import { applyBuildUpgrade, serviceCondition } from "../src/game/upgrades";
+import {
+  applyBuildUpgrade,
+  serviceCondition,
+  towConditionToRunnableMinimum,
+} from "../src/game/upgrades";
 import type { CarCondition } from "../src/game/types";
 
 function damagedCondition(): CarCondition {
@@ -106,5 +110,27 @@ describe("upgrade mechanics", () => {
     expect(steeringClinic.systems.transmission).toBeCloseTo(0.66);
     expect(steeringClinic.body.left).toBeCloseTo(0.04);
     expect(steeringClinic.body.right).toBeCloseTo(0.09);
+  });
+
+  it("tows a wreck back to a runnable minimum without repairing the body", () => {
+    const condition = damagedCondition();
+    condition.systems.engine = 0.04;
+    condition.systems.radiator = 0.18;
+    condition.systems.transmission = 0.31;
+    condition.systems.steering = 0.08;
+    condition.systems.overheat = 0.96;
+
+    const towed = towConditionToRunnableMinimum(condition);
+
+    expect(towed.systems).toEqual({
+      engine: 0.32,
+      radiator: 0.32,
+      transmission: 0.32,
+      steering: 0.32,
+      overheat: 0.7,
+    });
+    expect(towed.body).toEqual(condition.body);
+    expect(towed.frame).not.toBe(condition.frame);
+    expect(condition.systems.engine).toBe(0.04);
   });
 });

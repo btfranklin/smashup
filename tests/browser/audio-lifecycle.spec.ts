@@ -50,7 +50,7 @@ test("initializes native Web Audio under activation and resumes suspension", asy
   await page.goto("/");
   expect(await readAudioProbe(page)).toMatchObject({ count: 0, states: [] });
 
-  await page.getByRole("button", { name: "Start Tournament" }).click();
+  await page.getByRole("button", { name: "Start Career Night" }).click();
   await expect.poll(async () => (await readAudioProbe(page)).count).toBe(1);
   await expect.poll(async () => (await readAudioProbe(page)).states).toEqual(["running"]);
 
@@ -70,7 +70,7 @@ test("closes native audio and transfers browser-hook ownership on recreate", asy
   await installNativeAudioProbe(page);
   await page.goto("/tests/browser/controller-fixture.html");
   await page.evaluate(() => window.controllerFixture.create());
-  await page.getByRole("button", { name: "Start Tournament" }).click();
+  await page.getByRole("button", { name: "Start Career Night" }).click();
   await expect.poll(async () => (await readAudioProbe(page)).states).toEqual(["running"]);
 
   await page.evaluate(() => window.controllerFixture.destroy());

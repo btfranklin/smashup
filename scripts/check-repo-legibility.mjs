@@ -35,7 +35,6 @@ function requireContains(relativePath, fragments, remediation) {
   "README.md",
   "LICENSE",
   "AGENTS.md",
-  "ROADMAP.md",
   ".github/workflows/validate.yml",
   "docs/README.md",
   "docs/ARCHITECTURE.md",
@@ -49,6 +48,9 @@ function requireContains(relativePath, fragments, remediation) {
   "playwright.config.ts",
   "src/app/bootstrap.ts",
   "src/vite-env.d.ts",
+  "src/game/content.ts",
+  "src/game/career.ts",
+  "src/game/awards.ts",
   "src/game/events.ts",
   "src/game/roundStats.ts",
   "src/game/roster.ts",
@@ -95,8 +97,9 @@ requireContains(
     "docs/references/validation-surfaces.md",
     "docs/references/gameplay-tuning.md",
     "docs/exec-plans/tech-debt-tracker.md",
-    "ROADMAP.md",
     "LICENSE",
+    "src/game/career.ts",
+    "src/game/awards.ts",
   ],
   "AGENTS.md should stay a short map that routes the agent to deeper sources of truth.",
 );
@@ -113,7 +116,8 @@ requireContains(
     "./LEGIBILITY-AUDIT.md",
     "../LICENSE",
     "./exec-plans/tech-debt-tracker.md",
-    "../ROADMAP.md",
+    "src/game/career.ts",
+    "src/game/awards.ts",
   ],
   "docs/README.md must index the deeper docs and future-work artifacts.",
 );
@@ -129,6 +133,19 @@ requireContains(
     "## License",
   ],
   "README.md should remain the public front door with setup, controls, validation, automation surfaces, and license guidance.",
+);
+
+requireContains(
+  "docs/QUALITY.md",
+  [
+    "## Architectural Guardrails",
+    "npm run validate",
+    "src/game/content.ts",
+    "src/game/career.ts",
+    "window.advanceTime(ms)",
+    "window.render_game_to_text()",
+  ],
+  "docs/QUALITY.md must preserve the executable architectural guardrails for content ids, split gameplay modules, and browser hooks.",
 );
 
 requireContains(

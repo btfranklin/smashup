@@ -329,7 +329,10 @@ export class AudioManager {
     this.skidGain.gain.linearRampToValueAtTime(mix.skidLevel, now + 0.04);
 
     this.crashCooldownTicks = Math.max(0, this.crashCooldownTicks - 1);
-    if (state.mode === "running" && state.recentCollisions.length > 0) {
+    if (
+      (state.mode === "running" || state.mode === "spectating") &&
+      state.recentCollisions.length > 0
+    ) {
       this.playCrashSounds(state.recentCollisions, state.cars);
     }
     const countdownTone = getCountdownToneFrequency(

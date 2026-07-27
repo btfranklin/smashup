@@ -1,11 +1,11 @@
 import {
   CAR_PREVIEW_SCENARIOS,
-  ROUND_PLANS,
   TOTAL_ROUNDS,
   createDefaultPlayerBuild,
   getArenaMudZones,
   getArenaObjects,
 } from "./content";
+import { generateCareerRoundPlans } from "./career";
 import { cloneCondition, createFreshCondition } from "./conditions";
 import { pushEvent } from "./events";
 import { createRoundStats, resetRoundStats } from "./roundStats";
@@ -14,7 +14,11 @@ import {
   createMenuPreviewCars,
   createRoundCars,
 } from "./roster";
-import { applyBuildUpgrade, serviceCondition } from "./upgrades";
+import {
+  applyBuildUpgrade,
+  serviceCondition,
+  towConditionToRunnableMinimum,
+} from "./upgrades";
 import type {
   Car,
   CarPreviewScenarioId,
@@ -87,7 +91,10 @@ function buildArenaFromPlan(roundPlan: RoundPlan): GameState["arena"] {
 }
 
 function prepareRound(state: GameState, roundIndex: number): void {
-  const roundPlan = ROUND_PLANS[roundIndex];
+  const roundPlan = state.session.roundPlans[roundIndex];
+  if (!roundPlan) {
+    throw new Error(`Career round ${roundIndex + 1} is not configured.`);
+  }
   state.session.roundIndex = roundIndex;
   state.session.roundPlan = roundPlan;
   state.arena = buildArenaFromPlan(roundPlan);
@@ -106,7 +113,15 @@ function prepareRound(state: GameState, roundIndex: number): void {
       car.systems.overheat = 0.4;
     }
   }
-  if (roundPlan.modifier === "lights_out") {
+  if (roundPlan.modifier === "redline") {
+    for (const car of state.cars) {
+      car.systems.overheat = Math.max(0.55, car.systems.overheat);
+    }
+  }
+  if (
+    roundPlan.modifier === "lights_out" ||
+    roundPlan.modifier === "redline"
+  ) {
     for (const car of state.cars) {
       car.lights.rearLeft = false;
       if (!car.isPlayer) {
@@ -127,7 +142,7 @@ function prepareRound(state: GameState, roundIndex: number): void {
 }
 
 export function createInitialState(): GameState {
-  const previewPlan = ROUND_PLANS[0];
+  const previewPlan = generateCareerRoundPlans(0)[0];
   const state: GameState = {
     mode: "menu",
     arena: buildArenaFromPlan(previewPlan),
@@ -136,6 +151,8 @@ export function createInitialState(): GameState {
       totalRounds: TOTAL_ROUNDS,
       roundIndex: 0,
       roundPlan: previewPlan,
+      runSeed: null,
+      roundPlans: [],
       playerBuild: null,
       playerCondition: null,
       completedRounds: [],
@@ -237,7 +254,10 @@ export function beginCarSelect(state: GameState): void {
 export function chooseStarterCar(
   state: GameState,
   presetId: CarPresetId,
+  runSeed = Math.floor(Math.random() * 0x1_0000_0000) >>> 0,
 ): void {
+  state.session.runSeed = runSeed >>> 0;
+  state.session.roundPlans = generateCareerRoundPlans(state.session.runSeed);
   state.session.playerBuild = createDefaultPlayerBuild(presetId);
   state.session.playerCondition = createFreshCondition();
   state.session.completedRounds = [];
@@ -250,11 +270,8 @@ export function advanceAfterRound(state: GameState): void {
   if (!summary) {
     return;
   }
-  if (
-    !summary.playerWon ||
-    state.session.roundIndex >= state.session.totalRounds - 1
-  ) {
-    state.mode = "tournament_over";
+  if (state.session.roundIndex >= state.session.totalRounds - 1) {
+    state.mode = "career_over";
     return;
   }
   state.mode = "upgrade";
@@ -268,8 +285,12 @@ export function applySessionUpgrade(
     return;
   }
   applyBuildUpgrade(state.session.playerBuild, upgradeId);
+  const condition =
+    state.session.lastRoundSummary?.playerWon === false
+      ? towConditionToRunnableMinimum(state.session.playerCondition)
+      : state.session.playerCondition;
   state.session.playerCondition = serviceCondition(
-    state.session.playerCondition,
+    condition,
     upgradeId,
   );
   prepareRound(state, state.session.roundIndex + 1);

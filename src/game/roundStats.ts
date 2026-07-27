@@ -8,8 +8,11 @@ export function createRoundStats(startElapsed = 0): RoundStats {
     eliminatedById: null,
     knockoutReason: null,
     playerKnockouts: [],
+    strongestPlayerHitSeverity: 0,
     lastPlayerTargetId: null,
     lastPlayerTargetElapsed: null,
+    lastPlayerTargetSeverity: 0,
+    strongestPlayerKnockoutSeverity: 0,
     finalTwoAnnounced: false,
   };
 }

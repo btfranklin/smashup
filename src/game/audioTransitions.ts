@@ -7,9 +7,17 @@ export function getRoundResultCue(
   nextMode: Mode,
   playerDisabled: boolean,
 ): FinishCue | null {
-  if (previousMode !== "running" || nextMode !== "round_results") {
-    return null;
+  if (
+    previousMode === "running" &&
+    nextMode === "spectating" &&
+    playerDisabled
+  ) {
+    return "sad";
   }
 
-  return playerDisabled ? "sad" : "happy";
+  if (previousMode === "running" && nextMode === "round_results") {
+    return playerDisabled ? "sad" : "happy";
+  }
+
+  return null;
 }

@@ -86,7 +86,7 @@ export function updateSmokeEffects(state: GameState, dt: number): void {
     .filter((puff) => puff.age < puff.ttl)
     .slice(-180);
 
-  if (state.mode !== "running") {
+  if (state.mode !== "running" && state.mode !== "spectating") {
     return;
   }
 

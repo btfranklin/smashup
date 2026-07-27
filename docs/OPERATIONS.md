@@ -13,7 +13,7 @@
 - `npm run typecheck`
   Runs TypeScript against `src`, `tests`, and `vitest.config.ts` without emitting files.
 - `npm run validate`
-  Runs `check:repo`, typecheck, production build, and the coverage-gated Vitest suite.
+  Runs `check:repo`, typecheck, the production build, the coverage-gated Vitest suite, and the focused Chromium integration suite.
 - `npm run test:unit`
   Runs the fast Vitest suite once without coverage instrumentation.
 - `npm run test:coverage`
@@ -26,7 +26,7 @@
 - Deterministic stepping hook: `window.advanceTime(ms)`
 - Text-state hook: `window.render_game_to_text()`
 
-See [Validation Surfaces](./references/validation-surfaces.md) for the contract details.
+The text-state payload exposes the in-memory Career Night seed and round schedule, placements, points, awards, and current standings alongside the active arena and cars. See [Validation Surfaces](./references/validation-surfaces.md) for the contract details.
 
 ## Artifact Locations
 - `dist/`: Vite production build output
@@ -37,5 +37,6 @@ See [Validation Surfaces](./references/validation-surfaces.md) for the contract 
 ## Failure Recovery
 - If `check:repo` fails, read the remediation text first; it tells you which file or link drifted.
 - If `test:unit` or `test:coverage` fails on preview coverage, inspect `src/game/content.ts`, `src/game/preview.ts`, `tests/preview.spec.ts`, and `tests/bootstrap.spec.ts` together.
+- If Career Night generation, scoring, or award tests fail, inspect `src/game/content.ts`, `src/game/career.ts`, and `src/game/awards.ts` before changing session or browser code.
 - If startup errors appear in preview mode, confirm the requested ids are present in `CAR_PRESET_IDS` and `CAR_PREVIEW_SCENARIO_IDS`.
 - If `test:browser` cannot launch Chromium, rerun `npx playwright install chromium`; on Linux CI use `npx playwright install --with-deps chromium`.

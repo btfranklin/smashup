@@ -1,6 +1,12 @@
 import { updateAi } from "./ai";
+import { selectWreckAwards } from "./awards";
+import { rankRoundCars } from "./career";
 import { captureCarCondition } from "./conditions";
-import { getKnockoutCause, getCarSystemPhases } from "./damage";
+import {
+  getEngineHealth,
+  getKnockoutCause,
+  getCarSystemPhases,
+} from "./damage";
 import { spawnImpactDebris, updateDebrisEffects } from "./debris";
 import {
   pushCarFragments,
@@ -19,7 +25,6 @@ import {
   getActiveCars,
   getCarById,
   getPlayerCar,
-  getWinnerCar,
 } from "./selectors";
 import { updateSmokeEffects } from "./smoke";
 import type {
@@ -27,6 +32,7 @@ import type {
   CollisionEvent,
   DamagePhase,
   GameState,
+  RoundPlacement,
   RoundSummary,
   SystemName,
 } from "./types";
@@ -72,16 +78,29 @@ function getKnockoutReason(car: Car): string {
   }
 }
 
-function makeRoundSummary(state: GameState, playerWon: boolean): RoundSummary {
+function makeRoundSummary(
+  state: GameState,
+  placements: RoundPlacement[],
+): RoundSummary {
   const player = getPlayerCar(state);
-  const winner = getWinnerCar(state);
+  const winner = placements[0] ?? null;
+  const playerWon = winner?.driverId === state.playerId;
   const eliminatedBy = getCarById(state, state.roundStats.eliminatedById);
   const roundPlan = state.session.roundPlan;
+  const awardIds = selectWreckAwards({
+    playerWon,
+    playerEngineHealth: player ? getEngineHealth(player) : 0,
+    playerFrontDamage: player?.body.front ?? 0,
+    playerKnockoutCount: state.roundStats.playerKnockouts.length,
+    strongestPlayerHitSeverity: state.roundStats.strongestPlayerHitSeverity,
+    strongestPlayerKnockoutSeverity:
+      state.roundStats.strongestPlayerKnockoutSeverity,
+  });
   return {
     roundIndex: state.session.roundIndex + 1,
     title: roundPlan?.title ?? `Round ${state.session.roundIndex + 1}`,
     playerWon,
-    winnerLabel: winner?.label ?? (playerWon ? "Player" : null),
+    winnerLabel: winner?.label ?? null,
     survivalTime: Number(
       (state.elapsed - state.roundStats.startElapsed).toFixed(1),
     ),
@@ -90,7 +109,24 @@ function makeRoundSummary(state: GameState, playerWon: boolean): RoundSummary {
     biggestHitLabel: state.roundStats.biggestHitLabel,
     biggestHitSeverity: Number(state.roundStats.biggestHitSeverity.toFixed(2)),
     knockoutReason: !playerWon && player ? getKnockoutReason(player) : null,
+    placements,
+    awardIds,
   };
+}
+
+function completeRound(state: GameState, forceConditionRanking = false): void {
+  const placements = rankRoundCars(state.cars, forceConditionRanking);
+  state.winnerId = placements[0]?.driverId ?? null;
+  const player = getPlayerCar(state);
+  if (player) {
+    state.session.playerCondition = captureCarCondition(player);
+  }
+  state.session.lastRoundSummary = makeRoundSummary(state, placements);
+  state.session.completedRounds.push(state.session.lastRoundSummary);
+  state.mode = "round_results";
+  if (state.winnerId === state.playerId) {
+    pushEvent(state, "Round Won!", "result", 1, 2.4);
+  }
 }
 
 function refreshPhaseEvents(state: GameState, car: Car): void {
@@ -189,6 +225,11 @@ function recordPlayerContactCredit(
       ? playerCollision.bId
       : playerCollision.aId;
   state.roundStats.lastPlayerTargetElapsed = state.elapsed;
+  state.roundStats.lastPlayerTargetSeverity = playerCollision.damageSeverity;
+  state.roundStats.strongestPlayerHitSeverity = Math.max(
+    state.roundStats.strongestPlayerHitSeverity,
+    playerCollision.damageSeverity,
+  );
 }
 
 function applyCollisionCameraDrama(
@@ -287,6 +328,14 @@ function registerNewEliminations(
       attackerId === state.playerId ||
       (attackerId === null && hasRecentPlayerCredit(state, car))
     ) {
+      const knockoutSeverity =
+        attackerId === state.playerId
+          ? (relevant?.damageSeverity ?? 0)
+          : state.roundStats.lastPlayerTargetSeverity;
+      state.roundStats.strongestPlayerKnockoutSeverity = Math.max(
+        state.roundStats.strongestPlayerKnockoutSeverity,
+        knockoutSeverity,
+      );
       if (!state.roundStats.playerKnockouts.includes(car.label)) {
         state.roundStats.playerKnockouts.push(car.label);
       }
@@ -375,7 +424,7 @@ export function advanceState(state: GameState, dt: number): void {
     return;
   }
 
-  if (state.mode !== "running") {
+  if (state.mode !== "running" && state.mode !== "spectating") {
     state.recentCollisions = [];
     state.elapsed += dt;
     return;
@@ -440,27 +489,24 @@ export function advanceState(state: GameState, dt: number): void {
 
   const playerCar = getPlayerCar(state);
   const alive = getActiveCars(state);
-  if (playerCar?.disabled) {
-    state.winnerId = alive.length === 1 ? (alive[0]?.id ?? null) : null;
+  if (playerCar?.disabled && state.mode === "running") {
     state.outlastedDriverIds = alive
       .filter((car) => car.id !== state.playerId)
       .map((car) => car.id);
     state.session.playerCondition = captureCarCondition(playerCar);
-    state.session.lastRoundSummary = makeRoundSummary(state, false);
-    state.session.completedRounds.push(state.session.lastRoundSummary);
-    state.mode = "round_results";
-  } else if (alive.length <= 1) {
-    state.winnerId = alive[0]?.id ?? null;
-    state.outlastedDriverIds = [];
-    if (playerCar) {
-      state.session.playerCondition = captureCarCondition(playerCar);
-    }
-    state.session.lastRoundSummary = makeRoundSummary(state, true);
-    state.session.completedRounds.push(state.session.lastRoundSummary);
-    state.mode = "round_results";
-    pushEvent(state, "Round Won!", "result", 1, 2.4);
+    state.mode = "spectating";
+  }
+  if (alive.length <= 1) {
+    completeRound(state);
   }
 
   state.tick += 1;
   state.elapsed += dt;
+}
+
+export function finishSpectatingRound(state: GameState): void {
+  if (state.mode !== "spectating") {
+    return;
+  }
+  completeRound(state, true);
 }

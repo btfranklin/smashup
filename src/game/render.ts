@@ -981,7 +981,7 @@ export function renderGame(
 
   if (state.mode === "intro") {
     drawIntroOverlay(ctx, state);
-  } else if (state.mode !== "running") {
+  } else if (state.mode !== "running" && state.mode !== "spectating") {
     drawNonRunningOverlay(ctx, state.arena.width, state.arena.height);
   }
 }

@@ -12,7 +12,6 @@ Start here before changing code.
 - `docs/references/gameplay-tuning.md`: intent behind physics, damage, AI, thermal, and spectacle tuning
 - `docs/LEGIBILITY-AUDIT.md`: current legibility strengths, gaps, and next investments
 - `LICENSE`: public license terms
-- `ROADMAP.md`: product-facing deferred work
 - `docs/exec-plans/tech-debt-tracker.md`: technical future-work tracker
 
 ## Common Commands
@@ -26,6 +25,8 @@ Start here before changing code.
 
 ## Task Routing
 - Gameplay flow and round transitions: `src/game/session.ts`
+- Career Night plan generation, placements, scoring, and standings: `src/game/career.ts`
+- Wreck Award qualification: `src/game/awards.ts`
 - Roster setup and car construction: `src/game/roster.ts`
 - Upgrade effects and condition servicing: `src/game/upgrades.ts`
 - Per-round stat lifecycle: `src/game/roundStats.ts`
@@ -38,5 +39,5 @@ Start here before changing code.
 
 ## Working Rules
 - Do not rebuild a catch-all gameplay module; extend the dedicated split modules instead.
-- Keep preview ids sourced from `src/game/content.ts`; do not hardcode duplicate allowlists in the bootstrap path.
+- Keep preview, Career Night, and Wreck Award ids and display content sourced from `src/game/content.ts`; do not duplicate authored content in bootstrap, session, or tests.
 - Treat `docs/` as the durable system of record for architecture, operations, and quality expectations. Update docs when commands, boundaries, or validation surfaces change.

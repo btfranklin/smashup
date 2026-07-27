@@ -12,14 +12,15 @@
 - [Legibility Audit](./LEGIBILITY-AUDIT.md): current strengths, remaining gaps, and next leverage points
 - [License](../LICENSE): MIT license terms
 
-## Plans And Memory
+## Maintenance
 - [Tech Debt Tracker](./exec-plans/tech-debt-tracker.md): prioritized follow-on cleanup and legibility work
-- [Roadmap](../ROADMAP.md): deferred product-facing work
 
 ## Code Map
 - `src/app/bootstrap.ts`: browser bootstrap, menus, startup errors, and runtime hooks
 - `src/main.ts`: thin browser entrypoint and CSS import
-- `src/game/session.ts`: state creation, preview state, and round/tournament progression
+- `src/game/session.ts`: state creation, preview state, and round/Career Night progression
+- `src/game/career.ts`: seeded round generation, placements, points, and standings
+- `src/game/awards.ts`: Wreck Award qualification
 - `src/game/roster.ts`: lineup data and car construction helpers
 - `src/game/upgrades.ts`: upgrade bonuses and condition servicing
 - `src/game/roundStats.ts`: round stat defaults and reset lifecycle

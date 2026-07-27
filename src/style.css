@@ -35,6 +35,7 @@ body {
 .frame {
   position: relative;
   width: min(100%, 1480px);
+  min-width: 0;
   aspect-ratio: 16 / 10;
   display: grid;
   place-items: center;
@@ -63,12 +64,29 @@ canvas {
 
 .menu[data-mode="car_select"],
 .menu[data-mode="upgrade"],
-.menu[data-mode="tournament_over"] {
+.menu[data-mode="round_results"] {
   width: min(720px, calc(100% - 64px));
+}
+
+.menu[data-mode="career_over"] {
+  inset: 24px auto auto 50%;
+  width: min(1120px, calc(100% - 48px));
+  max-height: calc(100% - 48px);
+  overflow: auto;
+  color: #fff5dc;
+  background:
+    linear-gradient(135deg, rgba(51, 29, 13, 0.98), rgba(19, 14, 10, 0.98)),
+    #1b120c;
+  border-color: rgba(231, 170, 60, 0.62);
+  box-shadow:
+    0 24px 90px rgba(25, 8, 0, 0.62),
+    inset 0 0 0 1px rgba(255, 229, 161, 0.12);
+  transform: translateX(-50%);
 }
 
 .menu h1,
 .menu h2,
+.menu h3,
 .menu p {
   margin: 0;
 }
@@ -111,6 +129,12 @@ canvas {
 
 .menu .primary-button:hover {
   filter: brightness(1.06);
+}
+
+.menu .primary-button:disabled {
+  cursor: wait;
+  filter: grayscale(0.35);
+  opacity: 0.74;
 }
 
 .choice-grid {
@@ -169,13 +193,345 @@ canvas {
   color: #8a4f1b;
 }
 
-.results-list {
-  margin: 1rem 0 0;
-  padding-left: 1.2rem;
+.eyebrow {
+  display: block;
+  margin-bottom: 0.45rem;
+  color: #8a4f1b;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
 }
 
-.results-list li + li {
+.result-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1.25rem;
+}
+
+.points-stamp {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  min-width: 118px;
+  padding: 0.8rem;
+  color: #fff6dc;
+  background: #61230c;
+  border: 3px double rgba(255, 218, 148, 0.72);
+  border-radius: 50%;
+  aspect-ratio: 1;
+  text-align: center;
+  transform: rotate(3deg);
+}
+
+.points-stamp strong {
+  font-size: 2rem;
+  line-height: 0.9;
+}
+
+.points-stamp span {
+  max-width: 72px;
+  font-size: 0.67rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.result-facts {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-top: 1rem;
+}
+
+.result-facts p {
+  margin: 0;
+  padding: 0.7rem 0.75rem;
+  background: rgba(255, 248, 231, 0.58);
+  border-left: 3px solid #9b4a15;
+  font-size: 0.84rem;
+}
+
+.award-section {
+  margin-top: 1rem;
+}
+
+.award-section h3,
+.award-recap h3 {
+  font-size: 0.78rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.award-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 8px;
+  margin-top: 0.55rem;
+}
+
+.award-card {
+  padding: 0.75rem;
+  background: linear-gradient(145deg, #3e2515, #1f160f);
+  color: #fff3d2;
+  border: 1px solid rgba(227, 166, 72, 0.54);
+  border-radius: 7px;
+}
+
+.award-card > span {
+  color: #eab866;
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.17em;
+  text-transform: uppercase;
+}
+
+.award-card strong {
+  display: block;
+  margin-top: 0.25rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.award-card p {
   margin-top: 0.35rem;
+  color: #e9d5b5;
+  font-size: 0.78rem;
+}
+
+.career-finale {
+  position: relative;
+}
+
+.finale-header {
+  position: relative;
+  z-index: 2;
+  text-align: center;
+}
+
+.menu[data-mode="career_over"] .eyebrow {
+  color: #e9ad4f;
+}
+
+.menu[data-mode="career_over"] h1 {
+  color: #ffe2a2;
+  font-size: clamp(2.5rem, 5vw, 4rem);
+  text-shadow:
+    0 2px 0 #7e3c0a,
+    0 0 30px rgba(248, 180, 59, 0.3);
+}
+
+.menu[data-mode="career_over"] h2 {
+  color: #e7b65f;
+}
+
+.menu[data-mode="career_over"] .field-champion h1 {
+  color: #e4d4ba;
+  text-shadow: 0 2px 0 #3b2618;
+}
+
+.podium {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: end;
+  gap: 10px;
+  width: min(670px, 100%);
+  min-height: 152px;
+  margin: 1rem auto 0;
+  padding: 0;
+  list-style: none;
+}
+
+.podium-place {
+  display: grid;
+  place-items: center;
+  align-content: center;
+  min-height: 105px;
+  padding: 0.8rem;
+  background: linear-gradient(180deg, #5a3924, #2b1b12);
+  border: 1px solid rgba(255, 224, 169, 0.34);
+  border-radius: 10px 10px 2px 2px;
+  text-align: center;
+}
+
+.podium-place-1 {
+  min-height: 144px;
+  background:
+    linear-gradient(180deg, rgba(255, 222, 125, 0.28), transparent 55%),
+    linear-gradient(180deg, #79501d, #3a2310);
+  border-color: #f4ca65;
+  box-shadow: 0 0 26px rgba(243, 184, 58, 0.24);
+}
+
+.podium-place-3 {
+  min-height: 88px;
+}
+
+.podium-rank {
+  display: grid;
+  place-items: center;
+  width: 2.2rem;
+  height: 2.2rem;
+  margin-bottom: 0.4rem;
+  color: #301a09;
+  background: #e8b654;
+  border-radius: 50%;
+  font-size: 1.15rem;
+  font-weight: 900;
+}
+
+.podium-place strong {
+  font-size: 1.06rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.podium-place > span:last-child {
+  margin-top: 0.2rem;
+  color: #d7c09c;
+  font-size: 0.78rem;
+}
+
+.standings-wrap {
+  margin-top: 1rem;
+  overflow-x: auto;
+  background: rgba(255, 247, 224, 0.05);
+  border: 1px solid rgba(255, 226, 171, 0.18);
+  border-radius: 8px;
+}
+
+.standings-table {
+  width: 100%;
+  min-width: 720px;
+  border-collapse: collapse;
+  font-size: 0.8rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.standings-table caption {
+  padding: 0.65rem 0.8rem;
+  color: #efbc64;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.18em;
+  text-align: left;
+  text-transform: uppercase;
+}
+
+.standings-table th,
+.standings-table td {
+  padding: 0.42rem 0.6rem;
+  border-top: 1px solid rgba(255, 231, 185, 0.12);
+  text-align: center;
+  white-space: nowrap;
+}
+
+.standings-table th:first-child {
+  min-width: 160px;
+  text-align: left;
+}
+
+.standings-table thead th {
+  color: #d9aa5d;
+  font-size: 0.68rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.standings-table tbody th span {
+  display: inline-block;
+  min-width: 1.5rem;
+  color: #d9aa5d;
+}
+
+.standings-table .player-standing {
+  color: #1e140a;
+  background: linear-gradient(90deg, #f6d27b, #e9b754);
+}
+
+.standings-table .player-standing th span {
+  color: #72340d;
+}
+
+.award-recap {
+  margin-top: 1rem;
+}
+
+.award-recap ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin: 0.55rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.award-recap li {
+  display: flex;
+  gap: 0.65rem;
+  padding: 0.45rem 0.65rem;
+  color: #f6dfb8;
+  background: rgba(239, 180, 79, 0.1);
+  border: 1px solid rgba(239, 180, 79, 0.3);
+  border-radius: 999px;
+  font-size: 0.76rem;
+}
+
+.award-recap li span {
+  color: #e7ae52;
+}
+
+.champion-sparks {
+  position: absolute;
+  inset: -24px 0 auto;
+  height: 210px;
+  z-index: 1;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.champion-sparks span {
+  --spark-color: #f3bd4f;
+  position: absolute;
+  top: -22px;
+  left: var(--spark-left);
+  width: 7px;
+  height: 16px;
+  background: var(--spark-color);
+  border-radius: 2px;
+  animation: champion-fall 2.6s linear infinite;
+  animation-delay: var(--spark-delay);
+  transform: rotate(var(--spark-angle));
+}
+
+.champion-sparks span:nth-child(3n) {
+  --spark-color: #d96722;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+.champion-sparks span:nth-child(4n) {
+  --spark-color: #fff0b1;
+}
+
+@keyframes champion-fall {
+  from {
+    translate: 0 -20px;
+    rotate: 0deg;
+    opacity: 0;
+  }
+
+  12% {
+    opacity: 1;
+  }
+
+  to {
+    translate: 32px 230px;
+    rotate: 420deg;
+    opacity: 0;
+  }
 }
 
 .menu .hint {
@@ -220,5 +576,54 @@ canvas {
   .menu {
     inset: auto 16px 16px 16px;
     width: auto;
+  }
+
+  .menu[data-mode="car_select"],
+  .menu[data-mode="upgrade"],
+  .menu[data-mode="round_results"] {
+    width: auto;
+  }
+
+  .menu[data-mode="career_over"] {
+    inset: 12px;
+    width: auto;
+    max-width: calc(100vw - 24px);
+    max-height: calc(100% - 24px);
+    transform: none;
+  }
+
+  .result-facts {
+    grid-template-columns: 1fr;
+  }
+
+  .podium {
+    min-height: 140px;
+  }
+
+  .podium-place {
+    min-height: 88px;
+    padding-inline: 0.35rem;
+  }
+
+  .podium-place-1 {
+    min-height: 132px;
+  }
+
+  .podium-place-3 {
+    min-height: 76px;
+  }
+
+  .podium-place strong {
+    font-size: 0.82rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .champion-sparks {
+    display: none;
+  }
+
+  .choice-card {
+    transition: none;
   }
 }

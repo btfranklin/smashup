@@ -4,7 +4,7 @@
 
 | Priority | Area | Debt | Next Concrete Step |
 | --- | --- | --- | --- |
-| P2 | Design decision memory | Larger architectural tradeoffs still live mostly in roadmap and tech-debt notes. | Add a lightweight decision log once there is a second durable tradeoff to preserve. |
+| P3 | Decision history | Current architectural choices fit the architecture, quality, and tuning docs, but there is no chronological record for competing alternatives. | Add a lightweight decision log only when multiple durable tradeoffs need historical context. |
 
 ## Rule
 If a debt item repeatedly affects agent autonomy or causes the same review comment twice, either move it up in priority or encode it mechanically.

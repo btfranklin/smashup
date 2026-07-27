@@ -1,4 +1,5 @@
 import { AI_ARCHETYPE_LABELS, getModifierSummary } from "./content";
+import { buildCareerStandings } from "./career";
 import { getRecentDebrisSummary } from "./debris";
 import { summarizeFrameDamage } from "./deformation";
 import { getRecentFragmentSummary } from "./fragments";
@@ -94,6 +95,7 @@ function serializeArena(state: GameState) {
 
 function serializeSession(state: GameState) {
   return {
+    runSeed: state.session.runSeed,
     roundNumber: state.session.roundIndex + 1,
     totalRounds: state.session.totalRounds,
     roundTitle: state.session.roundPlan?.title ?? null,
@@ -101,11 +103,20 @@ function serializeSession(state: GameState) {
       ? getModifierSummary(state.session.roundPlan.modifier)
       : null,
     selectedPreset: state.session.playerBuild?.presetId ?? null,
+    roundPlans: state.session.roundPlans.map((roundPlan) => ({
+      id: roundPlan.id,
+      title: roundPlan.title,
+      arenaVariant: roundPlan.arenaVariant,
+      modifier: roundPlan.modifier,
+    })),
     completedRounds: state.session.completedRounds.map((round) => ({
       roundIndex: round.roundIndex,
       playerWon: round.playerWon,
       winnerLabel: round.winnerLabel,
+      placements: round.placements,
+      awardIds: round.awardIds,
     })),
+    standings: buildCareerStandings(state.session.completedRounds),
     countdown: fixed(state.session.countdown, 2),
   };
 }

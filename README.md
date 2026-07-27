@@ -2,7 +2,7 @@
 
 **Smashup Derby** is a browser-based demolition derby game built with TypeScript, Vite, and canvas.
 
-Pick a car, survive three themed rounds, and keep the machine running through upgrades, hazards, smoke, debris, engine damage, and AI drivers that would rather reverse into you than behave sensibly.
+Pick a car and fight through a five-round Career Night whose arenas and pressure escalate toward a Redline finale. Keep the machine running through pit choices, hazards, smoke, debris, engine damage, and AI drivers that would rather reverse into you than behave sensibly.
 
 ## Quick Start
 
@@ -24,12 +24,14 @@ Open the local Vite URL shown in the terminal, usually `http://localhost:5173/`.
 
 ## Game Features
 
-- Three-round tournament flow with car select, intros, upgrade choices, round results, and tournament end.
+- Five-round Career Night with a seeded sequence of arenas and modifiers, between-round pit choices, and a Redline finale.
 - Three player car presets and multiple arena variants.
 - Physics-based impacts with directional damage to engines, radiators, steering, lights, and body panels.
-- Disabled cars remain in the arena as hulks.
+- Disabled cars remain in the arena as hulks; if the player is wrecked, the remaining fight can be watched or skipped to its result.
+- Post-round Wreck Awards celebrate impact, survival, and style.
+- All eight drivers earn placement points toward a final standings table and top-three podium.
 - Procedural audio, smoke, debris, dust, screen shake, and hit callouts.
-- Browser-only runtime with no server or saved state.
+- Browser-only, in-memory runtime with no server or saved state.
 
 ## Development
 
@@ -51,7 +53,9 @@ npm run validate
 
 - `src/app/bootstrap.ts`: browser bootstrap, menus, startup errors, and runtime hooks
 - `src/main.ts`: thin browser entrypoint and CSS import
-- `src/game/session.ts`: state creation, preview state, and round/tournament progression
+- `src/game/session.ts`: state creation, preview state, and round/Career Night progression
+- `src/game/career.ts`: seeded round generation, placements, points, and standings
+- `src/game/awards.ts`: Wreck Award qualification
 - `src/game/roster.ts`: lineup data and car construction helpers
 - `src/game/upgrades.ts`: upgrade bonuses and condition servicing
 - `src/game/roundStats.ts`: round stat defaults and reset lifecycle

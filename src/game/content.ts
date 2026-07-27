@@ -9,11 +9,12 @@ import type {
   MudZone,
   PlayerBuild,
   RoundModifierId,
-  RoundPlan,
   SessionUpgradeId,
+  WreckAwardDefinition,
+  WreckAwardId,
 } from "./types";
 
-export const TOTAL_ROUNDS = 3;
+export const TOTAL_ROUNDS = 5;
 
 export const CAR_PRESETS: Record<
   CarPresetId,
@@ -179,30 +180,119 @@ export const AI_ARCHETYPE_CONFIG: Record<
   },
 };
 
-export const ROUND_PLANS: RoundPlan[] = [
+export const ARENA_DEFINITIONS: Record<
+  ArenaVariantId,
   {
-    id: 1,
+    id: ArenaVariantId;
+    title: string;
+    introLine: string;
+  }
+> = {
+  classic: {
+    id: "classic",
     title: "Dust Bowl",
-    introLine: "Eight cars, fresh paint, and nowhere to hide.",
-    arenaVariant: "classic",
-    modifier: "none",
+    introLine: "Hard dirt, high walls, and nowhere to hide.",
   },
-  {
-    id: 2,
+  mud_pit: {
+    id: "mud_pit",
     title: "Mud Pit",
-    introLine: "The center is slick and the engines are already running hot.",
-    arenaVariant: "mud_pit",
-    modifier: "hot_engines",
+    introLine: "The slick center punishes every careless line.",
   },
+  junkyard: {
+    id: "junkyard",
+    title: "Junkyard",
+    introLine: "Loose junk waits in the dirt for the first big hit.",
+  },
+};
+
+export const ARENA_VARIANT_IDS = Object.freeze(
+  Object.keys(ARENA_DEFINITIONS) as ArenaVariantId[],
+);
+
+export const ROUND_MODIFIER_DEFINITIONS: Record<
+  RoundModifierId,
   {
-    id: 3,
-    title: "Junkyard Night",
-    introLine:
-      "Loose junk in the dirt and busted lights from the opening bell.",
-    arenaVariant: "junkyard",
-    modifier: "lights_out",
+    id: RoundModifierId;
+    title: string;
+    introLine: string;
+  }
+> = {
+  none: {
+    id: "none",
+    title: "Standard Derby",
+    introLine: "Eight cars roll in with fresh paint.",
   },
-];
+  hot_engines: {
+    id: "hot_engines",
+    title: "Hot Engines",
+    introLine: "The engines are already running hot.",
+  },
+  lights_out: {
+    id: "lights_out",
+    title: "Lights Out",
+    introLine: "Busted lights turn every hit into a surprise.",
+  },
+  redline: {
+    id: "redline",
+    title: "Redline",
+    introLine:
+      "Heat spikes early, cooling fades, and damaged lights make the finale vicious.",
+  },
+};
+
+export const WRECK_AWARD_DEFINITIONS: Record<
+  WreckAwardId,
+  WreckAwardDefinition
+> = {
+  sledgehammer: {
+    id: "sledgehammer",
+    category: "impact",
+    title: "Sledgehammer",
+    description: "Delivered a knockout blow with spectacular force.",
+  },
+  big_swing: {
+    id: "big_swing",
+    category: "impact",
+    title: "Big Swing",
+    description: "Landed one of the round's heaviest player hits.",
+  },
+  running_on_fumes: {
+    id: "running_on_fumes",
+    category: "survival",
+    title: "Running on Fumes",
+    description: "Won with the engine barely holding together.",
+  },
+  lead_with_your_chin: {
+    id: "lead_with_your_chin",
+    category: "survival",
+    title: "Lead With Your Chin",
+    description: "Won after absorbing brutal damage at the nose.",
+  },
+  last_car_rolling: {
+    id: "last_car_rolling",
+    category: "survival",
+    title: "Last Car Rolling",
+    description: "Outlasted every other driver in the arena.",
+  },
+  wrecking_crew: {
+    id: "wrecking_crew",
+    category: "style",
+    title: "Wrecking Crew",
+    description: "Claimed at least three credited knockouts.",
+  },
+  double_trouble: {
+    id: "double_trouble",
+    category: "style",
+    title: "Double Trouble",
+    description: "Claimed two credited knockouts.",
+  },
+  finisher: {
+    id: "finisher",
+    category: "style",
+    title: "Finisher",
+    description: "Claimed a credited knockout.",
+  },
+};
 
 export const SESSION_UPGRADES: Record<
   SessionUpgradeId,
@@ -436,12 +526,5 @@ export function getArenaObjects(variant: ArenaVariantId): ArenaObject[] {
 }
 
 export function getModifierSummary(modifier: RoundModifierId): string {
-  switch (modifier) {
-    case "hot_engines":
-      return "Hot Engines";
-    case "lights_out":
-      return "Lights Out";
-    default:
-      return "Standard Derby";
-  }
+  return ROUND_MODIFIER_DEFINITIONS[modifier].title;
 }

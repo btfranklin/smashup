@@ -106,11 +106,18 @@ describe("renderGameToText", () => {
     expect(
       (payload.recentCollisions as Array<{ severity: number }>)[0].severity,
     ).toBe(0.88);
+    expect(payload.session).toMatchObject({
+      runSeed: expect.any(Number),
+      roundPlans: expect.arrayContaining([
+        expect.objectContaining({ id: 5, modifier: "redline" }),
+      ]),
+      standings: [],
+    });
   });
 
   it("includes coherent session, car, and event fields in normal non-running states", () => {
     const state = createInitialState();
-    state.mode = "tournament_over";
+    state.mode = "career_over";
     state.session.playerBuild = {
       presetId: "bulldozer",
       reverseForceBonus: 0,
@@ -135,7 +142,7 @@ describe("renderGameToText", () => {
 
     const payload = parsePayload(renderGameToText(state));
 
-    expect(payload.mode).toBe("tournament_over");
+    expect(payload.mode).toBe("career_over");
     expect(payload.remainingDrivers).toBe(1);
     expect(payload.recentEvents).toEqual([
       { text: "Done", kind: "result", ttl: 1.23 },

@@ -12,7 +12,9 @@ import {
   setInputKeyState,
   shouldHideMenu,
 } from "../src/app/bootstrap";
+import { PLACEMENT_POINTS } from "../src/game/career";
 import { createDomHarness } from "./helpers/dom-harness";
+import { createRoundSummaryFixture } from "./helpers/fixtures";
 import { parsePayload } from "./helpers/payload-assertions";
 
 describe("jsdom bootstrap and app-controller contract", () => {
@@ -74,7 +76,7 @@ describe("jsdom bootstrap and app-controller contract", () => {
 
     expect(harness.appRoot.contains(controller.frame)).toBe(true);
     expect(controller.canvas.getAttribute("aria-label")).toContain("arena");
-    expect(controller.menu.textContent).toContain("Start Tournament");
+    expect(controller.menu.textContent).toContain("Start Career Night");
     expect(window.advanceTime).toBeTypeOf("function");
     expect(window.render_game_to_text).toBeTypeOf("function");
   });
@@ -248,20 +250,16 @@ describe("jsdom bootstrap and app-controller contract", () => {
       .querySelector<HTMLButtonElement>('[data-preset-id="bulldozer"]')
       ?.click();
     controller.state.mode = "round_results";
-    controller.state.session.lastRoundSummary = {
-      roundIndex: 1,
-      title: "Dust Bowl",
-      playerWon: true,
-      winnerLabel: "Player",
-      survivalTime: 10,
-      eliminatedByLabel: null,
+    controller.state.session.lastRoundSummary = createRoundSummaryFixture({
       playerKnockouts: ["Rimshot"],
       biggestHitLabel: "Player into Rimshot",
       biggestHitSeverity: 0.9,
-      knockoutReason: null,
-    };
+      awardIds: ["sledgehammer", "finisher"],
+    });
     controller.syncMenu();
     expect(controller.menu.textContent).toContain("Round 1");
+    expect(controller.menu.textContent).toContain("Sledgehammer");
+    expect(controller.menu.textContent).toContain("+10");
     harness.appRoot.querySelector<HTMLButtonElement>("#advance-btn")?.click();
     expect(controller.state.mode).toBe("upgrade");
 
@@ -274,30 +272,101 @@ describe("jsdom bootstrap and app-controller contract", () => {
     expect(controller.state.session.roundIndex).toBe(1);
   });
 
-  it("renders tournament-over flow and supports keyboard restart", () => {
+  it("renders champion standings and supports keyboard restart", () => {
     const controller = createTestController();
-
-    controller.state.mode = "tournament_over";
-    controller.state.session.completedRounds = [
-      {
-        roundIndex: 1,
-        title: "Dust Bowl",
-        playerWon: false,
-        winnerLabel: "Rimshot",
-        survivalTime: 8,
-        eliminatedByLabel: "Rimshot",
-        playerKnockouts: [],
-        biggestHitLabel: null,
-        biggestHitSeverity: 0.4,
-        knockoutReason: "Engine Failure",
-      },
-    ];
-    controller.state.cars[0].disabled = true;
+    const placements = controller.state.cars.map((car, index) => ({
+      driverId: car.id,
+      label: car.label,
+      presetId: car.presetId,
+      isPlayer: car.isPlayer,
+      place: index + 1,
+      points: PLACEMENT_POINTS[index],
+    }));
+    controller.state.mode = "career_over";
+    controller.state.session.completedRounds = Array.from(
+      { length: 5 },
+      (_, index) =>
+        createRoundSummaryFixture({
+          roundIndex: index + 1,
+          title: `Round ${index + 1}`,
+          placements,
+          awardIds: index === 0 ? ["last_car_rolling"] : [],
+        }),
+    );
     controller.syncMenu();
 
-    expect(controller.menu.textContent).toContain("Tournament");
+    expect(
+      controller.menu.querySelector(".career-finale.player-champion"),
+    ).not.toBeNull();
+    expect(controller.menu.querySelectorAll(".standings-table tbody tr")).toHaveLength(
+      8,
+    );
+    expect(controller.menu.querySelector(".champion-sparks")).not.toBeNull();
+    expect(controller.menu.textContent).toContain("Last Car Rolling");
     document.dispatchEvent(new KeyboardEvent("keydown", { code: "KeyR" }));
     expect(controller.state.mode).toBe("menu");
+  });
+
+  it("renders a restrained field-champion finale", () => {
+    const controller = createTestController();
+    const orderedCars = [
+      controller.state.cars[1],
+      controller.state.cars[0],
+      ...controller.state.cars.slice(2),
+    ];
+    const placements = orderedCars.map((car, index) => ({
+      driverId: car.id,
+      label: car.label,
+      presetId: car.presetId,
+      isPlayer: car.isPlayer,
+      place: index + 1,
+      points: PLACEMENT_POINTS[index],
+    }));
+    controller.state.mode = "career_over";
+    controller.state.session.completedRounds = Array.from(
+      { length: 5 },
+      (_, index) =>
+        createRoundSummaryFixture({
+          roundIndex: index + 1,
+          playerWon: false,
+          winnerLabel: orderedCars[0].label,
+          placements,
+        }),
+    );
+
+    controller.syncMenu();
+
+    expect(controller.menu.textContent).toContain("Rimshot");
+    expect(controller.menu.textContent).toContain("You finished 2nd");
+    expect(controller.menu.querySelector(".champion-sparks")).toBeNull();
+  });
+
+  it("shows spectating controls and skips through the live simulation", () => {
+    const controller = createTestController();
+    harness.appRoot.querySelector<HTMLButtonElement>("#start-btn")?.click();
+    harness.appRoot
+      .querySelector<HTMLButtonElement>('[data-preset-id="bulldozer"]')
+      ?.click();
+    controller.state.mode = "spectating";
+    controller.state.cars[0].disabled = true;
+    controller.state.cars[0].eliminationTime = controller.state.elapsed;
+    controller.state.cars.slice(2).forEach((car, index) => {
+      car.disabled = true;
+      car.eliminationTime = controller.state.elapsed - index - 1;
+    });
+    controller.syncMenu();
+
+    const skip = controller.menu.querySelector<HTMLButtonElement>("#skip-btn");
+    expect(skip?.textContent).toContain("Skip to Results");
+    skip?.click();
+    expect(
+      controller.menu.querySelector<HTMLButtonElement>("#skip-btn")?.disabled,
+    ).toBe(true);
+
+    harness.flushAnimationFrames();
+
+    expect(controller.state.mode).toBe("round_results");
+    expect(controller.state.session.lastRoundSummary?.placements).toHaveLength(8);
   });
 
   it("handles automated stepping and startup failures from missing canvas support", async () => {

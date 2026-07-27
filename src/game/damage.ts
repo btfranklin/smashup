@@ -34,6 +34,12 @@ const HOT_ENGINES_TUNING: ThermalTuning = {
   startingHeatFloor: 0.38,
 };
 
+const REDLINE_TUNING: ThermalTuning = {
+  heatGainScale: 1.4,
+  coolingScale: 0.45,
+  startingHeatFloor: 0.55,
+};
+
 export function getLocalImpact(
   car: Car,
   point: Vec2,
@@ -104,6 +110,9 @@ function disableCar(car: Car): void {
 export function getThermalTuningForModifier(
   modifier: GameState["arena"]["modifier"],
 ): ThermalTuning {
+  if (modifier === "redline") {
+    return REDLINE_TUNING;
+  }
   if (modifier === "hot_engines") {
     return HOT_ENGINES_TUNING;
   }

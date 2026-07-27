@@ -6,7 +6,9 @@ test("boots the application and accepts pointer and keyboard gameplay input", as
   await page.goto("/");
 
   await expect(page.getByRole("heading", { name: /Smashup\s+Derby/i })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Start Tournament" })).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Start Career Night" }),
+  ).toBeVisible();
   await expect(page.getByLabel("Smashup Derby arena")).toBeVisible();
   await expect
     .poll(() =>
@@ -17,7 +19,7 @@ test("boots the application and accepts pointer and keyboard gameplay input", as
     )
     .toEqual({ advanceTime: "function", renderGameToText: "function" });
 
-  await page.getByRole("button", { name: "Start Tournament" }).click();
+  await page.getByRole("button", { name: "Start Career Night" }).click();
   await expect(page.getByRole("heading", { name: /Choose\s+Your Ride/i })).toBeVisible();
   await page.getByRole("button", { name: /Bulldozer/ }).click();
 
@@ -38,6 +40,11 @@ test("boots the application and accepts pointer and keyboard gameplay input", as
     controls: { forward: number };
   };
   expect(afterInput.mode).toBe("running");
+  expect((afterInput.session as { totalRounds: number }).totalRounds).toBe(5);
+  expect(
+    (afterInput.session as { roundPlans: Array<{ modifier: string }> })
+      .roundPlans[4]?.modifier,
+  ).toBe("redline");
   expect(
     Math.hypot(afterPlayer.x - beforePlayer.x, afterPlayer.y - beforePlayer.y),
   ).toBeGreaterThan(0);

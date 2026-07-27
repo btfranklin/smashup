@@ -1,11 +1,12 @@
 import {
   CAR_PRESET_IDS,
   CAR_PRESETS,
-  ROUND_PLANS,
   SESSION_UPGRADES,
+  WRECK_AWARD_DEFINITIONS,
   getModifierSummary,
 } from "../game/content";
 import { AudioManager } from "../game/audio";
+import { buildCareerStandings } from "../game/career";
 import { renderGameToText } from "../game/debug";
 import { parseCarPreviewRequest } from "../game/preview";
 import { renderGame } from "../game/render";
@@ -18,13 +19,19 @@ import {
   createInitialState,
   restartState,
 } from "../game/session";
-import { advanceState, applyPlayerControls } from "../game/runtime";
 import {
-  getOutlastedDriverLabels,
-  getPlayerCar,
-  getWinnerCar,
-} from "../game/selectors";
-import type { CarPresetId, GameState, Mode, SessionUpgradeId } from "../game/types";
+  advanceState,
+  applyPlayerControls,
+  finishSpectatingRound,
+} from "../game/runtime";
+import { getActiveCars } from "../game/selectors";
+import type {
+  CarPresetId,
+  GameState,
+  Mode,
+  SessionUpgradeId,
+  WreckAwardId,
+} from "../game/types";
 
 type AppWindow = Window &
   typeof globalThis & {
@@ -134,6 +141,23 @@ export function computeCanvasDisplaySize(
   return { width, height };
 }
 
+function formatPlace(place: number): string {
+  const tens = place % 100;
+  if (tens >= 11 && tens <= 13) {
+    return `${place}th`;
+  }
+  switch (place % 10) {
+    case 1:
+      return `${place}st`;
+    case 2:
+      return `${place}nd`;
+    case 3:
+      return `${place}rd`;
+    default:
+      return `${place}th`;
+  }
+}
+
 export function shouldHideMenu(mode: Mode): boolean {
   return mode === "running" || mode === "intro" || mode === "car_preview";
 }
@@ -190,13 +214,14 @@ export function createAppController({
   const automatedStepping = Boolean(nav.webdriver);
   const teardown: Array<() => void> = [];
   let destroyed = false;
+  let spectatorSkipActive = false;
 
   function renderMainMenu(): void {
     menu.innerHTML = `
       <h1>Smashup<br />Derby</h1>
-      <h2>Three rounds. Pick your ride. Survive the wreckage.</h2>
-      <p>Choose a derby car, fight through three themed rounds, and patch the machine between fights.</p>
-      <button class="primary-button" id="start-btn" type="button">Start Tournament</button>
+      <h2>Five rounds. One long night. Eight cars chasing the crown.</h2>
+      <p>Choose a derby car, survive an escalating Career Night, and fight for every point in the final standings.</p>
+      <button class="primary-button" id="start-btn" type="button">Start Career Night</button>
       <p class="hint">Press Enter to begin, W/A/S/D or arrows to drive, F for fullscreen.</p>
     `;
     menu
@@ -222,7 +247,7 @@ export function createAppController({
       .join("");
     menu.innerHTML = `
       <h1>Choose<br />Your Ride</h1>
-      <h2>Pick a derby identity for the full three-round run.</h2>
+      <h2>Pick a derby identity for the full five-round run.</h2>
       <div class="choice-grid">${cards}</div>
       <p class="hint">Heavier cars take punishment. Faster cars escape better. Backstab hits hardest in reverse.</p>
     `;
@@ -238,14 +263,43 @@ export function createAppController({
 
   function renderRoundResultsMenu(): void {
     const summary = state.session.lastRoundSummary;
+    const playerPlacement = summary?.placements.find(
+      (placement) => placement.isPlayer,
+    );
+    const awardCards = (summary?.awardIds ?? [])
+      .map((awardId) => {
+        const award = WRECK_AWARD_DEFINITIONS[awardId];
+        return `
+          <article class="award-card" data-award-category="${award.category}">
+            <span>${award.category}</span>
+            <strong>${award.title}</strong>
+            <p>${award.description}</p>
+          </article>
+        `;
+      })
+      .join("");
+    const isFinalRound =
+      state.session.roundIndex >= state.session.totalRounds - 1;
     menu.innerHTML = `
-      <h1>Round ${summary?.roundIndex ?? state.session.roundIndex + 1}<br />Result</h1>
-      <h2>${summary?.playerWon ? "You survived this heat." : "Your run hit the wall."}</h2>
-      <p>${summary?.playerWon ? `Winner: ${summary.winnerLabel ?? "Player"}.` : `Knocked out by: ${summary?.eliminatedByLabel ?? "the field"}.`}</p>
-      <p>${summary?.knockoutReason ? `Cause: ${summary.knockoutReason}.` : `Biggest hit: ${summary?.biggestHitLabel ?? "None"} (${Math.round((summary?.biggestHitSeverity ?? 0) * 100)}%).`}</p>
-      <p>${summary?.playerKnockouts.length ? `You wrecked: ${summary.playerKnockouts.join(", ")}.` : "No knockouts credited to you this round."}</p>
-      <button class="primary-button" id="advance-btn" type="button">${summary?.playerWon && state.session.roundIndex < state.session.totalRounds - 1 ? "Pit Stop" : "Tournament Wrap-Up"}</button>
-      <p class="hint">Survival time: ${summary?.survivalTime ?? 0}s.</p>
+      <div class="result-heading">
+        <div>
+          <span class="eyebrow">Round ${summary?.roundIndex ?? state.session.roundIndex + 1} complete</span>
+          <h1>${summary?.playerWon ? "Round<br />Winner" : `${formatPlace(playerPlacement?.place ?? 8)}<br />Place`}</h1>
+        </div>
+        <div class="points-stamp">
+          <strong>+${playerPlacement?.points ?? 0}</strong>
+          <span>Career points</span>
+        </div>
+      </div>
+      <h2>${summary?.playerWon ? "You took the checkered flag." : `${summary?.winnerLabel ?? "The field"} owns this round.`}</h2>
+      <div class="result-facts">
+        <p>${summary?.knockoutReason ? `Wrecked by ${summary.eliminatedByLabel ?? "the field"}: ${summary.knockoutReason}` : `Biggest hit: ${summary?.biggestHitLabel ?? "None"} (${Math.round((summary?.biggestHitSeverity ?? 0) * 100)}%)`}</p>
+        <p>${summary?.playerKnockouts.length ? `Knockouts: ${summary.playerKnockouts.join(", ")}` : "Knockouts: none credited"}</p>
+        <p>Survival time: ${summary?.survivalTime ?? 0}s</p>
+      </div>
+      ${awardCards ? `<section class="award-section" aria-labelledby="award-heading"><h3 id="award-heading">Wreck Awards</h3><div class="award-grid">${awardCards}</div></section>` : ""}
+      <button class="primary-button" id="advance-btn" type="button">${isFinalRound ? "Final Standings" : "Pit Stop"}</button>
+      <p class="hint">${isFinalRound ? "The full Career Night table is ready." : "The crew can tow a wreck back to runnable condition, but body damage still carries forward."}</p>
     `;
     menu
       .querySelector<HTMLButtonElement>("#advance-btn")
@@ -256,7 +310,7 @@ export function createAppController({
   }
 
   function renderUpgradeMenu(): void {
-    const nextPlan = ROUND_PLANS[state.session.roundIndex + 1];
+    const nextPlan = state.session.roundPlans[state.session.roundIndex + 1];
     const cards = Object.values(SESSION_UPGRADES)
       .map(
         (upgrade, index) => `
@@ -288,32 +342,108 @@ export function createAppController({
       });
   }
 
-  function renderTournamentOverMenu(): void {
-    const winner = getWinnerCar(state);
-    const playerLost = getPlayerCar(state)?.disabled ?? false;
-    const rounds = state.session.completedRounds
+  function renderSpectatingMenu(): void {
+    const remaining = getActiveCars(state).length;
+    menu.innerHTML = `
+      <span class="eyebrow">Round ${state.session.roundIndex + 1} still live</span>
+      <h1>Wrecked</h1>
+      <h2><span data-remaining-count>${remaining}</span> <span data-remaining-label>${remaining === 1 ? "driver is" : "drivers are"}</span> still fighting.</h2>
+      <p>Your car stays where it died. Watch the field finish the round or jump to the official result.</p>
+      <button class="primary-button" id="skip-btn" type="button" ${spectatorSkipActive ? "disabled" : ""}>
+        ${spectatorSkipActive ? "Finishing Round…" : "Skip to Results"}
+      </button>
+      <p class="hint" aria-live="polite">${spectatorSkipActive ? "Running the same derby simulation at high speed." : "Press Enter to skip."}</p>
+    `;
+    menu
+      .querySelector<HTMLButtonElement>("#skip-btn")
+      ?.addEventListener("click", skipSpectatingRound);
+  }
+
+  function renderCareerOverMenu(): void {
+    const standings = buildCareerStandings(state.session.completedRounds);
+    const champion = standings[0] ?? null;
+    const playerStanding =
+      standings.find((standing) => standing.isPlayer) ?? null;
+    const playerChampion = champion?.isPlayer ?? false;
+    const podiumOrder = [standings[1], standings[0], standings[2]].filter(
+      (standing) => standing !== undefined,
+    );
+    const podium = podiumOrder
       .map(
-        (round) =>
-          `<li>Round ${round.roundIndex}: ${round.title} - ${round.playerWon ? "Win" : `Out by ${round.eliminatedByLabel ?? "the field"}`}</li>`,
+        (standing) => `
+          <li class="podium-place podium-place-${standing.rank}" data-rank="${standing.rank}">
+            <span class="podium-rank">${standing.rank}</span>
+            <strong>${standing.label}</strong>
+            <span>${standing.points} pts</span>
+          </li>
+        `,
       )
       .join("");
+    const roundHeaders = Array.from(
+      { length: state.session.totalRounds },
+      (_, index) => `<th scope="col">R${index + 1}</th>`,
+    ).join("");
+    const standingRows = standings
+      .map((standing) => {
+        const rounds = Array.from(
+          { length: state.session.totalRounds },
+          (_, index) => {
+            const place = standing.roundPlacements[index];
+            return `<td>${place ? formatPlace(place) : "—"}</td>`;
+          },
+        ).join("");
+        return `
+          <tr class="${standing.isPlayer ? "player-standing" : ""}">
+            <th scope="row"><span>${standing.rank}</span> ${standing.label}${standing.isPlayer ? " (You)" : ""}</th>
+            ${rounds}
+            <td>${standing.wins}</td>
+            <td><strong>${standing.points}</strong></td>
+          </tr>
+        `;
+      })
+      .join("");
+    const awardCounts = new Map<WreckAwardId, number>();
+    for (const round of state.session.completedRounds) {
+      for (const awardId of round.awardIds) {
+        awardCounts.set(awardId, (awardCounts.get(awardId) ?? 0) + 1);
+      }
+    }
+    const awardRecap = [...awardCounts]
+      .map(([awardId, count]) => {
+        const award = WRECK_AWARD_DEFINITIONS[awardId];
+        return `<li><strong>${award.title}</strong><span>${count > 1 ? `×${count}` : "Earned"}</span></li>`;
+      })
+      .join("");
+    const celebration = playerChampion
+      ? `<div class="champion-sparks" aria-hidden="true">${Array.from({ length: 18 }, (_, index) => `<span style="--spark-left: ${2 + index * 5.55}%; --spark-delay: ${index * -0.17}s; --spark-angle: ${index * 19}deg"></span>`).join("")}</div>`
+      : "";
+
     menu.innerHTML = `
-      <h1>Tournament<br />Over</h1>
-      <h2>${
-        playerLost
-          ? "The derby chewed you up."
-          : winner?.isPlayer
-            ? "You outlasted the whole card."
-            : `${winner?.label ?? "Nobody"} took the crown.`
-      }</h2>
-      <p>${
-        playerLost
-          ? `Drivers still rolling when you went out: ${getOutlastedDriverLabels(state).join(", ") || "nobody"}.`
-          : `Rounds cleared: ${state.session.completedRounds.length}/${state.session.totalRounds}.`
-      }</p>
-      <ul class="results-list">${rounds}</ul>
-      <button class="primary-button" id="start-btn" type="button">Restart Tournament</button>
-      <p class="hint">Press R or click restart.</p>
+      <section class="career-finale ${playerChampion ? "player-champion" : "field-champion"}">
+        ${celebration}
+        <header class="finale-header">
+          <span class="eyebrow">Career Night complete</span>
+          <h1>${playerChampion ? "Career Night<br />Champion" : `${champion?.label ?? "Career Night"}<br />Owns the Night`}</h1>
+          <h2>${playerChampion ? "You own the night." : `You finished ${formatPlace(playerStanding?.rank ?? 8)} with ${playerStanding?.points ?? 0} points.`}</h2>
+        </header>
+        <ol class="podium" aria-label="Top three finishers">${podium}</ol>
+        <div class="standings-wrap">
+          <table class="standings-table">
+            <caption>Final standings</caption>
+            <thead>
+              <tr><th scope="col">Driver</th>${roundHeaders}<th scope="col">Wins</th><th scope="col">Points</th></tr>
+            </thead>
+            <tbody>${standingRows}</tbody>
+          </table>
+        </div>
+        ${
+          awardRecap
+            ? `<section class="award-recap" aria-labelledby="award-recap-title"><h3 id="award-recap-title">Your Wreck Awards</h3><ul>${awardRecap}</ul></section>`
+            : ""
+        }
+        <button class="primary-button" id="start-btn" type="button">Run Another Career Night</button>
+        <p class="hint">Press R or click to return to the garage.</p>
+      </section>
     `;
     menu
       .querySelector<HTMLButtonElement>("#start-btn")
@@ -339,18 +469,31 @@ export function createAppController({
       renderMainMenu();
     } else if (state.mode === "car_select") {
       renderCarSelectMenu();
+    } else if (state.mode === "spectating") {
+      renderSpectatingMenu();
     } else if (state.mode === "round_results") {
       renderRoundResultsMenu();
     } else if (state.mode === "upgrade") {
       renderUpgradeMenu();
-    } else if (state.mode === "tournament_over") {
-      renderTournamentOverMenu();
+    } else if (state.mode === "career_over") {
+      renderCareerOverMenu();
     }
   }
 
   function syncMenu(): void {
     menu.hidden = shouldHideMenu(state.mode);
     renderMenuContent();
+    if (state.mode === "spectating") {
+      const remaining = getActiveCars(state).length;
+      const count = menu.querySelector<HTMLElement>("[data-remaining-count]");
+      const label = menu.querySelector<HTMLElement>("[data-remaining-label]");
+      if (count) {
+        count.textContent = String(remaining);
+      }
+      if (label) {
+        label.textContent = remaining === 1 ? "driver is" : "drivers are";
+      }
+    }
   }
 
   function resizeCanvas(): void {
@@ -394,7 +537,9 @@ export function createAppController({
       } else if (state.mode === "round_results") {
         advanceAfterRound(state);
         syncMenu();
-      } else if (state.mode === "tournament_over") {
+      } else if (state.mode === "spectating") {
+        skipSpectatingRound();
+      } else if (state.mode === "career_over") {
         restartState(state);
         renderMenuContent(true);
       }
@@ -413,7 +558,8 @@ export function createAppController({
     if (
       event.code === "KeyR" &&
       state.mode !== "running" &&
-      state.mode !== "intro"
+      state.mode !== "intro" &&
+      state.mode !== "spectating"
     ) {
       restartState(state);
       renderMenuContent(true);
@@ -460,6 +606,50 @@ export function createAppController({
   const fixedStep = 1 / 60;
   let skipNextFrameCatchup = false;
 
+  function skipSpectatingRound(): void {
+    if (state.mode !== "spectating" || spectatorSkipActive || destroyed) {
+      return;
+    }
+
+    spectatorSkipActive = true;
+    renderMenuContent(true);
+    let remainingSteps = 90 * 60;
+
+    const runBatch = () => {
+      if (destroyed || state.mode !== "spectating") {
+        spectatorSkipActive = false;
+        return;
+      }
+
+      const batchSize = Math.min(60, remainingSteps);
+      let completedSteps = 0;
+      while (
+        completedSteps < batchSize &&
+        state.mode === "spectating"
+      ) {
+        advanceState(state, fixedStep);
+        completedSteps += 1;
+      }
+      remainingSteps -= completedSteps;
+
+      if (state.mode === "spectating" && remainingSteps <= 0) {
+        finishSpectatingRound(state);
+      }
+      audio.update(state);
+
+      if (state.mode === "spectating") {
+        present();
+        requestAnimationFrame(runBatch);
+        return;
+      }
+
+      spectatorSkipActive = false;
+      present();
+    };
+
+    requestAnimationFrame(runBatch);
+  }
+
   function advanceTime(ms: number): void {
     if (destroyed) {
       return;
@@ -482,6 +672,12 @@ export function createAppController({
 
   function frameLoop(now: number): void {
     if (destroyed) {
+      return;
+    }
+    if (spectatorSkipActive) {
+      lastTime = now;
+      accumulator = 0;
+      scheduleNextFrame();
       return;
     }
     if (automatedStepping) {

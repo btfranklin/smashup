@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { advanceState, applyPlayerControls } from "../src/game/runtime";
+import {
+  advanceState,
+  applyPlayerControls,
+  finishSpectatingRound,
+} from "../src/game/runtime";
 import { createCarFixture, createRunningState, createStateFixture, getPlayerFixture } from "./helpers/fixtures";
 
 describe("runtime flow", () => {
@@ -117,7 +121,7 @@ describe("runtime flow", () => {
     expect(state.elapsed).toBe(10);
   });
 
-  it("transitions to round results when the player is eliminated", () => {
+  it("keeps the round live in spectating mode after the player is eliminated", () => {
     const player = createCarFixture({
       id: 1,
       isPlayer: true,
@@ -131,19 +135,79 @@ describe("runtime flow", () => {
         overheat: 0,
       },
     });
-    const rival = createCarFixture({ id: 2, label: "Rimshot" });
+    const rival = createCarFixture({ id: 2, label: "Rimshot", x: 700 });
+    const secondRival = createCarFixture({
+      id: 3,
+      label: "Rustline",
+      x: 900,
+    });
     const state = createStateFixture({
       mode: "running",
-      cars: [player, rival],
+      cars: [player, rival, secondRival],
       playerId: player.id,
     });
 
     advanceState(state, 1 / 60);
 
+    expect(state.mode).toBe("spectating");
+    expect(state.outlastedDriverIds).toEqual([rival.id, secondRival.id]);
+    expect(state.session.lastRoundSummary).toBeNull();
+
+    const spectatingTick = state.tick;
+    advanceState(state, 1 / 60);
+    expect(state.mode).toBe("spectating");
+    expect(state.tick).toBe(spectatingTick + 1);
+
+    rival.disabled = true;
+    rival.eliminationTime = state.elapsed + 1;
+    secondRival.disabled = true;
+    secondRival.eliminationTime = state.elapsed + 2;
+    advanceState(state, 1 / 60);
+
     expect(state.mode).toBe("round_results");
-    expect(state.outlastedDriverIds).toEqual([rival.id]);
     expect(state.session.lastRoundSummary?.playerWon).toBe(false);
-    expect(state.session.lastRoundSummary?.knockoutReason).toBe("Engine Failure");
+    expect(state.session.lastRoundSummary?.knockoutReason).toBe(
+      "Engine Failure",
+    );
+    expect(state.session.lastRoundSummary?.placements).toHaveLength(3);
+  });
+
+  it("condition-ranks active cars when a spectated round is force-finished", () => {
+    const player = createCarFixture({
+      id: 1,
+      isPlayer: true,
+      label: "Player",
+      disabled: true,
+      eliminationTime: 1,
+    });
+    const healthy = createCarFixture({ id: 2, label: "Healthy" });
+    const battered = createCarFixture({
+      id: 3,
+      label: "Battered",
+      systems: {
+        engine: 0.3,
+        radiator: 0.3,
+        transmission: 0.3,
+        steering: 0.3,
+        overheat: 0.8,
+      },
+      body: { front: 0.8, rear: 0.7, left: 0.6, right: 0.5 },
+    });
+    const state = createStateFixture({
+      mode: "spectating",
+      cars: [player, battered, healthy],
+      playerId: player.id,
+    });
+
+    finishSpectatingRound(state);
+
+    expect(state.mode).toBe("round_results");
+    expect(state.winnerId).toBe(healthy.id);
+    expect(
+      state.session.lastRoundSummary?.placements.map(
+        (placement) => placement.driverId,
+      ),
+    ).toEqual([healthy.id, battered.id, player.id]);
   });
 
   it("registers huge hits, freeze time, and system events from collisions", () => {
@@ -212,6 +276,9 @@ describe("runtime flow", () => {
     expect(state.mode).toBe("round_results");
     expect(state.winnerId).toBe(player.id);
     expect(state.session.lastRoundSummary?.playerWon).toBe(true);
+    expect(state.session.lastRoundSummary?.awardIds).toContain(
+      "last_car_rolling",
+    );
   });
 
   it("announces the final two once", () => {
@@ -317,10 +384,13 @@ describe("runtime flow", () => {
     state.cars = [player, rival];
     state.roundStats.lastPlayerTargetId = rival.id;
     state.roundStats.lastPlayerTargetElapsed = state.elapsed - 1;
+    state.roundStats.lastPlayerTargetSeverity = 0.76;
 
     advanceState(state, 1 / 60);
 
     expect(state.roundStats.playerKnockouts).toContain("Scrapheap");
+    expect(state.roundStats.strongestPlayerKnockoutSeverity).toBe(0.76);
+    expect(state.session.lastRoundSummary?.awardIds).toContain("sledgehammer");
     expect(state.events.some((event) => event.text.includes("wrecked"))).toBe(
       true,
     );

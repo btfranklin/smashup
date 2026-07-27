@@ -23,10 +23,13 @@ This document captures the current intent behind the hand-tuned gameplay rules. 
 ## Thermal
 - Normal rounds should let healthy cars cool meaningfully when off throttle.
 - `hot_engines` should keep heat elevated and make damaged radiators dangerous under sustained throttle.
+- `redline` is the fifth-round climax: cars begin hot, generate heat faster, cool slowly, and enter with damaged rear lights.
 - Overheating should create pressure over time rather than instantly decide a round.
 
 ## Spectacle
 - Screen shake, freeze time, "Huge Hit!" callouts, debris, dust, smoke, and audio should emphasize major moments only.
 - Biggest-hit summaries should track damaging impacts rather than harmless shoves.
+- Wreck Awards should reward player impact, survival, and style from recorded round facts rather than encourage passive stalling.
+- A player wreck should leave a physical hulk and let the AI finish; skipping must advance the same simulation to a bounded result.
 - Smoke should escalate from light smoke to dark smoke and flame only near critical failure.
 - Car panel lines should describe believable sheet-metal joins rather than cross the cabin, while each preset keeps one simple visual signature that remains legible under damage.

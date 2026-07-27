@@ -20,12 +20,14 @@ This document is the durable reference for the repo's browser automation contrac
 - Preview mode uses the same content tables as live gameplay setup for presets and conditions.
 
 ## Expected Runtime Behavior
-- The runtime hook coverage starts a tournament, selects a preset, advances into gameplay, and inspects the running-state payload.
-- The running payload must include the selected preset, round metadata, player state, and current arena metadata.
+- Runtime hook coverage starts a Career Night, selects a preset, advances into gameplay, and inspects the running-state payload.
+- The session payload includes the generated seed and all five round plans. Completed-round payloads include placements, points, Wreck Award ids, and standings derived from those summaries.
+- The running and spectating payloads include the selected preset, current round and arena metadata, player state, remaining drivers, and visible outcome state.
+- `advanceTime(ms)` remains deterministic in `spectating`; the **Skip to Results** control uses the same fixed-step runtime rather than a separate result path.
 
 ## Enforcement
 - `tests/preview.spec.ts` covers preview matrix alignment and invalid preview failures.
-- `tests/bootstrap.spec.ts` covers jsdom controller wiring, supplied-platform routing, and deterministic stepping through tournament start.
+- `tests/bootstrap.spec.ts` covers jsdom controller wiring, supplied-platform routing, and deterministic stepping through Career Night start.
 - `tests/render-game-to-text.spec.ts` covers payload shape and truncation without browser-driving.
 - `tests/browser/app-flow.spec.ts` covers served-app boot, live hooks, and trusted pointer/keyboard flow in Chromium.
 - `tests/browser/canvas-lifecycle.spec.ts` covers native Canvas painting plus real resize, fullscreen, and RAF behavior.

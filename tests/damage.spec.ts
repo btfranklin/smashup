@@ -190,6 +190,11 @@ describe("damage model", () => {
     expect(
       getThermalTuningForModifier("hot_engines").startingHeatFloor,
     ).toBeGreaterThan(0);
+    expect(getThermalTuningForModifier("redline")).toEqual({
+      heatGainScale: 1.4,
+      coolingScale: 0.45,
+      startingHeatFloor: 0.55,
+    });
 
     updateSubsystemWear(normalCar, 1, "none");
     updateSubsystemWear(hotCar, 1, "hot_engines");

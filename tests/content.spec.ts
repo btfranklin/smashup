@@ -3,13 +3,16 @@ import { describe, expect, it } from "vitest";
 import {
   AI_ARCHETYPE_CONFIG,
   AI_ARCHETYPE_LABELS,
+  ARENA_DEFINITIONS,
+  ARENA_VARIANT_IDS,
   CAR_PRESETS,
   CAR_PRESET_IDS,
   CAR_PREVIEW_SCENARIOS,
   CAR_PREVIEW_SCENARIO_IDS,
-  ROUND_PLANS,
+  ROUND_MODIFIER_DEFINITIONS,
   SESSION_UPGRADES,
   TOTAL_ROUNDS,
+  WRECK_AWARD_DEFINITIONS,
   getArenaMudZones,
   getArenaObjects,
   getModifierSummary,
@@ -49,16 +52,27 @@ describe("content contracts", () => {
     }
   });
 
-  it("keeps round plans sequential and consistent with total rounds", () => {
-    expect(ROUND_PLANS).toHaveLength(TOTAL_ROUNDS);
-    ROUND_PLANS.forEach((roundPlan, index) => {
-      expect(roundPlan.id).toBe(index + 1);
-      expect(roundPlan.title.length).toBeGreaterThan(0);
-      expect(roundPlan.introLine.length).toBeGreaterThan(0);
-      expect(["Standard Derby", "Hot Engines", "Lights Out"]).toContain(
-        getModifierSummary(roundPlan.modifier),
-      );
+  it("single-sources arena, modifier, and award display content", () => {
+    expect(TOTAL_ROUNDS).toBe(5);
+    expect(ARENA_VARIANT_IDS).toEqual(Object.keys(ARENA_DEFINITIONS));
+    Object.entries(ARENA_DEFINITIONS).forEach(([id, definition]) => {
+      expect(definition.id).toBe(id);
+      expect(definition.title.length).toBeGreaterThan(0);
+      expect(definition.introLine.length).toBeGreaterThan(0);
     });
+    Object.entries(ROUND_MODIFIER_DEFINITIONS).forEach(([id, definition]) => {
+      expect(definition.id).toBe(id);
+      expect(definition.title.length).toBeGreaterThan(0);
+      expect(definition.introLine.length).toBeGreaterThan(0);
+      expect(getModifierSummary(definition.id)).toBe(definition.title);
+    });
+    Object.entries(WRECK_AWARD_DEFINITIONS).forEach(([id, definition]) => {
+      expect(definition.id).toBe(id);
+      expect(["impact", "survival", "style"]).toContain(definition.category);
+      expect(definition.title.length).toBeGreaterThan(0);
+      expect(definition.description.length).toBeGreaterThan(0);
+    });
+    expect(getModifierSummary("redline")).toBe("Redline");
   });
 
   it("returns mud zones only for the mud pit arena", () => {

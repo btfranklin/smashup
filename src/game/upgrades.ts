@@ -94,3 +94,15 @@ export function serviceCondition(
 
   return next;
 }
+
+export function towConditionToRunnableMinimum(
+  condition: CarCondition,
+): CarCondition {
+  const next = cloneCondition(condition);
+  next.systems.engine = Math.max(0.32, next.systems.engine);
+  next.systems.radiator = Math.max(0.32, next.systems.radiator);
+  next.systems.transmission = Math.max(0.32, next.systems.transmission);
+  next.systems.steering = Math.max(0.32, next.systems.steering);
+  next.systems.overheat = Math.min(0.7, next.systems.overheat);
+  return next;
+}

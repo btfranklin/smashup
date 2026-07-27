@@ -10,6 +10,7 @@ import {
   restartState,
 } from "../src/game/session";
 import { CAR_PREVIEW_SCENARIOS } from "../src/game/content";
+import { createRoundSummaryFixture } from "./helpers/fixtures";
 
 describe("session flow", () => {
   it("creates an initial menu state with preview cars", () => {
@@ -37,10 +38,10 @@ describe("session flow", () => {
     );
   });
 
-  it("restarts mutated state back to the initial tournament shell", () => {
+  it("restarts mutated state back to the initial Career Night shell", () => {
     const state = createInitialState();
-    chooseStarterCar(state, "backstab");
-    state.mode = "tournament_over";
+    chooseStarterCar(state, "backstab", 42);
+    state.mode = "career_over";
     state.events.push({
       id: 999,
       text: "Test",
@@ -63,10 +64,12 @@ describe("session flow", () => {
     beginCarSelect(state);
     expect(state.mode).toBe("car_select");
 
-    chooseStarterCar(state, "backstab");
+    chooseStarterCar(state, "backstab", 42);
 
     expect(state.mode).toBe("intro");
     expect(state.session.playerBuild?.presetId).toBe("backstab");
+    expect(state.session.runSeed).toBe(42);
+    expect(state.session.roundPlans).toHaveLength(5);
     expect(state.session.roundIndex).toBe(0);
     expect(state.cars[0].presetId).toBe("backstab");
     expect(state.session.roundPlan?.id).toBe(1);
@@ -75,19 +78,13 @@ describe("session flow", () => {
 
   it("applies pit upgrades and carries serviced condition into the next round", () => {
     const state = createInitialState();
-    chooseStarterCar(state, "bulldozer");
-    state.session.lastRoundSummary = {
-      roundIndex: 1,
-      title: "Dust Bowl",
-      playerWon: true,
-      winnerLabel: "Player",
+    chooseStarterCar(state, "bulldozer", 42);
+    state.session.lastRoundSummary = createRoundSummaryFixture({
       survivalTime: 12,
-      eliminatedByLabel: null,
       playerKnockouts: ["Rimshot"],
       biggestHitLabel: "Player into Rimshot",
       biggestHitSeverity: 0.9,
-      knockoutReason: null,
-    };
+    });
     state.session.playerCondition = {
       systems: {
         engine: 0.4,
@@ -122,9 +119,9 @@ describe("session flow", () => {
     expect(state.roundStats.biggestHitSeverity).toBe(0);
   });
 
-  it("applies round modifiers when preparing later heats", () => {
+  it("applies generated modifiers through the Redline finale", () => {
     const state = createInitialState();
-    chooseStarterCar(state, "bulldozer");
+    chooseStarterCar(state, "bulldozer", 42);
     state.session.playerCondition = state.session.playerCondition ?? {
       systems: {
         engine: 1,
@@ -142,57 +139,76 @@ describe("session flow", () => {
       },
     };
 
-    applySessionUpgrade(state, "ram_rig");
-    expect(state.arena.modifier).toBe("hot_engines");
-    expect(state.cars.every((car) => car.systems.overheat >= 0.4)).toBe(true);
+    for (let roundIndex = 1; roundIndex < state.session.totalRounds; roundIndex += 1) {
+      state.session.lastRoundSummary = createRoundSummaryFixture({
+        roundIndex,
+      });
+      state.session.playerCondition = {
+        systems: { ...state.cars[0].systems },
+        body: { ...state.cars[0].body },
+        lights: { ...state.cars[0].lights },
+      };
+      applySessionUpgrade(state, "ram_rig");
+      expect(state.arena.modifier).toBe(
+        state.session.roundPlans[roundIndex].modifier,
+      );
+    }
 
-    state.session.playerCondition = {
-      systems: { ...state.cars[0].systems },
-      body: { ...state.cars[0].body },
-      lights: { ...state.cars[0].lights },
-    };
-    applySessionUpgrade(state, "steering_clinic");
-    expect(state.arena.modifier).toBe("lights_out");
+    expect(state.arena.modifier).toBe("redline");
+    expect(state.cars.every((car) => car.systems.overheat >= 0.55)).toBe(true);
     expect(state.cars.every((car) => car.lights.rearLeft === false)).toBe(true);
   });
 
-  it("advances winning runs to upgrades and losing/final runs to tournament over", () => {
+  it("advances every non-final result to upgrades and the finale to career over", () => {
     const state = createInitialState();
-    chooseStarterCar(state, "darter");
-    state.session.lastRoundSummary = {
-      roundIndex: 1,
-      title: "Dust Bowl",
-      playerWon: true,
-      winnerLabel: "Player",
-      survivalTime: 10,
-      eliminatedByLabel: null,
-      playerKnockouts: [],
-      biggestHitLabel: null,
-      biggestHitSeverity: 0,
-      knockoutReason: null,
-    };
+    chooseStarterCar(state, "darter", 42);
+    state.session.lastRoundSummary = createRoundSummaryFixture();
 
     advanceAfterRound(state);
     expect(state.mode).toBe("upgrade");
 
-    state.session.lastRoundSummary = {
-      ...state.session.lastRoundSummary,
-      roundIndex: 3,
-      playerWon: true,
-    };
+    state.session.lastRoundSummary = createRoundSummaryFixture({
+      roundIndex: 5,
+    });
     state.session.roundIndex = state.session.totalRounds - 1;
     advanceAfterRound(state);
-    expect(state.mode).toBe("tournament_over");
+    expect(state.mode).toBe("career_over");
 
     state.session.roundIndex = 0;
-    state.session.lastRoundSummary = {
-      ...state.session.lastRoundSummary,
-      roundIndex: 1,
+    state.session.lastRoundSummary = createRoundSummaryFixture({
       playerWon: false,
+      winnerLabel: "Rimshot",
       eliminatedByLabel: "Rimshot",
-    };
+    });
     advanceAfterRound(state);
-    expect(state.mode).toBe("tournament_over");
+    expect(state.mode).toBe("upgrade");
+  });
+
+  it("tows a wreck before applying normal pit service", () => {
+    const state = createInitialState();
+    chooseStarterCar(state, "darter", 42);
+    state.session.lastRoundSummary = createRoundSummaryFixture({
+      playerWon: false,
+      winnerLabel: "Rimshot",
+      eliminatedByLabel: "Rimshot",
+    });
+    const condition = state.session.playerCondition;
+    if (!condition) {
+      throw new Error("Player condition missing.");
+    }
+    condition.systems.engine = 0.04;
+    condition.systems.radiator = 0.06;
+    condition.systems.transmission = 0.08;
+    condition.systems.steering = 0.1;
+    condition.systems.overheat = 0.98;
+    condition.body.front = 0.8;
+
+    applySessionUpgrade(state, "ram_rig");
+
+    expect(state.cars[0].systems.engine).toBeGreaterThanOrEqual(0.48);
+    expect(state.cars[0].systems.radiator).toBeGreaterThanOrEqual(0.4);
+    expect(state.cars[0].systems.overheat).toBeLessThanOrEqual(0.45);
+    expect(state.cars[0].body.front).toBeCloseTo(0.66);
   });
 
   it("keeps mode unchanged when advancing without a round summary", () => {
@@ -212,5 +228,15 @@ describe("session flow", () => {
     expect(state.mode).toBe("menu");
     expect(state.session.playerBuild).toBeNull();
     expect(state.session.roundIndex).toBe(0);
+  });
+
+  it("fails loudly when a generated Career Night round is missing", () => {
+    const state = createInitialState();
+    chooseStarterCar(state, "bulldozer", 42);
+    state.session.roundPlans = [];
+
+    expect(() => applySessionUpgrade(state, "pit_patch")).toThrow(
+      "Career round 2 is not configured",
+    );
   });
 });

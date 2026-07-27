@@ -4,9 +4,10 @@ export type Mode =
   | "car_preview"
   | "intro"
   | "running"
+  | "spectating"
   | "round_results"
   | "upgrade"
-  | "tournament_over";
+  | "career_over";
 
 export type Vec2 = {
   x: number;
@@ -40,9 +41,32 @@ export type AIArchetype = "bruiser" | "circler" | "scavenger" | "panic_driver";
 
 export type ArenaVariantId = "classic" | "mud_pit" | "junkyard";
 
-export type RoundModifierId = "none" | "hot_engines" | "lights_out";
+export type RoundModifierId =
+  | "none"
+  | "hot_engines"
+  | "lights_out"
+  | "redline";
 
 export type SessionUpgradeId = "pit_patch" | "ram_rig" | "steering_clinic";
+
+export type WreckAwardId =
+  | "sledgehammer"
+  | "big_swing"
+  | "running_on_fumes"
+  | "lead_with_your_chin"
+  | "last_car_rolling"
+  | "wrecking_crew"
+  | "double_trouble"
+  | "finisher";
+
+export type WreckAwardCategory = "impact" | "survival" | "style";
+
+export type WreckAwardDefinition = {
+  id: WreckAwardId;
+  category: WreckAwardCategory;
+  title: string;
+  description: string;
+};
 
 export type LightState = {
   frontLeft: boolean;
@@ -235,6 +259,27 @@ export type RoundPlan = {
   modifier: RoundModifierId;
 };
 
+export type RoundPlacement = {
+  driverId: number;
+  label: string;
+  presetId: CarPresetId;
+  isPlayer: boolean;
+  place: number;
+  points: number;
+};
+
+export type CareerStanding = {
+  driverId: number;
+  label: string;
+  presetId: CarPresetId;
+  isPlayer: boolean;
+  rank: number;
+  points: number;
+  wins: number;
+  podiums: number;
+  roundPlacements: number[];
+};
+
 export type RoundSummary = {
   roundIndex: number;
   title: string;
@@ -246,12 +291,16 @@ export type RoundSummary = {
   biggestHitLabel: string | null;
   biggestHitSeverity: number;
   knockoutReason: string | null;
+  placements: RoundPlacement[];
+  awardIds: WreckAwardId[];
 };
 
 export type SessionState = {
   totalRounds: number;
   roundIndex: number;
   roundPlan: RoundPlan | null;
+  runSeed: number | null;
+  roundPlans: RoundPlan[];
   playerBuild: PlayerBuild | null;
   playerCondition: CarCondition | null;
   completedRounds: RoundSummary[];
@@ -266,8 +315,11 @@ export type RoundStats = {
   eliminatedById: number | null;
   knockoutReason: string | null;
   playerKnockouts: string[];
+  strongestPlayerHitSeverity: number;
   lastPlayerTargetId: number | null;
   lastPlayerTargetElapsed: number | null;
+  lastPlayerTargetSeverity: number;
+  strongestPlayerKnockoutSeverity: number;
   finalTwoAnnounced: boolean;
 };
 

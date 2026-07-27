@@ -1,8 +1,15 @@
 import { CAR_PRESETS } from "../../src/game/content";
+import { PLACEMENT_POINTS } from "../../src/game/career";
 import { createFreshCondition } from "../../src/game/conditions";
 import { createFreshFrame } from "../../src/game/deformation";
 import { createInitialState, chooseStarterCar } from "../../src/game/session";
-import type { Car, CollisionEvent, GameState, CarPresetId } from "../../src/game/types";
+import type {
+  Car,
+  CarPresetId,
+  CollisionEvent,
+  GameState,
+  RoundSummary,
+} from "../../src/game/types";
 
 let nextCarId = 100;
 
@@ -137,4 +144,41 @@ export function getPlayerFixture(state: GameState): Car {
     throw new Error("Player car missing from fixture state.");
   }
   return player;
+}
+
+export function createRoundSummaryFixture(
+  overrides: Partial<RoundSummary> = {},
+): RoundSummary {
+  return {
+    roundIndex: 1,
+    title: "Dust Bowl",
+    playerWon: true,
+    winnerLabel: "Player",
+    survivalTime: 10,
+    eliminatedByLabel: null,
+    playerKnockouts: [],
+    biggestHitLabel: null,
+    biggestHitSeverity: 0,
+    knockoutReason: null,
+    placements: [
+      {
+        driverId: 0,
+        label: "Player",
+        presetId: "bulldozer",
+        isPlayer: true,
+        place: 1,
+        points: PLACEMENT_POINTS[0],
+      },
+      {
+        driverId: 1,
+        label: "Rimshot",
+        presetId: "bulldozer",
+        isPlayer: false,
+        place: 2,
+        points: PLACEMENT_POINTS[1],
+      },
+    ],
+    awardIds: [],
+    ...overrides,
+  };
 }

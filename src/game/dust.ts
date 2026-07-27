@@ -96,7 +96,7 @@ function spawnWheelDust(
 }
 
 export function spawnSlipDust(state: GameState): void {
-  if (state.mode !== "running") {
+  if (state.mode !== "running" && state.mode !== "spectating") {
     return;
   }
   for (const car of state.cars) {
