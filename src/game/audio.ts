@@ -158,6 +158,8 @@ export function getCrashSoundBursts(
 export class AudioManager {
   private ctx: AudioContextLike | null = null;
 
+  private prepareSuspension: Promise<void> | null = null;
+
   private master: GainNode | null = null;
 
   private engineGain: GainNode | null = null;
@@ -184,7 +186,31 @@ export class AudioManager {
 
   private lastIntroCount = 0;
 
-  async ensureStarted(): Promise<void> {
+  private voiceCreationCount = 0;
+
+  getVoiceCreationCount(): number {
+    return this.voiceCreationCount;
+  }
+
+  private async suspendPreparedContext(ctx: AudioContextLike): Promise<void> {
+    try {
+      await ctx.suspend();
+    } catch (error) {
+      if (this.ctx === ctx && ctx.state !== "closed") {
+        console.error("Unable to suspend a prepared audio context.", error);
+      }
+    } finally {
+      if (this.ctx === ctx) {
+        this.prepareSuspension = null;
+      }
+    }
+  }
+
+  private createGraph(suspendWhenRunning: boolean): void {
+    if (this.ctx) {
+      return;
+    }
+
     const AudioCtor =
       window.AudioContext ||
       (window as Window & { webkitAudioContext?: typeof AudioContext })
@@ -193,60 +219,92 @@ export class AudioManager {
       return;
     }
 
-    if (!this.ctx) {
-      this.ctx = new AudioCtor();
-      this.master = this.ctx.createGain();
-      this.master.gain.value = 0.18;
-      this.master.connect(this.ctx.destination);
+    const ctx = new AudioCtor();
+    try {
+      const master = ctx.createGain();
+      master.gain.value = 0.18;
+      master.connect(ctx.destination);
 
-      this.engineGain = this.ctx.createGain();
-      this.engineGain.gain.value = 0;
-      this.engineGain.connect(this.master);
+      const engineGain = ctx.createGain();
+      engineGain.gain.value = 0;
+      engineGain.connect(master);
 
-      this.engineOsc = this.ctx.createOscillator();
-      this.engineOsc.type = "sawtooth";
-      this.engineOsc.frequency.value = 70;
-      this.engineOsc.connect(this.engineGain);
-      this.engineOsc.start();
+      const engineOsc = ctx.createOscillator();
+      this.voiceCreationCount += 1;
+      engineOsc.type = "sawtooth";
+      engineOsc.frequency.value = 70;
+      engineOsc.connect(engineGain);
+      engineOsc.start();
 
-      this.engineSub = this.ctx.createOscillator();
-      this.engineSub.type = "triangle";
-      this.engineSub.frequency.value = 36;
-      this.engineSub.connect(this.engineGain);
-      this.engineSub.start();
+      const engineSub = ctx.createOscillator();
+      this.voiceCreationCount += 1;
+      engineSub.type = "triangle";
+      engineSub.frequency.value = 36;
+      engineSub.connect(engineGain);
+      engineSub.start();
 
-      this.engineNoiseFilter = this.ctx.createBiquadFilter();
-      this.engineNoiseFilter.type = "bandpass";
-      this.engineNoiseFilter.frequency.value = 420;
-      this.engineNoiseFilter.Q.value = 0.8;
+      const engineNoiseFilter = ctx.createBiquadFilter();
+      engineNoiseFilter.type = "bandpass";
+      engineNoiseFilter.frequency.value = 420;
+      engineNoiseFilter.Q.value = 0.8;
 
-      this.engineNoiseGain = this.ctx.createGain();
-      this.engineNoiseGain.gain.value = 0;
-      this.engineNoiseFilter.connect(this.engineNoiseGain);
-      this.engineNoiseGain.connect(this.master);
+      const engineNoiseGain = ctx.createGain();
+      engineNoiseGain.gain.value = 0;
+      engineNoiseFilter.connect(engineNoiseGain);
+      engineNoiseGain.connect(master);
 
-      this.skidFilter = this.ctx.createBiquadFilter();
-      this.skidFilter.type = "bandpass";
-      this.skidFilter.frequency.value = 1600;
-      this.skidFilter.Q.value = 1.2;
+      const skidFilter = ctx.createBiquadFilter();
+      skidFilter.type = "bandpass";
+      skidFilter.frequency.value = 1600;
+      skidFilter.Q.value = 1.2;
 
-      this.skidGain = this.ctx.createGain();
-      this.skidGain.gain.value = 0;
-      this.skidFilter.connect(this.skidGain);
-      this.skidGain.connect(this.master);
+      const skidGain = ctx.createGain();
+      skidGain.gain.value = 0;
+      skidFilter.connect(skidGain);
+      skidGain.connect(master);
 
-      this.noiseBuffer = createNoiseBuffer(this.ctx);
-      const noiseLoop = this.ctx.createBufferSource();
-      noiseLoop.buffer = this.noiseBuffer;
+      const noiseBuffer = createNoiseBuffer(ctx);
+      const noiseLoop = ctx.createBufferSource();
+      this.voiceCreationCount += 1;
+      noiseLoop.buffer = noiseBuffer;
       noiseLoop.loop = true;
-      noiseLoop.connect(this.engineNoiseFilter);
-      noiseLoop.connect(this.skidFilter);
+      noiseLoop.connect(engineNoiseFilter);
+      noiseLoop.connect(skidFilter);
       noiseLoop.start();
-      this.engineNoiseLoop = noiseLoop;
-    }
 
-    if (this.ctx.state === "suspended") {
-      await this.ctx.resume();
+      this.ctx = ctx;
+      this.master = master;
+      this.engineGain = engineGain;
+      this.engineOsc = engineOsc;
+      this.engineSub = engineSub;
+      this.engineNoiseFilter = engineNoiseFilter;
+      this.engineNoiseGain = engineNoiseGain;
+      this.skidFilter = skidFilter;
+      this.skidGain = skidGain;
+      this.noiseBuffer = noiseBuffer;
+      this.engineNoiseLoop = noiseLoop;
+      if (suspendWhenRunning && ctx.state === "running") {
+        this.prepareSuspension = this.suspendPreparedContext(ctx);
+      }
+    } catch (error) {
+      this.voiceCreationCount = 0;
+      void ctx.close().catch((closeError: unknown) => {
+        console.error("Unable to close a failed audio context.", closeError);
+      });
+      throw error;
+    }
+  }
+
+  prepare(): void {
+    this.createGraph(true);
+  }
+
+  async resume(): Promise<void> {
+    this.createGraph(false);
+    const ctx = this.ctx;
+    await this.prepareSuspension;
+    if (ctx === this.ctx && ctx?.state === "suspended") {
+      await ctx.resume();
     }
   }
 
@@ -257,6 +315,7 @@ export class AudioManager {
     }
 
     this.ctx = null;
+    this.prepareSuspension = null;
     this.engineOsc?.stop();
     this.engineSub?.stop();
     this.engineNoiseLoop?.stop();
@@ -273,6 +332,7 @@ export class AudioManager {
     this.crashCooldownTicks = 0;
     this.lastMode = "menu";
     this.lastIntroCount = 0;
+    this.voiceCreationCount = 0;
 
     if (ctx.state !== "closed") {
       await ctx.close();
@@ -370,6 +430,7 @@ export class AudioManager {
       const collision = burstConfig.collision;
 
       const burst = this.ctx.createBufferSource();
+      this.voiceCreationCount += 1;
       burst.buffer = this.noiseBuffer;
 
       const filter = this.ctx.createBiquadFilter();
@@ -392,6 +453,7 @@ export class AudioManager {
       burst.stop(now + 0.28);
 
       const thump = this.ctx.createOscillator();
+      this.voiceCreationCount += 1;
       const thumpGain = this.ctx.createGain();
       thump.type = "triangle";
       thump.frequency.setValueAtTime(burstConfig.thumpFrequency, now);
@@ -419,6 +481,7 @@ export class AudioManager {
     notes.forEach((frequency, index) => {
       const now = startTime + index * noteSpacing;
       const osc = this.ctx!.createOscillator();
+      this.voiceCreationCount += 1;
       const gain = this.ctx!.createGain();
       osc.type =
         mood === "happy"
@@ -447,6 +510,7 @@ export class AudioManager {
       return;
     }
     const osc = this.ctx.createOscillator();
+    this.voiceCreationCount += 1;
     const gain = this.ctx.createGain();
     osc.type = "triangle";
     osc.frequency.setValueAtTime(frequency, startTime);

@@ -15,6 +15,16 @@ import type {
 
 export const PLACEMENT_POINTS = Object.freeze([10, 8, 6, 5, 4, 3, 2, 1]);
 
+export const CAREER_ROUND_BLUEPRINT = Object.freeze([
+  "none",
+  "none",
+  "special",
+  "special",
+  "redline",
+] as const);
+
+export const CAREER_ROUND_COUNT = CAREER_ROUND_BLUEPRINT.length;
+
 function createSeededRandom(seed: number): () => number {
   let state = Math.trunc(seed) >>> 0;
 
@@ -53,12 +63,9 @@ export function generateCareerRoundPlans(seed: number): RoundPlan[] {
     random() < 0.5
       ? ["hot_engines", "lights_out"]
       : ["lights_out", "hot_engines"];
-  const modifiers: RoundModifierId[] = [
-    "none",
-    "none",
-    ...specialModifiers,
-    "redline",
-  ];
+  const modifiers = CAREER_ROUND_BLUEPRINT.map((slot) =>
+    slot === "special" ? specialModifiers.shift()! : slot,
+  );
   let previousArena: RoundPlan["arenaVariant"] | null = null;
 
   return modifiers.map((modifier, index) => {
@@ -93,11 +100,10 @@ function compareConditionThenId(a: Car, b: Car): number {
 
 export function rankRoundCars(
   cars: readonly Car[],
-  forceConditionRanking = false,
 ): RoundPlacement[] {
   const activeCars = cars.filter((car) => !car.disabled);
   activeCars.sort(
-    forceConditionRanking || activeCars.length > 1
+    activeCars.length > 1
       ? compareConditionThenId
       : (a, b) => a.id - b.id,
   );
@@ -125,7 +131,7 @@ export function buildCareerStandings(
   completedRounds: readonly RoundSummary[],
 ): CareerStanding[] {
   const orderedRounds = [...completedRounds].sort(
-    (a, b) => a.roundIndex - b.roundIndex,
+    (a, b) => a.roundNumber - b.roundNumber,
   );
   const driverIds = new Set<number>();
 

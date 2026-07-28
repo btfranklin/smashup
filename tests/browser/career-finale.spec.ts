@@ -1,4 +1,4 @@
-import { expect, test } from "./fixtures";
+import { expect, readGamePayload, test } from "./fixtures";
 
 async function createFixture(
   page: import("@playwright/test").Page,
@@ -23,6 +23,13 @@ test("presents complete champion standings without viewport overflow", async ({
   await expect(
     page.getByRole("button", { name: "Run Another Career Night" }),
   ).toBeVisible();
+  const careerPayload = await readGamePayload(page);
+  expect(careerPayload.mode).toBe("career_over");
+  expect(careerPayload.session).toMatchObject({
+    roundNumber: expect.any(Number),
+    roundTitle: expect.any(String),
+    modifierLabel: expect.any(String),
+  });
 
   for (const viewport of [
     { width: 1280, height: 900 },
@@ -59,6 +66,7 @@ test("offers a bounded skip while spectating a live round", async ({ page }) => 
   await page.evaluate(() => window.controllerFixture.stageSpectating());
 
   await expect(page.getByRole("heading", { name: "Wrecked" })).toBeVisible();
+  expect((await readGamePayload(page)).mode).toBe("spectating");
   await page.getByRole("button", { name: "Skip to Results" }).click();
   await expect(
     page.getByRole("button", { name: /Finishing Round/i }),
@@ -66,4 +74,5 @@ test("offers a bounded skip while spectating a live round", async ({ page }) => 
   await expect(
     page.getByText("Round 1 complete", { exact: true }),
   ).toBeVisible({ timeout: 10_000 });
+  expect((await readGamePayload(page)).mode).toBe("round_results");
 });

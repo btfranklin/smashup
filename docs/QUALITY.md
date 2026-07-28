@@ -6,6 +6,9 @@
 - Keep `window.advanceTime(ms)` and `window.render_game_to_text()` stable and callable throughout normal gameplay, including spectating and final results.
 - Preserve the dedicated gameplay split: session transitions, per-frame runtime, career generation/scoring, award selection, preview parsing, debug serialization, roster construction, upgrades, events, and round stats belong in their named modules rather than a catch-all file.
 - Generate Career Night schedules through `src/game/career.ts`; do not duplicate authored round-plan sequences in session, bootstrap, fixtures, or tests.
+- Derive Career Night count from the canonical round blueprint; UI and tests must not maintain an independent round-count constant.
+- Treat an active runtime mode without `currentRoundPlan` as invalid. Pre-career debug round and arena-plan fields must be explicit `null`, not placeholder content.
+- Derive car phases from system health. Only the per-round player transition cursor may persist phase history.
 - Treat documentation and repo navigation as part of correctness. When commands, boundaries, or validation surfaces change, update `AGENTS.md` and `docs/` in the same change.
 
 ## Mechanical Coverage
@@ -15,21 +18,46 @@
   - preview parsing matches source ids and fails visibly on invalid params
   - Career Night generation, placements, points, standings, and Wreck Award rules stay deterministic
   - runtime/session/debug modules preserve the documented state contracts across running, spectating, round results, and final results
+  - menu states expose null round metadata while every active runtime mode retains a coherent current plan
+  - rotated wall containment, embedded arena objects, and causal disabling-impact attribution remain covered
+  - arena layouts and complete rotated-car extents remain inside the
+    wall-bounded playable rectangle at alternate dimensions
   - roster, event, round-stat, and upgrade helpers preserve their current behavior
   - browser hooks survive bootstrap and deterministic stepping in `jsdom`
   - audio transition, countdown, crash cooldown, and mix helpers behave deterministically
   - render and effect systems stay branch-covered without browser-driving
+  - bounded performance collection preserves sample ordering, context, capacity,
+    optional timeline evidence, and teardown behavior
+  - the production session/runtime path carries five completed summaries into
+    exact eight-driver scoring, final standings, and populated debug output
 - `npm run test:browser` verifies in real Chromium:
+  - a fresh production bundle is built and served for the ordinary suite
   - the served application boots and accepts pointer and keyboard menu/gameplay input through Career Night start
   - representative spectating and final-standings layouts remain usable at desktop and mobile widths
   - native Canvas 2D paints normal and representative preview states without page, console, or request errors
   - browser resize, fullscreen, and requestAnimationFrame lifecycles remain functional
   - native Web Audio starts under user activation, resumes from suspension, and closes during controller teardown/recreation
 - `scripts/check-test-coverage.mjs` enforces calibrated per-surface thresholds so pure rule modules stay near-complete while imperative bootstrap/runtime wrappers still have explicit floors.
+- Every `src/**/*.ts` file must have either a calibrated line, statement,
+  function, and branch floor or an explicit durable exclusion. New source files
+  therefore cannot silently escape the coverage gate.
+- `npm run test:performance` is a separate production-build Chromium smoke with
+  deterministic scene, percentile, long-task, audio-startup, spectator-skip,
+  and 4x CPU gates. It is hardware-sensitive and must not be folded into
+  `npm run validate`; use it for performance-affecting handoffs.
 
 ## When To Extend Validation
 - Add or update Vitest coverage when a change affects the preview URL contract, startup errors, browser hooks, round-start flow, Career Night generation/scoring, Wreck Awards, or documented tuning regressions.
 - Add or update focused browser coverage only when a change affects native DOM, Canvas, layout/fullscreen/RAF, Web Audio, or controller ownership behavior.
+- Keep `tests/career-lifecycle.spec.ts` on the production session/runtime path;
+  it must not inject completed summaries or derive expected placement points
+  from the implementation constant it is meant to verify.
+- Update the standalone performance workload or budget only under the
+  recalibration policy in
+  `docs/references/performance-validation.md`.
+- Keep native Safari audio acceptance human-observed unless a non-invasive,
+  repeatable tracing path is available. Playwright WebKit and UI-driven
+  Inspector capture are not substitutes.
 - Extend `check:repo` for required docs, command wiring, or positive module surfaces. Do not add checks whose only purpose is proving a removed file or old implementation has not returned.
 
 ## Recovery Guidance

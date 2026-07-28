@@ -11,10 +11,7 @@ import {
   CAR_PREVIEW_SCENARIO_IDS,
   ROUND_MODIFIER_DEFINITIONS,
   SESSION_UPGRADES,
-  TOTAL_ROUNDS,
   WRECK_AWARD_DEFINITIONS,
-  getArenaMudZones,
-  getArenaObjects,
   getModifierSummary,
   isCarPreviewScenarioId,
   isCarPresetId,
@@ -53,7 +50,6 @@ describe("content contracts", () => {
   });
 
   it("single-sources arena, modifier, and award display content", () => {
-    expect(TOTAL_ROUNDS).toBe(5);
     expect(ARENA_VARIANT_IDS).toEqual(Object.keys(ARENA_DEFINITIONS));
     Object.entries(ARENA_DEFINITIONS).forEach(([id, definition]) => {
       expect(definition.id).toBe(id);
@@ -73,32 +69,6 @@ describe("content contracts", () => {
       expect(definition.description.length).toBeGreaterThan(0);
     });
     expect(getModifierSummary("redline")).toBe("Redline");
-  });
-
-  it("returns mud zones only for the mud pit arena", () => {
-    expect(getArenaMudZones("classic")).toEqual([]);
-    const mudZones = getArenaMudZones("mud_pit");
-    expect(mudZones).toHaveLength(3);
-    mudZones.forEach((zone, index) => {
-      expect(zone.id).toBe(index + 1);
-      expect(zone.width).toBeGreaterThan(0);
-      expect(zone.height).toBeGreaterThan(0);
-      expect(zone.grip).toBeLessThan(1);
-    });
-  });
-
-  it("returns stationary junkyard objects with stable ids", () => {
-    expect(getArenaObjects("classic")).toEqual([]);
-    const objects = getArenaObjects("junkyard");
-    expect(objects).toHaveLength(6);
-    objects.forEach((object, index) => {
-      expect(object.id).toBe(index + 1);
-      expect(object.kind === "junk" || object.kind === "tire").toBe(true);
-      expect(object.radius).toBeGreaterThan(0);
-      expect(object.mass).toBeGreaterThan(0);
-      expect(object.vx).toBe(0);
-      expect(object.vy).toBe(0);
-    });
   });
 
   it("keeps session upgrades aligned with their record keys", () => {

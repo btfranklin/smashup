@@ -1,12 +1,5 @@
-import {
-  CAR_PRESET_IDS,
-  CAR_PRESETS,
-  SESSION_UPGRADES,
-  WRECK_AWARD_DEFINITIONS,
-  getModifierSummary,
-} from "../game/content";
 import { AudioManager } from "../game/audio";
-import { buildCareerStandings } from "../game/career";
+import { CAR_PRESET_IDS } from "../game/content";
 import { renderGameToText } from "../game/debug";
 import { parseCarPreviewRequest } from "../game/preview";
 import { renderGame } from "../game/render";
@@ -24,14 +17,30 @@ import {
   applyPlayerControls,
   finishSpectatingRound,
 } from "../game/runtime";
-import { getActiveCars } from "../game/selectors";
+import type { CarPresetId, GameState } from "../game/types";
+import {
+  createAppLoop,
+  type AppLoop,
+  type LoopPerformanceDetails,
+} from "./loop";
+import {
+  createMenuPresenter,
+  shouldHideMenu,
+  type MenuPresenter,
+} from "./menu";
 import type {
-  CarPresetId,
-  GameState,
-  Mode,
-  SessionUpgradeId,
-  WreckAwardId,
-} from "../game/types";
+  PerformanceCollector,
+  PerformancePhase,
+} from "./performance";
+
+export { shouldHideMenu } from "./menu";
+export {
+  FIXED_STEP_SECONDS,
+  MAX_ADVANCE_TIME_MS,
+  SPECTATOR_SKIP_FRAME_BUDGET_MS,
+  SPECTATOR_SKIP_MAX_STEPS,
+  SPECTATOR_SKIP_MAX_STEPS_PER_BATCH,
+} from "./loop";
 
 type AppWindow = Window &
   typeof globalThis & {
@@ -46,7 +55,11 @@ export type InputState = {
   reverse: boolean;
 };
 
-export type AudioDriver = Pick<AudioManager, "ensureStarted" | "update" | "destroy">;
+export type AudioDriver = Pick<
+  AudioManager,
+  "prepare" | "resume" | "update" | "destroy"
+> &
+  Partial<Pick<AudioManager, "getVoiceCreationCount">>;
 
 export type AppController = {
   state: GameState;
@@ -69,7 +82,11 @@ export type BootstrapOptions = {
   nav?: Navigator;
   createAudio?: () => AudioDriver;
   requestAnimationFrame?: (callback: FrameRequestCallback) => number;
+  cancelAnimationFrame?: (handle: number) => void;
+  scheduleIdleTask?: (callback: () => void) => number;
+  cancelIdleTask?: (handle: number) => void;
   performanceNow?: () => number;
+  performanceCollector?: PerformanceCollector;
 };
 
 export function renderStartupError(
@@ -125,6 +142,13 @@ export function setInputKeyState(
   }
 }
 
+export function resetInputState(input: InputState): void {
+  input.left = false;
+  input.right = false;
+  input.forward = false;
+  input.reverse = false;
+}
+
 export function computeCanvasDisplaySize(
   arenaWidth: number,
   arenaHeight: number,
@@ -141,27 +165,6 @@ export function computeCanvasDisplaySize(
   return { width, height };
 }
 
-function formatPlace(place: number): string {
-  const tens = place % 100;
-  if (tens >= 11 && tens <= 13) {
-    return `${place}th`;
-  }
-  switch (place % 10) {
-    case 1:
-      return `${place}st`;
-    case 2:
-      return `${place}nd`;
-    case 3:
-      return `${place}rd`;
-    default:
-      return `${place}th`;
-  }
-}
-
-export function shouldHideMenu(mode: Mode): boolean {
-  return mode === "running" || mode === "intro" || mode === "car_preview";
-}
-
 export function installBrowserHooks(
   win: AppWindow,
   hooks: {
@@ -173,6 +176,10 @@ export function installBrowserHooks(
   win.render_game_to_text = hooks.renderGameToText;
 }
 
+function reportCleanupError(message: string, error: unknown): void {
+  console.error(message, error);
+}
+
 export function createAppController({
   appRoot,
   doc = appRoot.ownerDocument,
@@ -180,569 +187,447 @@ export function createAppController({
   nav = win.navigator,
   createAudio = () => new AudioManager(),
   requestAnimationFrame = (callback) => win.requestAnimationFrame(callback),
+  cancelAnimationFrame = (handle) => win.cancelAnimationFrame(handle),
+  scheduleIdleTask = (callback) => {
+    if (typeof win.requestIdleCallback === "function") {
+      return win.requestIdleCallback(() => callback(), { timeout: 1500 });
+    }
+    return win.setTimeout(callback, 250);
+  },
+  cancelIdleTask = (handle) => {
+    if (typeof win.cancelIdleCallback === "function") {
+      win.cancelIdleCallback(handle);
+    } else {
+      win.clearTimeout(handle);
+    }
+  },
   performanceNow = () => win.performance.now(),
+  performanceCollector,
 }: BootstrapOptions): AppController {
-  const state = createStateForSearch(win.location.search);
-  const orderedCarPresets = CAR_PRESET_IDS.map((id) => CAR_PRESETS[id]);
-  const audio = createAudio();
-  const frame = doc.createElement("div");
-  frame.className = "frame";
-
-  const canvas = doc.createElement("canvas");
-  canvas.width = state.arena.width;
-  canvas.height = state.arena.height;
-  canvas.setAttribute("aria-label", "Smashup Derby arena");
-
-  const menu = doc.createElement("section");
-  menu.className = "menu";
-
-  frame.append(canvas, menu);
-  appRoot.replaceChildren(frame);
-
-  const ctx = canvas.getContext("2d");
-  if (!ctx) {
-    throw new Error("2D canvas context unavailable.");
+  let state: GameState;
+  let audio: AudioDriver;
+  try {
+    state = createStateForSearch(win.location.search);
+    audio = createAudio();
+  } catch (error) {
+    try {
+      performanceCollector?.destroy();
+    } catch (cleanupError) {
+      reportCleanupError(
+        "Unable to stop performance collection after startup failure.",
+        cleanupError,
+      );
+    }
+    throw error;
   }
-  const renderContext: CanvasRenderingContext2D = ctx;
-
-  const input: InputState = {
-    left: false,
-    right: false,
-    forward: false,
-    reverse: false,
+  const previousHooks = {
+    hadAdvanceTime: Object.prototype.hasOwnProperty.call(win, "advanceTime"),
+    advanceTime: win.advanceTime,
+    hadRenderGameToText: Object.prototype.hasOwnProperty.call(
+      win,
+      "render_game_to_text",
+    ),
+    renderGameToText: win.render_game_to_text,
   };
-  const automatedStepping = Boolean(nav.webdriver);
   const teardown: Array<() => void> = [];
+  let idleTaskHandle: number | null = null;
   let destroyed = false;
-  let spectatorSkipActive = false;
+  let destroyPromise: Promise<void> | null = null;
+  let appLoop: AppLoop | null = null;
+  let menuPresenter: MenuPresenter | null = null;
+  let installedAdvanceTimeHook: ((ms: number) => void) | null = null;
+  let installedRenderGameToTextHook: (() => string) | null = null;
 
-  function renderMainMenu(): void {
-    menu.innerHTML = `
-      <h1>Smashup<br />Derby</h1>
-      <h2>Five rounds. One long night. Eight cars chasing the crown.</h2>
-      <p>Choose a derby car, survive an escalating Career Night, and fight for every point in the final standings.</p>
-      <button class="primary-button" id="start-btn" type="button">Start Career Night</button>
-      <p class="hint">Press Enter to begin, W/A/S/D or arrows to drive, F for fullscreen.</p>
-    `;
-    menu
-      .querySelector<HTMLButtonElement>("#start-btn")
-      ?.addEventListener("click", () => {
-        beginCarSelect(state);
-        syncMenu();
-      });
-  }
-
-  function renderCarSelectMenu(): void {
-    const cards = orderedCarPresets
-      .map(
-        (preset, index) => `
-          <button class="choice-card" data-preset-id="${preset.id}" ${index === 0 ? 'id="recommended-preset"' : ""} type="button">
-            <span class="choice-kicker">${preset.subtitle}</span>
-            <strong>${preset.title}</strong>
-            <span>${preset.description}</span>
-            <span>Mass ${preset.mass} | Reverse ${preset.reverseMaxSpeed} | Top ${preset.forwardMaxSpeed}</span>
-          </button>
-        `,
-      )
-      .join("");
-    menu.innerHTML = `
-      <h1>Choose<br />Your Ride</h1>
-      <h2>Pick a derby identity for the full five-round run.</h2>
-      <div class="choice-grid">${cards}</div>
-      <p class="hint">Heavier cars take punishment. Faster cars escape better. Backstab hits hardest in reverse.</p>
-    `;
-    menu
-      .querySelectorAll<HTMLButtonElement>("[data-preset-id]")
-      .forEach((button) => {
-        button.addEventListener("click", () => {
-          chooseStarterCar(state, button.dataset.presetId as CarPresetId);
-          syncMenu();
-        });
-      });
-  }
-
-  function renderRoundResultsMenu(): void {
-    const summary = state.session.lastRoundSummary;
-    const playerPlacement = summary?.placements.find(
-      (placement) => placement.isPlayer,
-    );
-    const awardCards = (summary?.awardIds ?? [])
-      .map((awardId) => {
-        const award = WRECK_AWARD_DEFINITIONS[awardId];
-        return `
-          <article class="award-card" data-award-category="${award.category}">
-            <span>${award.category}</span>
-            <strong>${award.title}</strong>
-            <p>${award.description}</p>
-          </article>
-        `;
-      })
-      .join("");
-    const isFinalRound =
-      state.session.roundIndex >= state.session.totalRounds - 1;
-    menu.innerHTML = `
-      <div class="result-heading">
-        <div>
-          <span class="eyebrow">Round ${summary?.roundIndex ?? state.session.roundIndex + 1} complete</span>
-          <h1>${summary?.playerWon ? "Round<br />Winner" : `${formatPlace(playerPlacement?.place ?? 8)}<br />Place`}</h1>
-        </div>
-        <div class="points-stamp">
-          <strong>+${playerPlacement?.points ?? 0}</strong>
-          <span>Career points</span>
-        </div>
-      </div>
-      <h2>${summary?.playerWon ? "You took the checkered flag." : `${summary?.winnerLabel ?? "The field"} owns this round.`}</h2>
-      <div class="result-facts">
-        <p>${summary?.knockoutReason ? `Wrecked by ${summary.eliminatedByLabel ?? "the field"}: ${summary.knockoutReason}` : `Biggest hit: ${summary?.biggestHitLabel ?? "None"} (${Math.round((summary?.biggestHitSeverity ?? 0) * 100)}%)`}</p>
-        <p>${summary?.playerKnockouts.length ? `Knockouts: ${summary.playerKnockouts.join(", ")}` : "Knockouts: none credited"}</p>
-        <p>Survival time: ${summary?.survivalTime ?? 0}s</p>
-      </div>
-      ${awardCards ? `<section class="award-section" aria-labelledby="award-heading"><h3 id="award-heading">Wreck Awards</h3><div class="award-grid">${awardCards}</div></section>` : ""}
-      <button class="primary-button" id="advance-btn" type="button">${isFinalRound ? "Final Standings" : "Pit Stop"}</button>
-      <p class="hint">${isFinalRound ? "The full Career Night table is ready." : "The crew can tow a wreck back to runnable condition, but body damage still carries forward."}</p>
-    `;
-    menu
-      .querySelector<HTMLButtonElement>("#advance-btn")
-      ?.addEventListener("click", () => {
-        advanceAfterRound(state);
-        syncMenu();
-      });
-  }
-
-  function renderUpgradeMenu(): void {
-    const nextPlan = state.session.roundPlans[state.session.roundIndex + 1];
-    const cards = Object.values(SESSION_UPGRADES)
-      .map(
-        (upgrade, index) => `
-          <button class="choice-card" data-upgrade-id="${upgrade.id}" ${index === 0 ? 'id="recommended-upgrade"' : ""} type="button">
-            <span class="choice-kicker">Pit Choice</span>
-            <strong>${upgrade.title}</strong>
-            <span>${upgrade.description}</span>
-          </button>
-        `,
-      )
-      .join("");
-    menu.innerHTML = `
-      <h1>Pit<br />Choice</h1>
-      <h2>Next up: ${nextPlan?.title ?? "Final Heat"}</h2>
-      <p>Round ${state.session.roundIndex + 2} of ${state.session.totalRounds}. ${nextPlan ? getModifierSummary(nextPlan.modifier) : ""}.</p>
-      <div class="choice-grid">${cards}</div>
-      <p class="hint">One choice only. Damage carries forward, but the pit crew gives a small baseline repair either way.</p>
-    `;
-    menu
-      .querySelectorAll<HTMLButtonElement>("[data-upgrade-id]")
-      .forEach((button) => {
-        button.addEventListener("click", () => {
-          applySessionUpgrade(
-            state,
-            button.dataset.upgradeId as SessionUpgradeId,
-          );
-          syncMenu();
-        });
-      });
-  }
-
-  function renderSpectatingMenu(): void {
-    const remaining = getActiveCars(state).length;
-    menu.innerHTML = `
-      <span class="eyebrow">Round ${state.session.roundIndex + 1} still live</span>
-      <h1>Wrecked</h1>
-      <h2><span data-remaining-count>${remaining}</span> <span data-remaining-label>${remaining === 1 ? "driver is" : "drivers are"}</span> still fighting.</h2>
-      <p>Your car stays where it died. Watch the field finish the round or jump to the official result.</p>
-      <button class="primary-button" id="skip-btn" type="button" ${spectatorSkipActive ? "disabled" : ""}>
-        ${spectatorSkipActive ? "Finishing Round…" : "Skip to Results"}
-      </button>
-      <p class="hint" aria-live="polite">${spectatorSkipActive ? "Running the same derby simulation at high speed." : "Press Enter to skip."}</p>
-    `;
-    menu
-      .querySelector<HTMLButtonElement>("#skip-btn")
-      ?.addEventListener("click", skipSpectatingRound);
-  }
-
-  function renderCareerOverMenu(): void {
-    const standings = buildCareerStandings(state.session.completedRounds);
-    const champion = standings[0] ?? null;
-    const playerStanding =
-      standings.find((standing) => standing.isPlayer) ?? null;
-    const playerChampion = champion?.isPlayer ?? false;
-    const podiumOrder = [standings[1], standings[0], standings[2]].filter(
-      (standing) => standing !== undefined,
-    );
-    const podium = podiumOrder
-      .map(
-        (standing) => `
-          <li class="podium-place podium-place-${standing.rank}" data-rank="${standing.rank}">
-            <span class="podium-rank">${standing.rank}</span>
-            <strong>${standing.label}</strong>
-            <span>${standing.points} pts</span>
-          </li>
-        `,
-      )
-      .join("");
-    const roundHeaders = Array.from(
-      { length: state.session.totalRounds },
-      (_, index) => `<th scope="col">R${index + 1}</th>`,
-    ).join("");
-    const standingRows = standings
-      .map((standing) => {
-        const rounds = Array.from(
-          { length: state.session.totalRounds },
-          (_, index) => {
-            const place = standing.roundPlacements[index];
-            return `<td>${place ? formatPlace(place) : "—"}</td>`;
-          },
-        ).join("");
-        return `
-          <tr class="${standing.isPlayer ? "player-standing" : ""}">
-            <th scope="row"><span>${standing.rank}</span> ${standing.label}${standing.isPlayer ? " (You)" : ""}</th>
-            ${rounds}
-            <td>${standing.wins}</td>
-            <td><strong>${standing.points}</strong></td>
-          </tr>
-        `;
-      })
-      .join("");
-    const awardCounts = new Map<WreckAwardId, number>();
-    for (const round of state.session.completedRounds) {
-      for (const awardId of round.awardIds) {
-        awardCounts.set(awardId, (awardCounts.get(awardId) ?? 0) + 1);
-      }
-    }
-    const awardRecap = [...awardCounts]
-      .map(([awardId, count]) => {
-        const award = WRECK_AWARD_DEFINITIONS[awardId];
-        return `<li><strong>${award.title}</strong><span>${count > 1 ? `×${count}` : "Earned"}</span></li>`;
-      })
-      .join("");
-    const celebration = playerChampion
-      ? `<div class="champion-sparks" aria-hidden="true">${Array.from({ length: 18 }, (_, index) => `<span style="--spark-left: ${2 + index * 5.55}%; --spark-delay: ${index * -0.17}s; --spark-angle: ${index * 19}deg"></span>`).join("")}</div>`
-      : "";
-
-    menu.innerHTML = `
-      <section class="career-finale ${playerChampion ? "player-champion" : "field-champion"}">
-        ${celebration}
-        <header class="finale-header">
-          <span class="eyebrow">Career Night complete</span>
-          <h1>${playerChampion ? "Career Night<br />Champion" : `${champion?.label ?? "Career Night"}<br />Owns the Night`}</h1>
-          <h2>${playerChampion ? "You own the night." : `You finished ${formatPlace(playerStanding?.rank ?? 8)} with ${playerStanding?.points ?? 0} points.`}</h2>
-        </header>
-        <ol class="podium" aria-label="Top three finishers">${podium}</ol>
-        <div class="standings-wrap">
-          <table class="standings-table">
-            <caption>Final standings</caption>
-            <thead>
-              <tr><th scope="col">Driver</th>${roundHeaders}<th scope="col">Wins</th><th scope="col">Points</th></tr>
-            </thead>
-            <tbody>${standingRows}</tbody>
-          </table>
-        </div>
-        ${
-          awardRecap
-            ? `<section class="award-recap" aria-labelledby="award-recap-title"><h3 id="award-recap-title">Your Wreck Awards</h3><ul>${awardRecap}</ul></section>`
-            : ""
-        }
-        <button class="primary-button" id="start-btn" type="button">Run Another Career Night</button>
-        <p class="hint">Press R or click to return to the garage.</p>
-      </section>
-    `;
-    menu
-      .querySelector<HTMLButtonElement>("#start-btn")
-      ?.addEventListener("click", () => {
-        restartState(state);
-        renderMenuContent(true);
-      });
-  }
-
-  function renderMenuContent(force = false): void {
-    if (state.mode === "car_preview") {
-      menu.dataset.mode = state.mode;
-      menu.innerHTML = "";
+  function recordPerformance(
+    phase: PerformancePhase,
+    startedAt: number,
+    details: LoopPerformanceDetails = {},
+  ): void {
+    if (!performanceCollector) {
       return;
     }
-
-    if (!force && menu.dataset.mode === state.mode) {
-      return;
-    }
-    menu.dataset.mode = state.mode;
-
-    if (state.mode === "menu") {
-      renderMainMenu();
-    } else if (state.mode === "car_select") {
-      renderCarSelectMenu();
-    } else if (state.mode === "spectating") {
-      renderSpectatingMenu();
-    } else if (state.mode === "round_results") {
-      renderRoundResultsMenu();
-    } else if (state.mode === "upgrade") {
-      renderUpgradeMenu();
-    } else if (state.mode === "career_over") {
-      renderCareerOverMenu();
-    }
-  }
-
-  function syncMenu(): void {
-    menu.hidden = shouldHideMenu(state.mode);
-    renderMenuContent();
-    if (state.mode === "spectating") {
-      const remaining = getActiveCars(state).length;
-      const count = menu.querySelector<HTMLElement>("[data-remaining-count]");
-      const label = menu.querySelector<HTMLElement>("[data-remaining-label]");
-      if (count) {
-        count.textContent = String(remaining);
-      }
-      if (label) {
-        label.textContent = remaining === 1 ? "driver is" : "drivers are";
-      }
-    }
-  }
-
-  function resizeCanvas(): void {
-    const container = frame.getBoundingClientRect();
-    const size = computeCanvasDisplaySize(
-      state.arena.width,
-      state.arena.height,
-      container.width,
-      container.height,
-    );
-    canvas.style.width = `${size.width}px`;
-    canvas.style.height = `${size.height}px`;
-  }
-
-  function activateAudio(): void {
-    void audio.ensureStarted().catch((error: unknown) => {
-      console.error("Unable to start audio.", error);
+    const completedAt = performanceNow();
+    performanceCollector.record({
+      phase,
+      timestampMs: completedAt,
+      durationMs: completedAt - startedAt,
+      state,
+      audioVoicesCreated: audio.getVoiceCreationCount?.() ?? 0,
+      ...details,
     });
   }
 
-  function toggleFullscreen(): void {
-    if (!doc.fullscreenElement) {
-      void frame.requestFullscreen?.();
-    } else {
-      void doc.exitFullscreen?.();
-    }
-  }
-
-  const handleKeyDown = (event: KeyboardEvent) => {
-    activateAudio();
-    if (event.repeat) {
-      return;
-    }
-    if (setInputKeyState(input, event.code, true)) {
-      event.preventDefault();
-    }
-    if (event.code === "Enter") {
-      if (state.mode === "menu") {
-        beginCarSelect(state);
-        syncMenu();
-      } else if (state.mode === "round_results") {
-        advanceAfterRound(state);
-        syncMenu();
-      } else if (state.mode === "spectating") {
-        skipSpectatingRound();
-      } else if (state.mode === "career_over") {
-        restartState(state);
-        renderMenuContent(true);
+  function restoreBrowserHooks(): void {
+    if (
+      installedAdvanceTimeHook &&
+      win.advanceTime === installedAdvanceTimeHook
+    ) {
+      if (previousHooks.hadAdvanceTime) {
+        win.advanceTime = previousHooks.advanceTime;
+      } else {
+        delete win.advanceTime;
       }
-    }
-    if (event.code === "KeyF") {
-      toggleFullscreen();
-    }
-    const presetShortcut = /^Digit([1-9])$/.exec(event.code);
-    const preset = presetShortcut
-      ? orderedCarPresets[Number(presetShortcut[1]) - 1]
-      : null;
-    if (preset && state.mode === "car_select") {
-      chooseStarterCar(state, preset.id);
-      syncMenu();
     }
     if (
-      event.code === "KeyR" &&
-      state.mode !== "running" &&
-      state.mode !== "intro" &&
-      state.mode !== "spectating"
+      installedRenderGameToTextHook &&
+      win.render_game_to_text === installedRenderGameToTextHook
     ) {
-      restartState(state);
-      renderMenuContent(true);
+      if (previousHooks.hadRenderGameToText) {
+        win.render_game_to_text = previousHooks.renderGameToText;
+      } else {
+        delete win.render_game_to_text;
+      }
     }
-  };
-
-  const handleKeyUp = (event: KeyboardEvent) => {
-    if (setInputKeyState(input, event.code, false)) {
-      event.preventDefault();
-    }
-  };
-
-  const handlePointerDown = () => {
-    activateAudio();
-  };
-
-  doc.addEventListener("keydown", handleKeyDown);
-  doc.addEventListener("keyup", handleKeyUp);
-  doc.addEventListener("pointerdown", handlePointerDown, { passive: true });
-  win.addEventListener("resize", resizeCanvas);
-  doc.addEventListener("fullscreenchange", resizeCanvas);
-
-  teardown.push(() => doc.removeEventListener("keydown", handleKeyDown));
-  teardown.push(() => doc.removeEventListener("keyup", handleKeyUp));
-  teardown.push(() => doc.removeEventListener("pointerdown", handlePointerDown));
-  teardown.push(() => win.removeEventListener("resize", resizeCanvas));
-  teardown.push(() => doc.removeEventListener("fullscreenchange", resizeCanvas));
-
-  function tick(dt: number): void {
-    if (state.mode === "running") {
-      applyPlayerControls(state, input);
-    }
-    advanceState(state, dt);
-    audio.update(state);
   }
 
-  function present(): void {
-    renderGame(renderContext, state);
-    syncMenu();
+  function destroyController(): Promise<void> {
+    if (destroyPromise) {
+      return destroyPromise;
+    }
+    destroyPromise = (async () => {
+      destroyed = true;
+      if (idleTaskHandle !== null) {
+        try {
+          cancelIdleTask(idleTaskHandle);
+        } catch (error) {
+          reportCleanupError("Unable to cancel audio preparation.", error);
+        }
+        idleTaskHandle = null;
+      }
+      try {
+        appLoop?.destroy();
+      } catch (error) {
+        reportCleanupError("Unable to stop the app loop.", error);
+      }
+      try {
+        menuPresenter?.destroy();
+      } catch (error) {
+        reportCleanupError("Unable to destroy the menu presenter.", error);
+      }
+      for (const cleanup of teardown.splice(0).reverse()) {
+        try {
+          cleanup();
+        } catch (error) {
+          reportCleanupError("Unable to remove an app listener.", error);
+        }
+      }
+      restoreBrowserHooks();
+      try {
+        await audio.destroy();
+      } catch (error) {
+        reportCleanupError("Unable to destroy audio.", error);
+      }
+      try {
+        performanceCollector?.destroy();
+      } catch (error) {
+        reportCleanupError("Unable to stop performance collection.", error);
+      }
+    })();
+    return destroyPromise;
   }
 
-  let lastTime = performanceNow();
-  let accumulator = 0;
-  const fixedStep = 1 / 60;
-  let skipNextFrameCatchup = false;
+  try {
+    const frame = doc.createElement("div");
+    frame.className = "frame";
 
-  function skipSpectatingRound(): void {
-    if (state.mode !== "spectating" || spectatorSkipActive || destroyed) {
-      return;
+    const canvas = doc.createElement("canvas");
+    canvas.width = state.arena.width;
+    canvas.height = state.arena.height;
+    canvas.setAttribute("aria-label", "Smashup Derby arena");
+
+    const menu = doc.createElement("section");
+    menu.className = "menu";
+
+    frame.append(canvas, menu);
+    appRoot.replaceChildren(frame);
+
+    const ctx = canvas.getContext("2d");
+    if (!ctx) {
+      throw new Error("2D canvas context unavailable.");
     }
+    const renderContext: CanvasRenderingContext2D = ctx;
 
-    spectatorSkipActive = true;
-    renderMenuContent(true);
-    let remainingSteps = 90 * 60;
-
-    const runBatch = () => {
-      if (destroyed || state.mode !== "spectating") {
-        spectatorSkipActive = false;
-        return;
-      }
-
-      const batchSize = Math.min(60, remainingSteps);
-      let completedSteps = 0;
-      while (
-        completedSteps < batchSize &&
-        state.mode === "spectating"
-      ) {
-        advanceState(state, fixedStep);
-        completedSteps += 1;
-      }
-      remainingSteps -= completedSteps;
-
-      if (state.mode === "spectating" && remainingSteps <= 0) {
-        finishSpectatingRound(state);
-      }
-      audio.update(state);
-
-      if (state.mode === "spectating") {
-        present();
-        requestAnimationFrame(runBatch);
-        return;
-      }
-
-      spectatorSkipActive = false;
-      present();
+    const input: InputState = {
+      left: false,
+      right: false,
+      forward: false,
+      reverse: false,
     };
+    const automatedStepping = Boolean(nav.webdriver);
+    let audioActivationPending = false;
 
-    requestAnimationFrame(runBatch);
-  }
+    function syncMenu(force = false): void {
+      const startedAt = performanceCollector ? performanceNow() : 0;
+      menuPresenter?.sync(force);
+      recordPerformance("menu", startedAt);
+    }
 
-  function advanceTime(ms: number): void {
-    if (destroyed) {
-      return;
+    function restartFromMenu(): void {
+      restartState(state);
+      appLoop?.resetClock();
+      syncMenu(true);
     }
-    accumulator = 0;
-    lastTime = performanceNow();
-    skipNextFrameCatchup = true;
-    const steps = Math.max(1, Math.round(ms / (1000 / 60)));
-    for (let i = 0; i < steps; i += 1) {
-      tick(fixedStep);
-    }
-    present();
-  }
 
-  function scheduleNextFrame(): void {
-    if (!destroyed) {
-      requestAnimationFrame(frameLoop);
-    }
-  }
+    menuPresenter = createMenuPresenter(menu, state, {
+      beginCarSelect: () => {
+        beginCarSelect(state);
+        syncMenu();
+      },
+      chooseStarterCar: (presetId) => {
+        chooseStarterCar(state, presetId);
+        appLoop?.resetClock();
+        syncMenu();
+      },
+      advanceAfterRound: () => {
+        advanceAfterRound(state);
+        syncMenu();
+      },
+      applySessionUpgrade: (upgradeId) => {
+        applySessionUpgrade(state, upgradeId);
+        syncMenu();
+      },
+      skipSpectatingRound: () => {
+        appLoop?.startSpectatorSkip();
+      },
+      restart: restartFromMenu,
+    });
 
-  function frameLoop(now: number): void {
-    if (destroyed) {
-      return;
+    function resizeCanvas(): void {
+      const container = frame.getBoundingClientRect();
+      const size = computeCanvasDisplaySize(
+        state.arena.width,
+        state.arena.height,
+        container.width,
+        container.height,
+      );
+      canvas.style.width = `${size.width}px`;
+      canvas.style.height = `${size.height}px`;
     }
-    if (spectatorSkipActive) {
-      lastTime = now;
-      accumulator = 0;
-      scheduleNextFrame();
-      return;
-    }
-    if (automatedStepping) {
-      lastTime = now;
-      accumulator = 0;
-      present();
-      scheduleNextFrame();
-      return;
-    }
-    if (skipNextFrameCatchup) {
-      lastTime = now;
-      accumulator = 0;
-      skipNextFrameCatchup = false;
-      present();
-      scheduleNextFrame();
-      return;
-    }
-    const delta = Math.min(0.05, (now - lastTime) / 1000);
-    lastTime = now;
-    accumulator += delta;
-    while (accumulator >= fixedStep) {
-      tick(fixedStep);
-      accumulator -= fixedStep;
-    }
-    present();
-    scheduleNextFrame();
-  }
 
-  const renderGameToTextHook = () => renderGameToText(state);
-  installBrowserHooks(win, {
-    advanceTime,
-    renderGameToText: renderGameToTextHook,
-  });
+    function activateAudio(): void {
+      if (audioActivationPending || destroyed) {
+        return;
+      }
+      audioActivationPending = true;
+      const startedAt = performanceCollector ? performanceNow() : 0;
+      void audio
+        .resume()
+        .then(() => {
+          recordPerformance("audio", startedAt);
+        })
+        .catch((error: unknown) => {
+          recordPerformance("audio", startedAt);
+          console.error("Unable to start audio.", error);
+        })
+        .finally(() => {
+          audioActivationPending = false;
+        });
+    }
 
-  resizeCanvas();
-  renderMenuContent(true);
-  present();
-  scheduleNextFrame();
-
-  return {
-    state,
-    frame,
-    canvas,
-    menu,
-    input,
-    tick,
-    present,
-    syncMenu,
-    resizeCanvas,
-    advanceTime,
-    destroy: async () => {
+    function prepareAudio(): void {
       if (destroyed) {
         return;
       }
-      destroyed = true;
-      teardown.forEach((cleanup) => cleanup());
-      if (win.advanceTime === advanceTime) {
-        delete win.advanceTime;
+      const startedAt = performanceCollector ? performanceNow() : 0;
+      try {
+        audio.prepare();
+      } catch (error) {
+        console.error("Unable to prepare audio.", error);
+      } finally {
+        recordPerformance("audio", startedAt);
       }
-      if (win.render_game_to_text === renderGameToTextHook) {
-        delete win.render_game_to_text;
+    }
+
+    function toggleFullscreen(): void {
+      if (!doc.fullscreenElement) {
+        void frame.requestFullscreen?.();
+      } else {
+        void doc.exitFullscreen?.();
       }
-      await audio.destroy();
-    },
-  };
+    }
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      activateAudio();
+      if (event.repeat) {
+        return;
+      }
+      if (setInputKeyState(input, event.code, true)) {
+        event.preventDefault();
+      }
+      if (event.code === "Enter") {
+        if (state.mode === "menu") {
+          beginCarSelect(state);
+          syncMenu();
+        } else if (state.mode === "round_results") {
+          advanceAfterRound(state);
+          syncMenu();
+        } else if (state.mode === "spectating") {
+          appLoop?.startSpectatorSkip();
+        } else if (state.mode === "career_over") {
+          restartFromMenu();
+        }
+      }
+      if (event.code === "KeyF") {
+        toggleFullscreen();
+      }
+      const presetShortcut = /^Digit([1-9])$/.exec(event.code);
+      const presetId = presetShortcut
+        ? CAR_PRESET_IDS[Number(presetShortcut[1]) - 1]
+        : null;
+      if (presetId && state.mode === "car_select") {
+        chooseStarterCar(state, presetId as CarPresetId);
+        appLoop?.resetClock();
+        syncMenu();
+      }
+      if (
+        event.code === "KeyR" &&
+        state.mode !== "running" &&
+        state.mode !== "intro" &&
+        state.mode !== "spectating"
+      ) {
+        restartFromMenu();
+      }
+    };
+
+    const handleKeyUp = (event: KeyboardEvent) => {
+      if (setInputKeyState(input, event.code, false)) {
+        event.preventDefault();
+      }
+    };
+
+    const handlePointerDown = () => {
+      activateAudio();
+    };
+
+    const releasePlayerInput = () => {
+      resetInputState(input);
+      const player = state.cars.find((car) => car.id === state.playerId);
+      if (player) {
+        player.controls.forward = 0;
+        player.controls.reverse = 0;
+        player.controls.steer = 0;
+      }
+    };
+
+    const handleWindowBlur = () => {
+      releasePlayerInput();
+    };
+
+    const handleVisibilityChange = () => {
+      if (doc.visibilityState === "hidden") {
+        releasePlayerInput();
+      }
+    };
+
+    doc.addEventListener("keydown", handleKeyDown);
+    doc.addEventListener("keyup", handleKeyUp);
+    doc.addEventListener("pointerdown", handlePointerDown, { passive: true });
+    doc.addEventListener("visibilitychange", handleVisibilityChange);
+    win.addEventListener("blur", handleWindowBlur);
+    win.addEventListener("resize", resizeCanvas);
+    doc.addEventListener("fullscreenchange", resizeCanvas);
+
+    teardown.push(() => doc.removeEventListener("keydown", handleKeyDown));
+    teardown.push(() => doc.removeEventListener("keyup", handleKeyUp));
+    teardown.push(() =>
+      doc.removeEventListener("pointerdown", handlePointerDown),
+    );
+    teardown.push(() =>
+      doc.removeEventListener("visibilitychange", handleVisibilityChange),
+    );
+    teardown.push(() => win.removeEventListener("blur", handleWindowBlur));
+    teardown.push(() => win.removeEventListener("resize", resizeCanvas));
+    teardown.push(() =>
+      doc.removeEventListener("fullscreenchange", resizeCanvas),
+    );
+
+    function tick(dt: number, waitForAudio = true): void {
+      const simulationStartedAt = performanceCollector ? performanceNow() : 0;
+      if (
+        state.mode === "intro" &&
+        waitForAudio &&
+        audioActivationPending &&
+        state.session.countdown <= dt
+      ) {
+        recordPerformance("simulation", simulationStartedAt);
+        return;
+      }
+      if (state.mode === "running") {
+        applyPlayerControls(state, input);
+      }
+      advanceState(state, dt);
+      recordPerformance("simulation", simulationStartedAt, {
+        fixedSteps: 1,
+      });
+      const audioStartedAt = performanceCollector ? performanceNow() : 0;
+      audio.update(state);
+      recordPerformance("audio", audioStartedAt);
+    }
+
+    function present(): void {
+      const renderStartedAt = performanceCollector ? performanceNow() : 0;
+      renderGame(renderContext, state);
+      recordPerformance("render", renderStartedAt);
+      syncMenu();
+    }
+
+    appLoop = createAppLoop({
+      automatedStepping,
+      requestAnimationFrame,
+      cancelAnimationFrame,
+      performanceNow,
+      performanceEnabled: Boolean(performanceCollector),
+      isSpectating: () => state.mode === "spectating",
+      runStep: tick,
+      runSpectatorStep: (dt) => advanceState(state, dt),
+      finishSpectating: () => finishSpectatingRound(state),
+      afterSpectatorBatch: () => {
+        const audioStartedAt = performanceCollector ? performanceNow() : 0;
+        audio.update(state);
+        recordPerformance("audio", audioStartedAt);
+      },
+      present,
+      onSpectatorSkipActive: (active) => {
+        menuPresenter?.setSpectatorSkipActive(active);
+      },
+      recordPerformance,
+    });
+    const activeLoop = appLoop;
+
+    const renderGameToTextHook = () => renderGameToText(state);
+    installedAdvanceTimeHook = activeLoop.advanceTime;
+    installedRenderGameToTextHook = renderGameToTextHook;
+    installBrowserHooks(win, {
+      advanceTime: activeLoop.advanceTime,
+      renderGameToText: renderGameToTextHook,
+    });
+
+    resizeCanvas();
+    syncMenu(true);
+    present();
+    activeLoop.start();
+    idleTaskHandle = scheduleIdleTask(() => {
+      idleTaskHandle = null;
+      prepareAudio();
+    });
+
+    return {
+      state,
+      frame,
+      canvas,
+      menu,
+      input,
+      tick,
+      present,
+      syncMenu,
+      resizeCanvas,
+      advanceTime: activeLoop.advanceTime,
+      destroy: destroyController,
+    };
+  } catch (error) {
+    void destroyController();
+    throw error;
+  }
 }
 
 export function bootstrapApp(options: BootstrapOptions): AppController | null {

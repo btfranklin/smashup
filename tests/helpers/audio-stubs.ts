@@ -119,6 +119,8 @@ export class FakeAudioContext {
 
   resumeCalls = 0;
 
+  suspendCalls = 0;
+
   closeCalls = 0;
 
   constructor() {
@@ -158,6 +160,11 @@ export class FakeAudioContext {
   async resume() {
     this.resumeCalls += 1;
     this.state = "running";
+  }
+
+  async suspend() {
+    this.suspendCalls += 1;
+    this.state = "suspended";
   }
 
   async close() {

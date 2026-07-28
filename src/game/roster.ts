@@ -1,9 +1,12 @@
 import {
+  DEFAULT_ARENA_GEOMETRY,
+  materializeArenaPoint,
+} from "./arena";
+import {
   CAR_PRESETS,
   createDefaultPlayerBuild,
 } from "./content";
 import { cloneCondition, createFreshCondition } from "./conditions";
-import { getCarSystemPhases } from "./damage";
 import {
   cloneCarFrame,
   createFreshFrame,
@@ -11,6 +14,7 @@ import {
 } from "./deformation";
 import type {
   AIArchetype,
+  ArenaGeometry,
   Car,
   CarCondition,
   CarPresetId,
@@ -18,17 +22,17 @@ import type {
 } from "./types";
 
 const LEFT_LINEUP = [
-  { x: 220, y: 170 },
-  { x: 220, y: 355 },
-  { x: 220, y: 540 },
-  { x: 220, y: 725 },
+  { xRatio: 0.11925287356321838, yRatio: 0.14646464646464646 },
+  { xRatio: 0.11925287356321838, yRatio: 0.380050505050505 },
+  { xRatio: 0.11925287356321838, yRatio: 0.6136363636363636 },
+  { xRatio: 0.11925287356321838, yRatio: 0.8472222222222222 },
 ];
 
 const RIGHT_LINEUP = [
-  { x: 1280, y: 170 },
-  { x: 1280, y: 355 },
-  { x: 1280, y: 540 },
-  { x: 1280, y: 725 },
+  { xRatio: 0.8807471264367817, yRatio: 0.14646464646464646 },
+  { xRatio: 0.8807471264367817, yRatio: 0.380050505050505 },
+  { xRatio: 0.8807471264367817, yRatio: 0.6136363636363636 },
+  { xRatio: 0.8807471264367817, yRatio: 0.8472222222222222 },
 ];
 
 const LEFT_AI_LINEUP = [LEFT_LINEUP[0], LEFT_LINEUP[2], LEFT_LINEUP[3]];
@@ -123,13 +127,55 @@ const AI_ROSTER: Array<{
   },
 ];
 
-function getAiLineupSlot(entry: (typeof AI_ROSTER)[number]): {
+function materializeLineupPoint(
+  geometry: ArenaGeometry,
+  slot: { xRatio: number; yRatio: number },
+  presetId: CarPresetId,
+  angle: number,
+): { x: number; y: number } {
+  const point = materializeArenaPoint(
+    geometry,
+    slot.xRatio,
+    slot.yRatio,
+  );
+  const preset = CAR_PRESETS[presetId];
+  const halfLength = preset.length * 0.5;
+  const halfWidth = preset.width * 0.5;
+  const absoluteCosine = Math.abs(Math.cos(angle));
+  const absoluteSine = Math.abs(Math.sin(angle));
+  const xExtent =
+    absoluteCosine * halfLength + absoluteSine * halfWidth;
+  const yExtent =
+    absoluteSine * halfLength + absoluteCosine * halfWidth;
+  const xMin = geometry.wallPadding + xExtent;
+  const xMax = geometry.width - geometry.wallPadding - xExtent;
+  const yMin = geometry.wallPadding + yExtent;
+  const yMax = geometry.height - geometry.wallPadding - yExtent;
+  if (xMin > xMax || yMin > yMax) {
+    throw new RangeError("Arena geometry is too small for the car lineup.");
+  }
+  return {
+    x: Math.min(xMax, Math.max(xMin, point.x)),
+    y: Math.min(yMax, Math.max(yMin, point.y)),
+  };
+}
+
+function getAiLineupSlot(
+  entry: (typeof AI_ROSTER)[number],
+  geometry: ArenaGeometry,
+): {
   x: number;
   y: number;
 } {
-  return entry.team === "left"
+  const slot = entry.team === "left"
     ? LEFT_AI_LINEUP[entry.lineupIndex]
     : RIGHT_LINEUP[entry.lineupIndex];
+  return materializeLineupPoint(
+    geometry,
+    slot,
+    entry.presetId,
+    entry.team === "left" ? Math.PI : 0,
+  );
 }
 
 function buildCar(
@@ -207,12 +253,6 @@ function buildCar(
     tractionBias: preset.tractionBias,
     engineTone: preset.engineTone,
     systems,
-    phases: {
-      engine: "healthy",
-      radiator: "healthy",
-      transmission: "healthy",
-      steering: "healthy",
-    },
     body: { ...condition.body },
     frame,
     lights: { ...condition.lights },
@@ -230,13 +270,12 @@ function buildCar(
   if (!condition.frame) {
     seedFrameFromBodyDamage(car);
   }
-  car.phases = getCarSystemPhases(car);
   return car;
 }
 
-function createAiCars(): Car[] {
+function createAiCars(geometry: ArenaGeometry): Car[] {
   return AI_ROSTER.map((entry) => {
-    const slot = getAiLineupSlot(entry);
+    const slot = getAiLineupSlot(entry, geometry);
     return buildCar(entry.id, {
       label: entry.label,
       isPlayer: false,
@@ -253,8 +292,16 @@ function createAiCars(): Car[] {
   });
 }
 
-export function createMenuPreviewCars(): Car[] {
+export function createMenuPreviewCars(
+  geometry: ArenaGeometry = DEFAULT_ARENA_GEOMETRY,
+): Car[] {
   const build = createDefaultPlayerBuild("bulldozer");
+  const playerSlot = materializeLineupPoint(
+    geometry,
+    LEFT_LINEUP[1],
+    build.presetId,
+    Math.PI,
+  );
   const player = buildCar(0, {
     label: "Player",
     isPlayer: true,
@@ -262,19 +309,26 @@ export function createMenuPreviewCars(): Car[] {
     presetId: build.presetId,
     roofNumber: "01",
     aiArchetype: null,
-    x: LEFT_LINEUP[1].x,
-    y: LEFT_LINEUP[1].y,
+    x: playerSlot.x,
+    y: playerSlot.y,
     angle: Math.PI,
     buildBonuses: build,
     condition: createFreshCondition(),
   });
-  return [player, ...createAiCars()];
+  return [player, ...createAiCars(geometry)];
 }
 
 export function createRoundCars(
   build: PlayerBuild,
   condition: CarCondition,
+  geometry: ArenaGeometry = DEFAULT_ARENA_GEOMETRY,
 ): Car[] {
+  const playerSlot = materializeLineupPoint(
+    geometry,
+    LEFT_LINEUP[1],
+    build.presetId,
+    Math.PI,
+  );
   const player = buildCar(0, {
     label: "Player",
     isPlayer: true,
@@ -282,19 +336,24 @@ export function createRoundCars(
     presetId: build.presetId,
     roofNumber: "01",
     aiArchetype: null,
-    x: LEFT_LINEUP[1].x,
-    y: LEFT_LINEUP[1].y,
+    x: playerSlot.x,
+    y: playerSlot.y,
     angle: Math.PI,
     buildBonuses: build,
     condition,
   });
-  return [player, ...createAiCars()];
+  return [player, ...createAiCars(geometry)];
 }
 
 export function createCarPreviewCar(
   presetId: CarPresetId,
   condition: CarCondition,
   disabled = false,
+  geometry: ArenaGeometry = {
+    width: 900,
+    height: 720,
+    wallPadding: 0,
+  },
 ): Car {
   const car = buildCar(0, {
     label: CAR_PRESETS[presetId].title,
@@ -303,13 +362,12 @@ export function createCarPreviewCar(
     presetId,
     roofNumber: "01",
     aiArchetype: null,
-    x: 450,
-    y: 360,
+    x: geometry.width / 2,
+    y: geometry.height / 2,
     angle: 0,
     buildBonuses: createDefaultPlayerBuild(presetId),
     condition,
   });
   car.disabled = disabled;
-  car.phases = getCarSystemPhases(car);
   return car;
 }

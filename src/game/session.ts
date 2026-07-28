@@ -1,11 +1,9 @@
+import { createArena, createEmptyArena } from "./arena";
+import { generateCareerRoundPlans } from "./career";
 import {
   CAR_PREVIEW_SCENARIOS,
-  TOTAL_ROUNDS,
   createDefaultPlayerBuild,
-  getArenaMudZones,
-  getArenaObjects,
 } from "./content";
-import { generateCareerRoundPlans } from "./career";
 import { cloneCondition, createFreshCondition } from "./conditions";
 import { pushEvent } from "./events";
 import { createRoundStats, resetRoundStats } from "./roundStats";
@@ -24,7 +22,6 @@ import type {
   CarPreviewScenarioId,
   CarPresetId,
   GameState,
-  RoundPlan,
   SessionUpgradeId,
 } from "./types";
 
@@ -76,32 +73,18 @@ function createPreviewSmokePuffs(
   });
 }
 
-function buildArenaFromPlan(roundPlan: RoundPlan): GameState["arena"] {
-  return {
-    width: 1500,
-    height: 900,
-    wallPadding: 54,
-    variant: roundPlan.arenaVariant,
-    modifier: roundPlan.modifier,
-    title: roundPlan.title,
-    introLine: roundPlan.introLine,
-    mudZones: getArenaMudZones(roundPlan.arenaVariant),
-    objects: getArenaObjects(roundPlan.arenaVariant),
-  };
-}
-
 function prepareRound(state: GameState, roundIndex: number): void {
   const roundPlan = state.session.roundPlans[roundIndex];
   if (!roundPlan) {
     throw new Error(`Career round ${roundIndex + 1} is not configured.`);
   }
   state.session.roundIndex = roundIndex;
-  state.session.roundPlan = roundPlan;
-  state.arena = buildArenaFromPlan(roundPlan);
+  state.currentRoundPlan = roundPlan;
+  state.arena = createArena(roundPlan.arenaVariant);
   const build =
     state.session.playerBuild ?? createDefaultPlayerBuild("bulldozer");
   const condition = state.session.playerCondition ?? createFreshCondition();
-  state.cars = createRoundCars(build, condition);
+  state.cars = createRoundCars(build, condition, state.arena);
   state.playerId = 0;
   clearRoundRuntimeState(state);
   state.session.countdown = 3.2;
@@ -142,15 +125,14 @@ function prepareRound(state: GameState, roundIndex: number): void {
 }
 
 export function createInitialState(): GameState {
-  const previewPlan = generateCareerRoundPlans(0)[0];
+  const arena = createArena("classic");
   const state: GameState = {
     mode: "menu",
-    arena: buildArenaFromPlan(previewPlan),
+    currentRoundPlan: null,
+    arena,
     preview: null,
     session: {
-      totalRounds: TOTAL_ROUNDS,
       roundIndex: 0,
-      roundPlan: previewPlan,
       runSeed: null,
       roundPlans: [],
       playerBuild: null,
@@ -180,7 +162,7 @@ export function createInitialState(): GameState {
     pendingSystemEvents: [],
     roundStats: createRoundStats(),
   };
-  state.cars = createMenuPreviewCars();
+  state.cars = createMenuPreviewCars(arena);
   return state;
 }
 
@@ -190,10 +172,16 @@ export function createCarPreviewState(
 ): GameState {
   const state = createInitialState();
   const scenario = CAR_PREVIEW_SCENARIOS[scenarioId];
+  const previewGeometry = {
+    width: 900,
+    height: 720,
+    wallPadding: 0,
+  };
   const car = createCarPreviewCar(
     presetId,
     scenario.condition,
     Boolean(scenario.disabled),
+    previewGeometry,
   );
 
   state.mode = "car_preview";
@@ -202,18 +190,7 @@ export function createCarPreviewState(
     presetId,
     scenario: scenarioId,
   };
-  state.arena = {
-    width: 900,
-    height: 720,
-    wallPadding: 0,
-    variant: "classic",
-    modifier: "none",
-    title: "Car Preview",
-    introLine: scenario.title,
-    mudZones: [],
-    objects: [],
-  };
-  state.session.roundPlan = null;
+  state.arena = createEmptyArena(previewGeometry);
   state.session.playerBuild = createDefaultPlayerBuild(presetId);
   state.session.playerCondition = cloneCondition(scenario.condition);
   state.session.countdown = 0;
@@ -270,7 +247,7 @@ export function advanceAfterRound(state: GameState): void {
   if (!summary) {
     return;
   }
-  if (state.session.roundIndex >= state.session.totalRounds - 1) {
+  if (state.session.roundIndex >= state.session.roundPlans.length - 1) {
     state.mode = "career_over";
     return;
   }
@@ -286,7 +263,7 @@ export function applySessionUpgrade(
   }
   applyBuildUpgrade(state.session.playerBuild, upgradeId);
   const condition =
-    state.session.lastRoundSummary?.playerWon === false
+    state.session.lastRoundSummary?.playerWrecked
       ? towConditionToRunnableMinimum(state.session.playerCondition)
       : state.session.playerCondition;
   state.session.playerCondition = serviceCondition(

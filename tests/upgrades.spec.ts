@@ -123,7 +123,7 @@ describe("upgrade mechanics", () => {
     const towed = towConditionToRunnableMinimum(condition);
 
     expect(towed.systems).toEqual({
-      engine: 0.32,
+      engine: 0.46,
       radiator: 0.32,
       transmission: 0.32,
       steering: 0.32,

@@ -4,7 +4,7 @@ import type {
   Car,
   DamagePhase,
   DamageZone,
-  GameState,
+  RoundModifierId,
   SystemName,
   Vec2,
 } from "./types";
@@ -108,7 +108,7 @@ function disableCar(car: Car): void {
 }
 
 export function getThermalTuningForModifier(
-  modifier: GameState["arena"]["modifier"],
+  modifier: RoundModifierId,
 ): ThermalTuning {
   if (modifier === "redline") {
     return REDLINE_TUNING;
@@ -296,7 +296,7 @@ export function applyImpactDamage(
 export function updateSubsystemWear(
   car: Car,
   dt: number,
-  modifier: GameState["arena"]["modifier"],
+  modifier: RoundModifierId,
 ): void {
   if (car.disabled) {
     return;
@@ -305,13 +305,13 @@ export function updateSubsystemWear(
   const tuning = getThermalTuningForModifier(modifier);
   const throttle = Math.max(car.controls.forward, car.controls.reverse);
   const radiatorLoss = 1 - car.systems.radiator;
-  const overheatPersistence =
+  const retainedOverheat =
     car.systems.overheat * (0.0015 + radiatorLoss * 0.012);
   const heatRate =
     (throttle * (0.024 + radiatorLoss * 0.115) +
       radiatorLoss * 0.03 +
       Math.max(0, radiatorLoss - 0.28) * 0.19 +
-      overheatPersistence) *
+      retainedOverheat) *
     tuning.heatGainScale;
   const coolRate = Math.max(
     0.004,

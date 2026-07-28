@@ -6,6 +6,7 @@ import {
   stepArenaObjects,
   stepCar,
 } from "../src/game/physics";
+import { CAR_PRESETS } from "../src/game/content";
 import { signedSpeedForCar } from "../src/game/math";
 import { createCarFixture, createRunningState, createStateFixture } from "./helpers/fixtures";
 
@@ -16,17 +17,17 @@ describe("physics", () => {
       controls: { steer: 0, forward: 1, reverse: 0 },
       angle: 0,
     });
-    stepCar(car, 1 / 30, state.arena, []);
+    stepCar(car, 1 / 30, state.arena, "none");
     expect(car.vx).toBeGreaterThan(0);
 
     car.controls = { steer: 0, forward: 1, reverse: 1 };
     car.vx = 140;
-    stepCar(car, 1 / 30, state.arena, []);
+    stepCar(car, 1 / 30, state.arena, "none");
     expect(car.vx).toBeLessThan(140);
 
     car.controls = { steer: 0, forward: 1, reverse: 0 };
     car.vx = car.forwardMaxSpeed * 4;
-    stepCar(car, 1 / 30, state.arena, []);
+    stepCar(car, 1 / 30, state.arena, "none");
     expect(signedSpeedForCar(car)).toBeLessThan(car.forwardMaxSpeed * 4);
     expect(signedSpeedForCar(car)).toBeLessThanOrEqual(
       car.forwardMaxSpeed * 1.1,
@@ -42,7 +43,7 @@ describe("physics", () => {
       controls: { steer: 0, forward: 0, reverse: 0 },
     });
 
-    stepCar(car, 1 / 30, state.arena, []);
+    stepCar(car, 1 / 30, state.arena, "none");
 
     expect(car.slipAmount).toBeGreaterThan(0);
     expect(Math.abs(car.vy)).toBeLessThan(90);
@@ -57,7 +58,7 @@ describe("physics", () => {
       vy: -120,
     });
 
-    stepCar(car, 1 / 30, state.arena, []);
+    stepCar(car, 1 / 30, state.arena, "none");
 
     expect(car.x).toBeGreaterThanOrEqual(
       state.arena.wallPadding + car.length * 0.5,
@@ -68,6 +69,38 @@ describe("physics", () => {
     expect(car.vx).toBeGreaterThan(0);
     expect(car.vy).toBeGreaterThan(0);
   });
+
+  it.each(
+    Object.keys(CAR_PRESETS).flatMap((presetId) =>
+      [0, Math.PI / 4, Math.PI / 2].map((angle) => [presetId, angle] as const),
+    ),
+  )(
+    "contains a rotated %s car at angle %f by its projected extents",
+    (presetId, angle) => {
+      const state = createStateFixture();
+      const car = createCarFixture(
+        {
+          x: 0,
+          y: 0,
+          angle,
+        },
+        presetId as keyof typeof CAR_PRESETS,
+      );
+
+      stepCar(car, 0, state.arena, "none");
+
+      const halfLength = car.length * 0.5;
+      const halfWidth = car.width * 0.5;
+      const expectedXExtent =
+        Math.abs(Math.cos(angle)) * halfLength +
+        Math.abs(Math.sin(angle)) * halfWidth;
+      const expectedYExtent =
+        Math.abs(Math.sin(angle)) * halfLength +
+        Math.abs(Math.cos(angle)) * halfWidth;
+      expect(car.x).toBeCloseTo(state.arena.wallPadding + expectedXExtent);
+      expect(car.y).toBeCloseTo(state.arena.wallPadding + expectedYExtent);
+    },
+  );
 
   it("slows acceleration inside mud zones", () => {
     const state = createRunningState();
@@ -90,8 +123,18 @@ describe("physics", () => {
       grip: 0.5,
     };
 
-    stepCar(dry, 1 / 15, state.arena, []);
-    stepCar(muddy, 1 / 15, state.arena, [mudZone]);
+    stepCar(
+      dry,
+      1 / 15,
+      { ...state.arena, mudZones: [] },
+      "none",
+    );
+    stepCar(
+      muddy,
+      1 / 15,
+      { ...state.arena, mudZones: [mudZone] },
+      "none",
+    );
 
     expect(dry.vx).toBeGreaterThan(muddy.vx);
   });
@@ -146,6 +189,58 @@ describe("physics", () => {
     expect(car.vx).toBeLessThan(90);
   });
 
+  it("pushes an embedded object through its nearest car face", () => {
+    const state = createStateFixture();
+    const car = createCarFixture({ x: 500, y: 500 });
+    const object = {
+      id: 2,
+      kind: "junk" as const,
+      x: car.x + car.length * 0.5 - 5,
+      y: car.y,
+      vx: 0,
+      vy: 0,
+      radius: 20,
+      mass: 240,
+      rotation: 0,
+      spin: 0,
+    };
+    const initialCarX = car.x;
+    const initialObjectX = object.x;
+
+    resolveArenaObjectInteractions([car], [object], state.arena);
+
+    expect(car.x).toBeLessThan(initialCarX);
+    expect(object.x).toBeGreaterThan(initialObjectX);
+    expect(object.x - car.x).toBeCloseTo(car.length * 0.5 + object.radius);
+  });
+
+  it("uses a deterministic outward normal for an exactly centered object", () => {
+    const state = createStateFixture();
+    const car = createCarFixture({ x: 500, y: 500, angle: 0 });
+    const object = {
+      id: 3,
+      kind: "tire" as const,
+      x: car.x,
+      y: car.y,
+      vx: 0,
+      vy: 0,
+      radius: 18,
+      mass: 90,
+      rotation: 0,
+      spin: 0,
+    };
+
+    resolveArenaObjectInteractions([car], [object], state.arena);
+
+    expect(Number.isFinite(car.x)).toBe(true);
+    expect(Number.isFinite(car.y)).toBe(true);
+    expect(Number.isFinite(object.x)).toBe(true);
+    expect(Number.isFinite(object.y)).toBe(true);
+    expect(object.x).toBeCloseTo(car.x);
+    expect(object.y).toBeGreaterThan(car.y);
+    expect(object.y - car.y).toBeCloseTo(car.width * 0.5 + object.radius);
+  });
+
   it("detects collisions, separates cars, and softens front-into-rear self-damage", () => {
     const striker = createCarFixture({
       id: 1,
@@ -173,8 +268,39 @@ describe("physics", () => {
     expect(collisions[0].zoneA).toBe("front");
     expect(collisions[0].zoneB).toBe("rear");
     expect(collisions[0].severity).toBeGreaterThan(0);
+    expect(collisions[0].aDisabledByImpact).toBe(false);
+    expect(collisions[0].bDisabledByImpact).toBe(false);
     expect(striker.systems.engine).toBeGreaterThan(0.9);
     expect(target.body.rear).toBeGreaterThan(0);
+  });
+
+  it("records the exact car disabled by an impact", () => {
+    const striker = createCarFixture({
+      id: 31,
+      x: 500,
+      y: 500,
+      vx: 220,
+    });
+    const target = createCarFixture({
+      id: 32,
+      x: 555,
+      y: 500,
+      angle: Math.PI,
+      systems: {
+        engine: 0.29,
+        radiator: 0.29,
+        transmission: 0.29,
+        steering: 0.29,
+        overheat: 0,
+      },
+      body: { front: 0.21, rear: 0, left: 0, right: 0 },
+    });
+
+    const collision = resolveCarCollisions([striker, target])[0];
+
+    expect(target.disabled).toBe(true);
+    expect(collision.aDisabledByImpact).toBe(false);
+    expect(collision.bDisabledByImpact).toBe(true);
   });
 
   it("separates medium from extreme front-hit damage severity", () => {
@@ -214,6 +340,8 @@ describe("physics", () => {
     expect(collision.damageSeverity).toBe(0);
     expect(collision.damageTakenA).toBe(0);
     expect(collision.damageTakenB).toBe(0);
+    expect(collision.aDisabledByImpact).toBe(false);
+    expect(collision.bDisabledByImpact).toBe(false);
     expect(collision.deformationA).toBe(0);
     expect(collision.deformationB).toBe(0);
     expect(collision.pointA).toMatchObject({ x: expect.any(Number) });

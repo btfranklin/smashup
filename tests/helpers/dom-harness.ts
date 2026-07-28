@@ -18,7 +18,10 @@ export function createDomHarness() {
   let width = 1200;
   let height = 900;
   let now = 0;
-  const rafQueue: FrameRequestCallback[] = [];
+  let nextRafHandle = 1;
+  let nextIdleHandle = 1;
+  const rafQueue: Array<{ handle: number; callback: FrameRequestCallback }> = [];
+  const idleQueue: Array<{ handle: number; callback: () => void }> = [];
 
   Object.defineProperty(document, "fullscreenElement", {
     configurable: true,
@@ -50,8 +53,28 @@ export function createDomHarness() {
   });
 
   const requestAnimationFrame = vi.fn((callback: FrameRequestCallback) => {
-    rafQueue.push(callback);
-    return rafQueue.length;
+    const handle = nextRafHandle;
+    nextRafHandle += 1;
+    rafQueue.push({ handle, callback });
+    return handle;
+  });
+  const cancelAnimationFrame = vi.fn((handle: number) => {
+    const index = rafQueue.findIndex((entry) => entry.handle === handle);
+    if (index >= 0) {
+      rafQueue.splice(index, 1);
+    }
+  });
+  const scheduleIdleTask = vi.fn((callback: () => void) => {
+    const handle = nextIdleHandle;
+    nextIdleHandle += 1;
+    idleQueue.push({ handle, callback });
+    return handle;
+  });
+  const cancelIdleTask = vi.fn((handle: number) => {
+    const index = idleQueue.findIndex((entry) => entry.handle === handle);
+    if (index >= 0) {
+      idleQueue.splice(index, 1);
+    }
   });
 
   const exitFullscreen = vi.fn(async () => {
@@ -78,14 +101,27 @@ export function createDomHarness() {
     appRoot,
     canvas,
     requestAnimationFrame,
+    cancelAnimationFrame,
+    scheduleIdleTask,
+    cancelIdleTask,
     exitFullscreen,
     performanceNow: () => now,
     advanceClock(ms: number) {
       now += ms;
     },
     flushAnimationFrames(time = now) {
-      const callbacks = rafQueue.splice(0);
-      callbacks.forEach((callback) => callback(time));
+      const entries = rafQueue.splice(0);
+      entries.forEach(({ callback }) => callback(time));
+    },
+    flushIdleTasks() {
+      const entries = idleQueue.splice(0);
+      entries.forEach(({ callback }) => callback());
+    },
+    pendingAnimationFrames() {
+      return rafQueue.length;
+    },
+    pendingIdleTasks() {
+      return idleQueue.length;
     },
     setContainerSize(nextWidth: number, nextHeight: number) {
       width = nextWidth;

@@ -60,6 +60,9 @@ export function createCanvasRecorder() {
     clearRect(x: number, y: number, width: number, height: number) {
       record("clearRect", x, y, width, height);
     },
+    drawImage(...args: unknown[]) {
+      record("drawImage", ...args);
+    },
     fillRect(x: number, y: number, width: number, height: number) {
       record("fillRect", x, y, width, height);
     },

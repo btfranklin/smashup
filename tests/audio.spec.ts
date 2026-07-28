@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   AudioManager,
@@ -105,7 +105,7 @@ describe("audio derivation and fake-graph orchestration", () => {
     expect(bursts[0].level).toBeGreaterThan(0.03);
   });
 
-  it("creates one fake graph and requests resume once", async () => {
+  it("prepares one suspended graph before resuming it once", async () => {
     class SuspendedAudioContext extends FakeAudioContext {
       constructor() {
         super();
@@ -120,22 +120,114 @@ describe("audio derivation and fake-graph orchestration", () => {
     });
 
     const manager = new AudioManager();
-    await manager.ensureStarted();
-    await manager.ensureStarted();
+    expect(manager.getVoiceCreationCount()).toBe(0);
+    manager.prepare();
+    manager.prepare();
 
     const ctx = getLatestAudioContext();
     expect(FakeAudioContext.instances).toHaveLength(1);
+    expect(manager.getVoiceCreationCount()).toBe(3);
+    expect(ctx.resumeCalls).toBe(0);
+    expect(manager.getVoiceCreationCount()).toBe(3);
+
+    await manager.resume();
+    await manager.resume();
     expect(ctx.resumeCalls).toBe(1);
+  });
+
+  it("suspends an idle-prepared running graph before gesture resume", async () => {
+    const manager = new AudioManager();
+    manager.prepare();
+    const ctx = getLatestAudioContext();
+
+    await vi.waitFor(() => expect(ctx.state).toBe("suspended"));
+    expect(ctx.suspendCalls).toBe(1);
+    expect(ctx.resumeCalls).toBe(0);
+
+    await manager.resume();
+    expect(ctx.resumeCalls).toBe(1);
+    expect(ctx.state).toBe("running");
+  });
+
+  it("constructs a running graph on gesture fallback without a suspend cycle", async () => {
+    const manager = new AudioManager();
+
+    await manager.resume();
+
+    const ctx = getLatestAudioContext();
+    expect(ctx.suspendCalls).toBe(0);
+    expect(ctx.resumeCalls).toBe(0);
+    expect(ctx.state).toBe("running");
+  });
+
+  it("tolerates browsers without a Web Audio constructor", async () => {
+    delete (window as Window & { AudioContext?: typeof AudioContext }).AudioContext;
+    const manager = new AudioManager();
+
+    expect(() => manager.prepare()).not.toThrow();
+    await expect(manager.resume()).resolves.toBeUndefined();
+    expect(FakeAudioContext.instances).toHaveLength(0);
+  });
+
+  it("closes a partially constructed graph when preparation fails", async () => {
+    class FailingAudioContext extends FakeAudioContext {
+      override createGain(): GainNode {
+        throw new Error("Graph construction failed.");
+      }
+    }
+    Object.defineProperty(window, "AudioContext", {
+      configurable: true,
+      writable: true,
+      value: FailingAudioContext,
+    });
+    const manager = new AudioManager();
+
+    expect(() => manager.prepare()).toThrow("Graph construction failed.");
+    const ctx = getLatestAudioContext();
+    await vi.waitFor(() => expect(ctx.closeCalls).toBe(1));
+  });
+
+  it("reports a rejected close while unwinding failed preparation", async () => {
+    const closeError = new Error("Context close failed.");
+    class UnclosableAudioContext extends FakeAudioContext {
+      override createGain(): GainNode {
+        throw new Error("Graph construction failed.");
+      }
+
+      override async close(): Promise<void> {
+        this.closeCalls += 1;
+        throw closeError;
+      }
+    }
+    Object.defineProperty(window, "AudioContext", {
+      configurable: true,
+      writable: true,
+      value: UnclosableAudioContext,
+    });
+    const consoleError = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => undefined);
+    const manager = new AudioManager();
+
+    expect(() => manager.prepare()).toThrow("Graph construction failed.");
+    await vi.waitFor(() => {
+      expect(consoleError).toHaveBeenCalledWith(
+        "Unable to close a failed audio context.",
+        closeError,
+      );
+    });
+    consoleError.mockRestore();
   });
 
   it("stops the persistent fake graph and closes its context on destroy", async () => {
     const manager = new AudioManager();
-    await manager.ensureStarted();
+    await manager.resume();
     const ctx = getLatestAudioContext();
 
     await manager.destroy();
     await manager.destroy();
 
+    expect(manager.getVoiceCreationCount()).toBe(0);
     expect(ctx.oscillators.every((oscillator) => oscillator.stoppedAt.length === 1)).toBe(
       true,
     );
@@ -151,7 +243,7 @@ describe("audio derivation and fake-graph orchestration", () => {
 
   it("schedules one finish melody for a single transition", async () => {
     const manager = new AudioManager();
-    await manager.ensureStarted();
+    await manager.resume();
 
     const running = createRunningState();
     const roundResults = createRunningState();
@@ -169,7 +261,7 @@ describe("audio derivation and fake-graph orchestration", () => {
 
   it("does not schedule duplicate countdown voices", async () => {
     const manager = new AudioManager();
-    await manager.ensureStarted();
+    await manager.resume();
     const state = createRunningState();
     state.mode = "intro";
     state.session.countdown = 3.2;
@@ -189,7 +281,7 @@ describe("audio derivation and fake-graph orchestration", () => {
 
   it("throttles crash-burst scheduling", async () => {
     const manager = new AudioManager();
-    await manager.ensureStarted();
+    await manager.resume();
     const state = createRunningState();
     const player = getPlayerFixture(state);
     const rival = createCarFixture({ id: 999, x: player.x + 10, y: player.y });
@@ -201,9 +293,12 @@ describe("audio derivation and fake-graph orchestration", () => {
     manager.update(state);
     const ctx = getLatestAudioContext();
     const afterFirstCrash = ctx.bufferSources.length;
+    const voicesAfterFirstCrash = manager.getVoiceCreationCount();
+    expect(voicesAfterFirstCrash).toBeGreaterThan(3);
 
     manager.update(state);
     expect(ctx.bufferSources.length).toBe(afterFirstCrash);
+    expect(manager.getVoiceCreationCount()).toBe(voicesAfterFirstCrash);
 
     state.recentCollisions = [];
     manager.update(state);

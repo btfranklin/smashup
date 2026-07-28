@@ -10,6 +10,14 @@ import { createCarPreviewState } from "../src/game/session";
 import { createCanvasRecorder } from "./helpers/canvas-recorder";
 import { createCarFixture, createRunningState } from "./helpers/fixtures";
 
+function getRoundPlan(state: ReturnType<typeof createRunningState>) {
+  const plan = state.currentRoundPlan;
+  if (!plan) {
+    throw new Error("Running render fixture is missing its round plan.");
+  }
+  return plan;
+}
+
 describe("Canvas command orchestration", () => {
   it("derives phase colors and camera offsets", () => {
     expect(getPhaseColor("healthy", "#123")).toBe("#123");
@@ -106,7 +114,10 @@ describe("Canvas command orchestration", () => {
   it("orders running HUD, event-feed, and smoke commands over the arena", () => {
     const canvas = createCanvasRecorder();
     const state = createRunningState();
-    state.arena.variant = "junkyard";
+    state.currentRoundPlan = {
+      ...getRoundPlan(state),
+      arenaVariant: "junkyard",
+    };
     state.arena.objects = [
       {
         id: 1,
@@ -197,18 +208,68 @@ describe("Canvas command orchestration", () => {
     expect(canvas.count("lineTo")).toBeGreaterThan(30);
   });
 
+  it("draws transient debris, dust, and non-flaming smoke", () => {
+    const canvas = createCanvasRecorder();
+    const state = createRunningState();
+    state.debrisParticles.push({
+      id: 1,
+      x: 240,
+      y: 260,
+      vx: 0,
+      vy: 0,
+      age: 0.2,
+      ttl: 1,
+      size: 6,
+      rotation: 0.4,
+      spin: 0,
+      tone: 0.7,
+    });
+    state.dustPuffs.push({
+      id: 2,
+      x: 300,
+      y: 320,
+      vx: 0,
+      vy: 0,
+      age: 0.3,
+      ttl: 1,
+      size: 10,
+      alpha: 0.6,
+      tone: 0.8,
+    });
+    state.smokePuffs.push({
+      id: 3,
+      sourceCarId: state.playerId,
+      x: 340,
+      y: 360,
+      vx: 0,
+      vy: 0,
+      age: 0.1,
+      ttl: 1,
+      size: 8,
+      density: 0.4,
+      flame: 0,
+    });
+
+    renderGame(canvas.ctx, state);
+
+    expect(canvas.count("createRadialGradient")).toBeGreaterThan(0);
+    expect(canvas.count("fillRect")).toBeGreaterThan(0);
+    expect(canvas.count("arc")).toBeGreaterThan(0);
+  });
+
   it("emits intro overlay commands with the countdown and title", () => {
     const canvas = createCanvasRecorder();
     const state = createRunningState();
     state.mode = "intro";
     state.session.countdown = 2.4;
+    const plan = getRoundPlan(state);
 
     renderGame(canvas.ctx, state);
 
     const textCalls = canvas
       .find("fillText")
       .map((entry) => String(entry.args[0]));
-    expect(textCalls).toContain(state.arena.title);
+    expect(textCalls).toContain(plan.title);
     expect(textCalls).toContain("3");
   });
 
@@ -229,7 +290,10 @@ describe("Canvas command orchestration", () => {
   it("emits gradient and rounded-rectangle commands for mud zones", () => {
     const canvas = createCanvasRecorder();
     const state = createRunningState();
-    state.arena.variant = "mud_pit";
+    state.currentRoundPlan = {
+      ...getRoundPlan(state),
+      arenaVariant: "mud_pit",
+    };
     state.arena.mudZones = [
       { id: 1, x: 100, y: 100, width: 200, height: 100, grip: 0.6 },
     ];

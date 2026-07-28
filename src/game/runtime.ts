@@ -21,10 +21,12 @@ import {
   stepArenaObjects,
   stepCar,
 } from "./physics";
+import { recordPlayerContact } from "./roundStats";
 import {
   getActiveCars,
   getCarById,
   getPlayerCar,
+  requireCurrentRoundPlan,
 } from "./selectors";
 import { updateSmokeEffects } from "./smoke";
 import type {
@@ -81,12 +83,18 @@ function getKnockoutReason(car: Car): string {
 function makeRoundSummary(
   state: GameState,
   placements: RoundPlacement[],
+  completionElapsed: number,
 ): RoundSummary {
+  const roundPlan = requireCurrentRoundPlan(state);
   const player = getPlayerCar(state);
   const winner = placements[0] ?? null;
   const playerWon = winner?.driverId === state.playerId;
+  const playerWrecked = player?.disabled ?? false;
   const eliminatedBy = getCarById(state, state.roundStats.eliminatedById);
-  const roundPlan = state.session.roundPlan;
+  const survivalEndElapsed =
+    playerWrecked
+      ? (player?.eliminationTime ?? completionElapsed)
+      : completionElapsed;
   const awardIds = selectWreckAwards({
     playerWon,
     playerEngineHealth: player ? getEngineHealth(player) : 0,
@@ -97,31 +105,37 @@ function makeRoundSummary(
       state.roundStats.strongestPlayerKnockoutSeverity,
   });
   return {
-    roundIndex: state.session.roundIndex + 1,
-    title: roundPlan?.title ?? `Round ${state.session.roundIndex + 1}`,
+    roundNumber: roundPlan.id,
+    title: roundPlan.title,
     playerWon,
+    playerWrecked,
     winnerLabel: winner?.label ?? null,
     survivalTime: Number(
-      (state.elapsed - state.roundStats.startElapsed).toFixed(1),
+      Math.max(0, survivalEndElapsed - state.roundStats.startElapsed).toFixed(1),
     ),
     eliminatedByLabel: eliminatedBy?.label ?? null,
     playerKnockouts: [...state.roundStats.playerKnockouts],
     biggestHitLabel: state.roundStats.biggestHitLabel,
     biggestHitSeverity: Number(state.roundStats.biggestHitSeverity.toFixed(2)),
-    knockoutReason: !playerWon && player ? getKnockoutReason(player) : null,
+    knockoutReason: playerWrecked && player ? getKnockoutReason(player) : null,
     placements,
     awardIds,
   };
 }
 
-function completeRound(state: GameState, forceConditionRanking = false): void {
-  const placements = rankRoundCars(state.cars, forceConditionRanking);
+function completeRound(state: GameState, completionElapsed = state.elapsed): void {
+  requireCurrentRoundPlan(state);
+  const placements = rankRoundCars(state.cars);
   state.winnerId = placements[0]?.driverId ?? null;
   const player = getPlayerCar(state);
   if (player) {
     state.session.playerCondition = captureCarCondition(player);
   }
-  state.session.lastRoundSummary = makeRoundSummary(state, placements);
+  state.session.lastRoundSummary = makeRoundSummary(
+    state,
+    placements,
+    completionElapsed,
+  );
   state.session.completedRounds.push(state.session.lastRoundSummary);
   state.mode = "round_results";
   if (state.winnerId === state.playerId) {
@@ -129,25 +143,33 @@ function completeRound(state: GameState, forceConditionRanking = false): void {
   }
 }
 
-function refreshPhaseEvents(state: GameState, car: Car): void {
+function refreshPlayerPhaseEvents(state: GameState, car: Car): void {
+  if (!car.isPlayer) {
+    return;
+  }
   const nextPhases = getCarSystemPhases(car);
+  const previousPhases = state.roundStats.lastPlayerSystemPhases;
+  if (!previousPhases) {
+    state.roundStats.lastPlayerSystemPhases = nextPhases;
+    return;
+  }
   for (const system of [
     "engine",
     "radiator",
     "transmission",
     "steering",
   ] as const) {
-    if (car.phases[system] !== nextPhases[system]) {
-      if (car.isPlayer && nextPhases[system] !== "healthy") {
+    if (previousPhases[system] !== nextPhases[system]) {
+      if (nextPhases[system] !== "healthy") {
         state.pendingSystemEvents.push({
           carId: car.id,
           system,
           phase: nextPhases[system],
         });
       }
-      car.phases[system] = nextPhases[system];
     }
   }
+  state.roundStats.lastPlayerSystemPhases = nextPhases;
 }
 
 function flushPendingSystemEvents(state: GameState): void {
@@ -196,40 +218,55 @@ function isPlayerCollision(state: GameState, collision: CollisionEvent): boolean
   return collision.aId === state.playerId || collision.bId === state.playerId;
 }
 
-function getStrongestPlayerCollision(
-  state: GameState,
-): CollisionEvent | null {
-  let playerCollision: CollisionEvent | null = null;
-  for (const collision of state.recentCollisions) {
-    if (
-      isPlayerCollision(state, collision) &&
-      collision.damageSeverity > 0 &&
-      (!playerCollision ||
-        collision.damageSeverity > playerCollision.damageSeverity)
-    ) {
-      playerCollision = collision;
-    }
+function wasCarActiveAtImpact(
+  carId: number,
+  collision: CollisionEvent,
+): boolean {
+  if (collision.aId === carId) {
+    return collision.aActiveAtImpact;
   }
-  return playerCollision;
+  return collision.bId === carId && collision.bActiveAtImpact;
+}
+
+function wasPlayerActiveAtImpact(
+  state: GameState,
+  collision: CollisionEvent,
+): boolean {
+  return wasCarActiveAtImpact(state.playerId, collision);
+}
+
+function wasCarDisabledByImpact(
+  carId: number,
+  collision: CollisionEvent,
+): boolean {
+  if (collision.aId === carId) {
+    return collision.aDisabledByImpact;
+  }
+  return collision.bId === carId && collision.bDisabledByImpact;
 }
 
 function recordPlayerContactCredit(
   state: GameState,
-  playerCollision: CollisionEvent | null,
+  collisions: CollisionEvent[],
+  contactElapsed: number,
 ): void {
-  if (!playerCollision) {
-    return;
+  for (const collision of collisions) {
+    if (
+      !isPlayerCollision(state, collision) ||
+      !wasPlayerActiveAtImpact(state, collision) ||
+      collision.damageSeverity <= 0
+    ) {
+      continue;
+    }
+    const targetId =
+      collision.aId === state.playerId ? collision.bId : collision.aId;
+    recordPlayerContact(
+      state.roundStats,
+      targetId,
+      contactElapsed,
+      collision.damageSeverity,
+    );
   }
-  state.roundStats.lastPlayerTargetId =
-    playerCollision.aId === state.playerId
-      ? playerCollision.bId
-      : playerCollision.aId;
-  state.roundStats.lastPlayerTargetElapsed = state.elapsed;
-  state.roundStats.lastPlayerTargetSeverity = playerCollision.damageSeverity;
-  state.roundStats.strongestPlayerHitSeverity = Math.max(
-    state.roundStats.strongestPlayerHitSeverity,
-    playerCollision.damageSeverity,
-  );
 }
 
 function applyCollisionCameraDrama(
@@ -270,47 +307,61 @@ function announceImpactCallout(
   }
 }
 
-function registerCollisionDrama(state: GameState): void {
+function registerCollisionDrama(
+  state: GameState,
+  collisionElapsed: number,
+): void {
   const strongest = getStrongestCollision(state.recentCollisions);
   if (!strongest) {
     return;
   }
 
   recordStrongestHit(state, strongest);
-  recordPlayerContactCredit(state, getStrongestPlayerCollision(state));
+  recordPlayerContactCredit(
+    state,
+    state.recentCollisions,
+    collisionElapsed,
+  );
   applyCollisionCameraDrama(state, strongest);
   announceImpactCallout(state, strongest);
 }
 
-function hasRecentPlayerCredit(state: GameState, car: Car): boolean {
-  const creditElapsed = state.roundStats.lastPlayerTargetElapsed;
-  return (
-    state.roundStats.lastPlayerTargetId === car.id &&
-    creditElapsed !== null &&
-    state.elapsed - creditElapsed <= 4
-  );
+function getRecentPlayerCredit(
+  state: GameState,
+  car: Car,
+  currentElapsed: number,
+): { elapsed: number; severity: number } | null {
+  const credit = state.roundStats.playerContactLedger[car.id];
+  return credit &&
+    currentElapsed >= credit.elapsed &&
+    currentElapsed - credit.elapsed <= 4
+    ? credit
+    : null;
 }
 
 function registerNewEliminations(
   state: GameState,
   beforeDisabled: Map<number, boolean>,
+  eliminationElapsed: number,
 ): void {
   for (const car of state.cars) {
     if (beforeDisabled.get(car.id) || !car.disabled) {
       continue;
     }
 
-    const relevant = [...state.recentCollisions]
-      .filter(
-        (collision) => collision.aId === car.id || collision.bId === car.id,
-      )
-      .sort((a, b) => b.damageSeverity - a.damageSeverity)[0];
+    const relevant = state.recentCollisions.find((collision) =>
+      wasCarDisabledByImpact(car.id, collision),
+    );
     const attackerId = relevant
       ? relevant.aId === car.id
         ? relevant.bId
         : relevant.aId
       : null;
     const attacker = getCarById(state, attackerId);
+    const recentPlayerCredit =
+      attackerId === null
+        ? getRecentPlayerCredit(state, car, eliminationElapsed)
+        : null;
 
     if (car.id === state.playerId) {
       state.roundStats.eliminatedById = attackerId;
@@ -325,13 +376,15 @@ function registerNewEliminations(
         2.6,
       );
     } else if (
-      attackerId === state.playerId ||
-      (attackerId === null && hasRecentPlayerCredit(state, car))
+      (attackerId === state.playerId &&
+        relevant !== undefined &&
+        wasPlayerActiveAtImpact(state, relevant)) ||
+      recentPlayerCredit
     ) {
       const knockoutSeverity =
         attackerId === state.playerId
           ? (relevant?.damageSeverity ?? 0)
-          : state.roundStats.lastPlayerTargetSeverity;
+          : (recentPlayerCredit?.severity ?? 0);
       state.roundStats.strongestPlayerKnockoutSeverity = Math.max(
         state.roundStats.strongestPlayerKnockoutSeverity,
         knockoutSeverity,
@@ -402,6 +455,13 @@ export function advanceState(state: GameState, dt: number): void {
   if (state.mode === "car_preview") {
     return;
   }
+  if (
+    state.mode === "intro" ||
+    state.mode === "running" ||
+    state.mode === "spectating"
+  ) {
+    requireCurrentRoundPlan(state);
+  }
 
   updateDebrisEffects(state, dt);
   updateCarFragments(state, dt);
@@ -419,6 +479,7 @@ export function advanceState(state: GameState, dt: number): void {
     if (state.session.countdown <= 0) {
       state.mode = "running";
       state.events = [];
+      state.roundStats.startElapsed = state.elapsed + dt;
     }
     state.elapsed += dt;
     return;
@@ -458,18 +519,25 @@ export function advanceState(state: GameState, dt: number): void {
   const beforeDisabled = new Map(
     state.cars.map((car) => [car.id, car.disabled]),
   );
+  const roundPlan = requireCurrentRoundPlan(state);
+  const stepEndElapsed = state.elapsed + dt;
   for (const car of state.cars) {
-    stepCar(car, dt, state.arena, state.arena.mudZones);
-    refreshPhaseEvents(state, car);
+    stepCar(
+      car,
+      dt,
+      state.arena,
+      roundPlan.modifier,
+    );
+    refreshPlayerPhaseEvents(state, car);
     if (car.disabled && car.eliminationTime === null) {
-      car.eliminationTime = state.elapsed;
+      car.eliminationTime = stepEndElapsed;
     }
   }
 
   stepArenaObjects(state.arena.objects, dt, state.arena);
   resolveArenaObjectInteractions(state.cars, state.arena.objects, state.arena);
   state.recentCollisions = resolveCarCollisions(state.cars);
-  registerCollisionDrama(state);
+  registerCollisionDrama(state, stepEndElapsed);
   spawnImpactDebris(state);
   spawnCarFragments(state);
   pushCarFragments(state);
@@ -477,13 +545,17 @@ export function advanceState(state: GameState, dt: number): void {
   spawnSlipDust(state);
 
   for (const car of state.cars) {
-    refreshPhaseEvents(state, car);
+    refreshPlayerPhaseEvents(state, car);
     if (car.disabled && car.eliminationTime === null) {
-      car.eliminationTime = state.elapsed;
+      car.eliminationTime = stepEndElapsed;
     }
   }
 
-  registerNewEliminations(state, beforeDisabled);
+  registerNewEliminations(
+    state,
+    beforeDisabled,
+    stepEndElapsed,
+  );
   flushPendingSystemEvents(state);
   maybeAnnounceFinalTwo(state);
 
@@ -497,7 +569,7 @@ export function advanceState(state: GameState, dt: number): void {
     state.mode = "spectating";
   }
   if (alive.length <= 1) {
-    completeRound(state);
+    completeRound(state, stepEndElapsed);
   }
 
   state.tick += 1;
@@ -508,5 +580,5 @@ export function finishSpectatingRound(state: GameState): void {
   if (state.mode !== "spectating") {
     return;
   }
-  completeRound(state, true);
+  completeRound(state);
 }

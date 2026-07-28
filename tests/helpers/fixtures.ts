@@ -1,5 +1,8 @@
 import { CAR_PRESETS } from "../../src/game/content";
-import { PLACEMENT_POINTS } from "../../src/game/career";
+import {
+  generateCareerRoundPlans,
+  PLACEMENT_POINTS,
+} from "../../src/game/career";
 import { createFreshCondition } from "../../src/game/conditions";
 import { createFreshFrame } from "../../src/game/deformation";
 import { createInitialState, chooseStarterCar } from "../../src/game/session";
@@ -54,12 +57,6 @@ export function createCarFixture(
     tractionBias: overrides.tractionBias ?? preset.tractionBias,
     engineTone: overrides.engineTone ?? preset.engineTone,
     systems: overrides.systems ?? { ...condition.systems },
-    phases: overrides.phases ?? {
-      engine: "healthy",
-      radiator: "healthy",
-      transmission: "healthy",
-      steering: "healthy",
-    },
     body: overrides.body ?? { ...condition.body },
     frame: overrides.frame ?? createFreshFrame(preset.length, preset.width),
     lights: overrides.lights ?? { ...condition.lights },
@@ -83,6 +80,10 @@ export function createCollisionFixture(
   return {
     aId: overrides.aId ?? 1,
     bId: overrides.bId ?? 2,
+    aActiveAtImpact: overrides.aActiveAtImpact ?? true,
+    bActiveAtImpact: overrides.bActiveAtImpact ?? true,
+    aDisabledByImpact: overrides.aDisabledByImpact ?? false,
+    bDisabledByImpact: overrides.bDisabledByImpact ?? false,
     point: overrides.point ?? { x: 500, y: 500 },
     pointA: overrides.pointA ?? overrides.point ?? { x: 494, y: 500 },
     pointB: overrides.pointB ?? overrides.point ?? { x: 506, y: 500 },
@@ -102,6 +103,22 @@ export function createStateFixture(
   overrides: Partial<GameState> = {},
 ): GameState {
   const state = createInitialState();
+  const mode = overrides.mode ?? state.mode;
+  if (
+    overrides.currentRoundPlan === undefined &&
+    [
+      "intro",
+      "running",
+      "spectating",
+      "round_results",
+      "upgrade",
+      "career_over",
+    ].includes(mode)
+  ) {
+    const roundPlan = generateCareerRoundPlans(0)[0];
+    state.currentRoundPlan = roundPlan;
+    state.session.roundPlans = [roundPlan];
+  }
   if (overrides.cars) {
     state.cars = overrides.cars;
   }
@@ -150,9 +167,10 @@ export function createRoundSummaryFixture(
   overrides: Partial<RoundSummary> = {},
 ): RoundSummary {
   return {
-    roundIndex: 1,
+    roundNumber: 1,
     title: "Dust Bowl",
     playerWon: true,
+    playerWrecked: false,
     winnerLabel: "Player",
     survivalTime: 10,
     eliminatedByLabel: null,

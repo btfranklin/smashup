@@ -45,25 +45,33 @@ npm run build
 npm run test:unit
 npm run test:browser
 npm run validate
+npm run test:performance
 ```
 
 `npm run validate` is the main regression command. It runs the repo legibility check, typecheck, builds the production bundle, runs the coverage-gated Vitest suite, verifies calibrated per-surface coverage thresholds, and exercises the focused Chromium integration suite. Install Chromium once with `npx playwright install chromium` before running browser validation locally.
 
+`npm run test:performance` is a separate, hardware-sensitive production-build smoke. Run it for changes that can affect simulation, rendering, menus, or browser-controller responsiveness; it intentionally stays outside the ordinary validation command. See [Performance Validation](docs/references/performance-validation.md) for budgets and artifact policy.
+
 ## Project Layout
 
-- `src/app/bootstrap.ts`: browser bootstrap, menus, startup errors, and runtime hooks
+- `src/app/bootstrap.ts`: browser controller lifecycle, startup errors, platform events, and runtime hooks
+- `src/app/loop.ts`: fixed-step scheduling, deterministic advancement, and spectator skip
+- `src/app/menu.ts`: menu presentation and menu event binding
+- `src/app/performance.ts`: bounded opt-in diagnostic timing and runtime-context collection
 - `src/main.ts`: thin browser entrypoint and CSS import
 - `src/game/session.ts`: state creation, preview state, and round/Career Night progression
 - `src/game/career.ts`: seeded round generation, placements, points, and standings
 - `src/game/awards.ts`: Wreck Award qualification
 - `src/game/roster.ts`: lineup data and car construction helpers
+- `src/game/arena.ts`: arena geometry and normalized authored-layout materialization
 - `src/game/upgrades.ts`: upgrade bonuses and condition servicing
 - `src/game/roundStats.ts`: round stat defaults and reset lifecycle
 - `src/game/events.ts`: event-feed appends and capping
 - `src/game/runtime.ts`: per-frame simulation, event expiration, eliminations, and camera updates
 - `src/game/debug.ts`: `window.render_game_to_text()` payload generation
-- `src/game/render.ts`: canvas drawing
-- `tests/`: Vitest rule/controller coverage plus focused real-browser boot, Canvas, lifecycle, and Web Audio checks
+- `src/game/render.ts`: stable canvas-rendering façade
+- `src/game/render/`: focused arena, car, effects, and overlay drawing
+- `tests/`: Vitest rule/controller coverage plus focused real-browser boot, Canvas, lifecycle, Web Audio, and standalone performance checks
 - `docs/`: architecture, operations, quality, and validation-surface references
 
 ## Automation Surfaces

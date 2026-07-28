@@ -1,5 +1,6 @@
 import { AI_ARCHETYPE_LABELS, getModifierSummary } from "./content";
 import { buildCareerStandings } from "./career";
+import { getCarSystemPhases } from "./damage";
 import { getRecentDebrisSummary } from "./debris";
 import { summarizeFrameDamage } from "./deformation";
 import { getRecentFragmentSummary } from "./fragments";
@@ -31,7 +32,7 @@ function serializePreviewCar(car: Car | null) {
         presetId: car.presetId,
         roofNumber: car.roofNumber,
         systems: car.systems,
-        phases: car.phases,
+        phases: getCarSystemPhases(car),
         body: car.body,
         frameDamage: summarizeFrameDamage(car.frame),
         lights: car.lights,
@@ -69,13 +70,14 @@ function serializePreviewState(state: GameState) {
 }
 
 function serializeArena(state: GameState) {
+  const roundPlan = state.currentRoundPlan;
   return {
     width: state.arena.width,
     height: state.arena.height,
     wallPadding: state.arena.wallPadding,
-    variant: state.arena.variant,
-    modifier: state.arena.modifier,
-    title: state.arena.title,
+    variant: roundPlan?.arenaVariant ?? null,
+    modifier: roundPlan?.modifier ?? null,
+    title: roundPlan?.title ?? null,
     coordinates: serializeCoordinates(),
     mudZones: state.arena.mudZones.map((zone) => ({
       x: zone.x,
@@ -94,14 +96,13 @@ function serializeArena(state: GameState) {
 }
 
 function serializeSession(state: GameState) {
+  const roundPlan = state.currentRoundPlan;
   return {
     runSeed: state.session.runSeed,
-    roundNumber: state.session.roundIndex + 1,
-    totalRounds: state.session.totalRounds,
-    roundTitle: state.session.roundPlan?.title ?? null,
-    modifierLabel: state.session.roundPlan
-      ? getModifierSummary(state.session.roundPlan.modifier)
-      : null,
+    roundNumber: roundPlan?.id ?? null,
+    totalRounds: state.session.roundPlans.length,
+    roundTitle: roundPlan?.title ?? null,
+    modifierLabel: roundPlan ? getModifierSummary(roundPlan.modifier) : null,
     selectedPreset: state.session.playerBuild?.presetId ?? null,
     roundPlans: state.session.roundPlans.map((roundPlan) => ({
       id: roundPlan.id,
@@ -110,8 +111,9 @@ function serializeSession(state: GameState) {
       modifier: roundPlan.modifier,
     })),
     completedRounds: state.session.completedRounds.map((round) => ({
-      roundIndex: round.roundIndex,
+      roundNumber: round.roundNumber,
       playerWon: round.playerWon,
+      playerWrecked: round.playerWrecked,
       winnerLabel: round.winnerLabel,
       placements: round.placements,
       awardIds: round.awardIds,
@@ -145,7 +147,7 @@ function serializePlayer(car: Car | undefined) {
           steering: fixed(car.systems.steering, 2),
           overheat: fixed(car.systems.overheat, 2),
         },
-        phases: car.phases,
+        phases: getCarSystemPhases(car),
         lights: car.lights,
         frameDamage: summarizeFrameDamage(car.frame),
         disabled: car.disabled,
@@ -167,7 +169,7 @@ function serializeOpponentCar(car: Car) {
     angle: fixed(car.angle, 2),
     targetId: car.aiState.targetId,
     disabled: car.disabled,
-    phases: car.phases,
+    phases: getCarSystemPhases(car),
     visibleDamage: {
       front: fixed(car.body.front, 2),
       rear: fixed(car.body.rear, 2),

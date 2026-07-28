@@ -1,20 +1,16 @@
 import { createFreshCondition } from "./conditions";
 import type {
   AIArchetype,
-  ArenaObject,
   CarCondition,
   CarPreviewScenarioId,
   ArenaVariantId,
   CarPresetId,
-  MudZone,
   PlayerBuild,
   RoundModifierId,
   SessionUpgradeId,
   WreckAwardDefinition,
   WreckAwardId,
 } from "./types";
-
-export const TOTAL_ROUNDS = 5;
 
 export const CAR_PRESETS: Record<
   CarPresetId,
@@ -208,6 +204,101 @@ export const ARENA_DEFINITIONS: Record<
 export const ARENA_VARIANT_IDS = Object.freeze(
   Object.keys(ARENA_DEFINITIONS) as ArenaVariantId[],
 );
+
+export const ARENA_MUD_ZONE_LAYOUTS = {
+  classic: [],
+  mud_pit: [
+    {
+      xRatio: 0.2629310344827586,
+      yRatio: 0.2474747474747475,
+      widthRatio: 0.22988505747126436,
+      heightRatio: 0.22727272727272727,
+      grip: 0.68,
+    },
+    {
+      xRatio: 0.507183908045977,
+      yRatio: 0.4621212121212121,
+      widthRatio: 0.20114942528735633,
+      heightRatio: 0.26515151515151514,
+      grip: 0.62,
+    },
+    {
+      xRatio: 0.7083333333333334,
+      yRatio: 0.1590909090909091,
+      widthRatio: 0.1724137931034483,
+      heightRatio: 0.20202020202020202,
+      grip: 0.7,
+    },
+  ],
+  junkyard: [],
+} as const satisfies Record<
+  ArenaVariantId,
+  readonly {
+    xRatio: number;
+    yRatio: number;
+    widthRatio: number;
+    heightRatio: number;
+    grip: number;
+  }[]
+>;
+
+export const ARENA_OBJECT_LAYOUTS = {
+  classic: [],
+  mud_pit: [],
+  junkyard: [
+    {
+      kind: "junk",
+      xRatio: 0.3635057471264368,
+      yRatio: 0.2474747474747475,
+      radiusRatio: 0.03282828282828283,
+      mass: 240,
+    },
+    {
+      kind: "tire",
+      xRatio: 0.47844827586206895,
+      yRatio: 0.19696969696969696,
+      radiusRatio: 0.022727272727272728,
+      mass: 90,
+    },
+    {
+      kind: "junk",
+      xRatio: 0.6077586206896551,
+      yRatio: 0.47474747474747475,
+      radiusRatio: 0.03535353535353535,
+      mass: 260,
+    },
+    {
+      kind: "tire",
+      xRatio: 0.7370689655172413,
+      yRatio: 0.7146464646464646,
+      radiusRatio: 0.022727272727272728,
+      mass: 90,
+    },
+    {
+      kind: "junk",
+      xRatio: 0.2988505747126437,
+      yRatio: 0.702020202020202,
+      radiusRatio: 0.030303030303030304,
+      mass: 220,
+    },
+    {
+      kind: "tire",
+      xRatio: 0.8520114942528736,
+      yRatio: 0.3484848484848485,
+      radiusRatio: 0.022727272727272728,
+      mass: 90,
+    },
+  ],
+} as const satisfies Record<
+  ArenaVariantId,
+  readonly {
+    kind: "tire" | "junk";
+    xRatio: number;
+    yRatio: number;
+    radiusRatio: number;
+    mass: number;
+  }[]
+>;
 
 export const ROUND_MODIFIER_DEFINITIONS: Record<
   RoundModifierId,
@@ -486,43 +577,6 @@ export function isCarPreviewScenarioId(
     value !== null &&
     CAR_PREVIEW_SCENARIO_IDS.includes(value as CarPreviewScenarioId)
   );
-}
-
-export function getArenaMudZones(variant: ArenaVariantId): MudZone[] {
-  if (variant !== "mud_pit") {
-    return [];
-  }
-  return [
-    { id: 1, x: 420, y: 250, width: 320, height: 180, grip: 0.68 },
-    { id: 2, x: 760, y: 420, width: 280, height: 210, grip: 0.62 },
-    { id: 3, x: 1040, y: 180, width: 240, height: 160, grip: 0.7 },
-  ];
-}
-
-export function getArenaObjects(variant: ArenaVariantId): ArenaObject[] {
-  if (variant !== "junkyard") {
-    return [];
-  }
-
-  const items: Array<
-    Omit<ArenaObject, "id" | "vx" | "vy" | "rotation" | "spin">
-  > = [
-    { kind: "junk", x: 560, y: 250, radius: 26, mass: 240 },
-    { kind: "tire", x: 720, y: 210, radius: 18, mass: 90 },
-    { kind: "junk", x: 900, y: 430, radius: 28, mass: 260 },
-    { kind: "tire", x: 1080, y: 620, radius: 18, mass: 90 },
-    { kind: "junk", x: 470, y: 610, radius: 24, mass: 220 },
-    { kind: "tire", x: 1240, y: 330, radius: 18, mass: 90 },
-  ];
-
-  return items.map((item, index) => ({
-    id: index + 1,
-    ...item,
-    vx: 0,
-    vy: 0,
-    rotation: 0,
-    spin: 0,
-  }));
 }
 
 export function getModifierSummary(modifier: RoundModifierId): string {

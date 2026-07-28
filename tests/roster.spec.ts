@@ -38,6 +38,40 @@ describe("roster and car construction", () => {
     expect(cars.filter((car) => car.isPlayer)).toHaveLength(1);
   });
 
+  it("materializes every lineup inside alternate arena dimensions", () => {
+    const geometry = { width: 600, height: 400, wallPadding: 54 };
+    const cars = createMenuPreviewCars(geometry);
+
+    for (const car of cars) {
+      const halfLength = car.length * 0.5;
+      const halfWidth = car.width * 0.5;
+      const xExtent =
+        Math.abs(Math.cos(car.angle)) * halfLength +
+        Math.abs(Math.sin(car.angle)) * halfWidth;
+      const yExtent =
+        Math.abs(Math.sin(car.angle)) * halfLength +
+        Math.abs(Math.cos(car.angle)) * halfWidth;
+      expect(car.x - xExtent).toBeGreaterThanOrEqual(geometry.wallPadding);
+      expect(car.x + xExtent).toBeLessThanOrEqual(
+        geometry.width - geometry.wallPadding,
+      );
+      expect(car.y - yExtent).toBeGreaterThanOrEqual(geometry.wallPadding);
+      expect(car.y + yExtent).toBeLessThanOrEqual(
+        geometry.height - geometry.wallPadding,
+      );
+    }
+  });
+
+  it("rejects arena geometry too small for the lineup", () => {
+    expect(() =>
+      createMenuPreviewCars({
+        width: 100,
+        height: 100,
+        wallPadding: 49,
+      }),
+    ).toThrow(RangeError);
+  });
+
   it("builds round cars from the player build while cloning condition state", () => {
     const build = createDefaultPlayerBuild("backstab");
     build.reverseForceBonus = 12000;

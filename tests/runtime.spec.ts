@@ -5,9 +5,37 @@ import {
   applyPlayerControls,
   finishSpectatingRound,
 } from "../src/game/runtime";
-import { createCarFixture, createRunningState, createStateFixture, getPlayerFixture } from "./helpers/fixtures";
+import {
+  createCarFixture,
+  createRunningState,
+  createStateFixture,
+  getPlayerFixture,
+} from "./helpers/fixtures";
 
 describe("runtime flow", () => {
+  it("fails clearly when an active runtime mode has no round plan", () => {
+    const player = createCarFixture({ id: 1, isPlayer: true });
+    const state = createStateFixture({
+      mode: "running",
+      currentRoundPlan: null,
+      cars: [player],
+      playerId: player.id,
+    });
+    const beforeAdvance = structuredClone(state);
+
+    expect(() => advanceState(state, 1 / 60)).toThrow(
+      'Mode "running" requires an active Career Night round.',
+    );
+    expect(state).toEqual(beforeAdvance);
+
+    state.mode = "spectating";
+    const beforeCompletion = structuredClone(state);
+    expect(() => finishSpectatingRound(state)).toThrow(
+      'Mode "spectating" requires an active Career Night round.',
+    );
+    expect(state).toEqual(beforeCompletion);
+  });
+
   it("applies player controls only while running and alive", () => {
     const state = createRunningState();
     const player = getPlayerFixture(state);
@@ -78,6 +106,10 @@ describe("runtime flow", () => {
       {
         aId: 1,
         bId: 2,
+        aActiveAtImpact: true,
+        bActiveAtImpact: true,
+        aDisabledByImpact: false,
+        bDisabledByImpact: false,
         point: { x: 0, y: 0 },
         pointA: { x: -6, y: 0 },
         pointB: { x: 6, y: 0 },
@@ -172,7 +204,7 @@ describe("runtime flow", () => {
     expect(state.session.lastRoundSummary?.placements).toHaveLength(3);
   });
 
-  it("condition-ranks active cars when a spectated round is force-finished", () => {
+  it("condition-ranks active cars when a spectated round ends early", () => {
     const player = createCarFixture({
       id: 1,
       isPlayer: true,
@@ -210,6 +242,101 @@ describe("runtime flow", () => {
     ).toEqual([healthy.id, battered.id, player.id]);
   });
 
+  it("measures survival from green to the player wreck, excluding intro and spectating", () => {
+    const player = createCarFixture({
+      id: 1,
+      isPlayer: true,
+      label: "Player",
+      x: 300,
+    });
+    const rival = createCarFixture({ id: 2, x: 700 });
+    const secondRival = createCarFixture({ id: 3, x: 1_100 });
+    const state = createStateFixture({
+      mode: "intro",
+      elapsed: 50,
+      cars: [player, rival, secondRival],
+      playerId: player.id,
+    });
+    state.session.countdown = 0.1;
+
+    advanceState(state, 0.1);
+    expect(state.mode).toBe("running");
+    expect(state.roundStats.startElapsed).toBeCloseTo(50.1);
+
+    player.disabled = true;
+    player.systems.engine = 0.05;
+    advanceState(state, 0.5);
+    expect(state.mode).toBe("spectating");
+    expect(player.eliminationTime).toBeCloseTo(50.6);
+
+    state.elapsed = 80;
+    finishSpectatingRound(state);
+
+    expect(state.session.lastRoundSummary).toMatchObject({
+      playerWrecked: true,
+      survivalTime: 0.5,
+    });
+  });
+
+  it("ends a surviving player's timer at exact round completion", () => {
+    const player = createCarFixture({
+      id: 1,
+      isPlayer: true,
+      label: "Player",
+    });
+    const rival = createCarFixture({
+      id: 2,
+      label: "Rival",
+      disabled: true,
+      eliminationTime: 19,
+    });
+    const state = createStateFixture({
+      mode: "running",
+      elapsed: 20,
+      cars: [player, rival],
+      playerId: player.id,
+    });
+    state.roundStats.startElapsed = 17.25;
+
+    advanceState(state, 0.5);
+
+    expect(state.session.lastRoundSummary).toMatchObject({
+      playerWon: true,
+      playerWrecked: false,
+      survivalTime: 3.3,
+    });
+  });
+
+  it("awards Survival to a wrecked player ranked first in an all-disabled finish", () => {
+    const player = createCarFixture({
+      id: 1,
+      isPlayer: true,
+      label: "Player",
+      disabled: true,
+      eliminationTime: 12,
+    });
+    const rival = createCarFixture({
+      id: 2,
+      label: "Rival",
+      disabled: true,
+      eliminationTime: 11,
+    });
+    const state = createStateFixture({
+      mode: "running",
+      elapsed: 12,
+      cars: [player, rival],
+      playerId: player.id,
+    });
+
+    advanceState(state, 1 / 60);
+
+    expect(state.session.lastRoundSummary).toMatchObject({
+      playerWon: true,
+      playerWrecked: true,
+      awardIds: expect.arrayContaining(["last_car_rolling"]),
+    });
+  });
+
   it("registers huge hits, freeze time, and system events from collisions", () => {
     const state = createRunningState();
     const player = getPlayerFixture(state);
@@ -224,7 +351,6 @@ describe("runtime flow", () => {
     });
     player.vx = 220;
     player.systems.engine = 0.35;
-    player.phases.engine = "healthy";
     state.cars = [player, rival];
 
     advanceState(state, 1 / 60);
@@ -237,6 +363,28 @@ describe("runtime flow", () => {
           event.kind === "impact" || event.kind === "system",
       ),
     ).toBe(true);
+  });
+
+  it("emits a player phase transition once without caching phases on the car", () => {
+    const state = createRunningState();
+    const player = getPlayerFixture(state);
+    player.systems.engine = 0.35;
+    state.cars = [
+      player,
+      createCarFixture({ id: 50, x: 1_200, y: 700 }),
+    ];
+
+    advanceState(state, 1 / 60);
+    const firstSystemEventCount = state.events.filter(
+      (event) => event.kind === "system",
+    ).length;
+    advanceState(state, 1 / 60);
+
+    expect(firstSystemEventCount).toBe(1);
+    expect(
+      state.events.filter((event) => event.kind === "system"),
+    ).toHaveLength(1);
+    expect("phases" in player).toBe(false);
   });
 
   it("does not call low-damage bumper shoves huge hits", () => {
@@ -364,6 +512,290 @@ describe("runtime flow", () => {
     );
   });
 
+  it("records each opponent in simultaneous damaging player contacts", () => {
+    const player = createCarFixture({
+      id: 1,
+      isPlayer: true,
+      label: "Player",
+      x: 500,
+      y: 500,
+      vx: 220,
+      mass: 10_000,
+    });
+    const firstRival = createCarFixture({
+      id: 71,
+      label: "First",
+      x: 555,
+      y: 495,
+      vx: -260,
+      mass: 500,
+    });
+    const secondRival = createCarFixture({
+      id: 72,
+      label: "Second",
+      x: 555,
+      y: 505,
+      mass: 500,
+    });
+    const survivor = createCarFixture({ id: 73, x: 1_000, y: 700 });
+    const state = createStateFixture({
+      mode: "running",
+      cars: [player, firstRival, secondRival, survivor],
+      playerId: player.id,
+    });
+
+    advanceState(state, 1 / 60);
+
+    expect(state.roundStats.playerContactLedger[firstRival.id]).toEqual({
+      elapsed: expect.any(Number),
+      severity: expect.any(Number),
+    });
+    expect(state.roundStats.playerContactLedger[secondRival.id]).toEqual({
+      elapsed: expect.any(Number),
+      severity: expect.any(Number),
+    });
+  });
+
+  it("stops player credit after an earlier impact wrecks them in the same pileup", () => {
+    const player = createCarFixture({
+      id: 1,
+      isPlayer: true,
+      label: "Player",
+      x: 500,
+      y: 500,
+      vx: 260,
+      mass: 10_000,
+      systems: {
+        engine: 0.29,
+        radiator: 0.29,
+        transmission: 0.29,
+        steering: 0.29,
+        overheat: 0,
+      },
+      body: { front: 0.17, rear: 0.46, left: 0.46, right: 0.46 },
+    });
+    const firstRival = createCarFixture({
+      id: 71,
+      label: "First",
+      x: 555,
+      y: 495,
+      mass: 500,
+    });
+    const secondRival = createCarFixture({
+      id: 72,
+      label: "Second",
+      x: 555,
+      y: 505,
+      mass: 500,
+    });
+    const survivor = createCarFixture({ id: 73, x: 1_000, y: 700 });
+    const state = createStateFixture({
+      mode: "running",
+      cars: [player, firstRival, secondRival, survivor],
+      playerId: player.id,
+    });
+
+    advanceState(state, 1 / 60);
+
+    const playerCollisions = state.recentCollisions.filter(
+      (collision) =>
+        collision.aId === player.id || collision.bId === player.id,
+    );
+    expect(player.disabled).toBe(true);
+    expect(playerCollisions).toHaveLength(2);
+    expect(playerCollisions.map((collision) =>
+      collision.aId === player.id
+        ? collision.aActiveAtImpact
+        : collision.bActiveAtImpact,
+    )).toEqual([true, false]);
+    expect(state.roundStats.playerContactLedger[firstRival.id]).toBeDefined();
+    expect(state.roundStats.playerContactLedger[secondRival.id]).toBeUndefined();
+    expect(state.roundStats.playerKnockouts).not.toContain(secondRival.label);
+  });
+
+  it("keeps the active causal hit when the wrecked rival hulk collides again", () => {
+    const player = createCarFixture({
+      id: 1,
+      isPlayer: true,
+      label: "Player",
+      x: 500,
+      y: 500,
+      vx: 120,
+      mass: 10_000,
+    });
+    const rival = createCarFixture({
+      id: 71,
+      label: "Rival",
+      x: 555,
+      y: 500,
+      mass: 500,
+      systems: {
+        engine: 0.29,
+        radiator: 0.29,
+        transmission: 0.29,
+        steering: 0.29,
+        overheat: 0,
+      },
+      body: { front: 0.19, rear: 0.449, left: 0.46, right: 0.46 },
+    });
+    const lateCollider = createCarFixture({
+      id: 72,
+      label: "Late Collider",
+      x: 610,
+      y: 540,
+      vx: 0,
+      vy: -500,
+      mass: 10_000,
+    });
+    const survivor = createCarFixture({ id: 73, x: 1_000, y: 700 });
+    const state = createStateFixture({
+      mode: "running",
+      cars: [player, rival, lateCollider, survivor],
+      playerId: player.id,
+    });
+
+    advanceState(state, 1 / 60);
+
+    const rivalCollisions = state.recentCollisions.filter(
+      (collision) =>
+        collision.aId === rival.id || collision.bId === rival.id,
+    );
+    expect(rival.disabled).toBe(true);
+    expect(rivalCollisions).toHaveLength(2);
+    expect(
+      rivalCollisions.map((collision) =>
+        collision.aId === rival.id
+          ? collision.aActiveAtImpact
+          : collision.bActiveAtImpact,
+      ),
+    ).toEqual([true, false]);
+    expect(rivalCollisions[1].damageSeverity).toBeGreaterThan(
+      rivalCollisions[0].damageSeverity,
+    );
+    expect(state.roundStats.playerKnockouts).toContain(rival.label);
+  });
+
+  it("attributes a wreck to the weaker collision that actually disables the car", () => {
+    const firstAttacker = createCarFixture({
+      id: 1,
+      isPlayer: true,
+      label: "Player",
+      x: 445,
+      y: 500,
+      vx: 220,
+      mass: 500,
+    });
+    const victim = createCarFixture({
+      id: 71,
+      label: "Rival",
+      x: 500,
+      y: 500,
+      mass: 10_000,
+      systems: {
+        engine: 0.29,
+        radiator: 0.29,
+        transmission: 0.29,
+        steering: 0.29,
+        overheat: 0,
+      },
+      body: { front: 0.19, rear: 0, left: 0, right: 0 },
+    });
+    const disablingAttacker = createCarFixture({
+      id: 72,
+      label: "Finisher",
+      x: 555,
+      y: 500,
+      angle: Math.PI,
+      vx: -110,
+      mass: 500,
+    });
+    const survivor = createCarFixture({ id: 73, x: 1_000, y: 700 });
+    const state = createRunningState();
+    state.cars = [firstAttacker, victim, disablingAttacker, survivor];
+    state.playerId = firstAttacker.id;
+
+    advanceState(state, 1 / 60);
+
+    const victimCollisions = state.recentCollisions.filter(
+      (collision) =>
+        collision.aId === victim.id || collision.bId === victim.id,
+    );
+    const causalCollision = victimCollisions.find((collision) =>
+      collision.aId === victim.id
+        ? collision.aDisabledByImpact
+        : collision.bDisabledByImpact,
+    );
+
+    expect(victim.disabled).toBe(true);
+    expect(victimCollisions).toHaveLength(2);
+    expect(victimCollisions[0].damageSeverity).toBeGreaterThan(
+      victimCollisions[1].damageSeverity,
+    );
+    expect(
+      victimCollisions.map((collision) =>
+        collision.aId === victim.id
+          ? collision.aActiveAtImpact
+          : collision.bActiveAtImpact,
+      ),
+    ).toEqual([true, true]);
+    expect(
+      victimCollisions.map((collision) =>
+        collision.aId === victim.id
+          ? collision.aDisabledByImpact
+          : collision.bDisabledByImpact,
+      ),
+    ).toEqual([false, true]);
+    expect(causalCollision).toBe(victimCollisions[1]);
+    expect(state.roundStats.playerKnockouts).not.toContain(victim.label);
+    expect(
+      state.events.some((event) => event.text === `${victim.label} is done`),
+    ).toBe(true);
+  });
+
+  it("does not credit a disabled player hulk for later collisions", () => {
+    const player = createCarFixture({
+      id: 1,
+      isPlayer: true,
+      label: "Player",
+      x: 500,
+      y: 500,
+      disabled: true,
+      eliminationTime: 1,
+    });
+    const rival = createCarFixture({
+      id: 81,
+      label: "Rimshot",
+      x: 555,
+      y: 500,
+      angle: Math.PI,
+      vx: -220,
+      systems: {
+        engine: 0.55,
+        radiator: 0.55,
+        transmission: 0.55,
+        steering: 0.55,
+        overheat: 0,
+      },
+      body: { front: 0.3, rear: 0, left: 0, right: 0 },
+    });
+    const survivor = createCarFixture({ id: 82, x: 1_000, y: 700 });
+    const state = createStateFixture({
+      mode: "spectating",
+      elapsed: 10,
+      cars: [player, rival, survivor],
+      playerId: player.id,
+    });
+
+    advanceState(state, 1 / 60);
+
+    expect(rival.disabled).toBe(true);
+    expect(state.roundStats.playerContactLedger[rival.id]).toBeUndefined();
+    expect(state.roundStats.playerKnockouts).toEqual([]);
+    expect(
+      state.events.some((event) => event.text === "You wrecked Rimshot"),
+    ).toBe(false);
+  });
+
   it("credits delayed knockouts from recent player damage", () => {
     const state = createRunningState();
     const player = getPlayerFixture(state);
@@ -382,9 +814,10 @@ describe("runtime flow", () => {
       body: { front: 0.5, rear: 0.2, left: 0.1, right: 0.1 },
     });
     state.cars = [player, rival];
-    state.roundStats.lastPlayerTargetId = rival.id;
-    state.roundStats.lastPlayerTargetElapsed = state.elapsed - 1;
-    state.roundStats.lastPlayerTargetSeverity = 0.76;
+    state.roundStats.playerContactLedger[rival.id] = {
+      elapsed: state.elapsed - 1,
+      severity: 0.76,
+    };
 
     advanceState(state, 1 / 60);
 
@@ -394,5 +827,44 @@ describe("runtime flow", () => {
     expect(state.events.some((event) => event.text.includes("wrecked"))).toBe(
       true,
     );
+  });
+
+  it("keeps delayed credit eligible through exactly four seconds", () => {
+    function runAt(stepEndElapsed: number) {
+      const player = createCarFixture({
+        id: 1,
+        isPlayer: true,
+        label: "Player",
+      });
+      const rival = createCarFixture({
+        id: 2,
+        label: "Rival",
+        systems: {
+          engine: 0.9,
+          radiator: 0.9,
+          transmission: 0.9,
+          steering: 0.9,
+          overheat: 1,
+        },
+      });
+      const survivor = createCarFixture({ id: 3, x: 1_000, y: 700 });
+      const dt = 1 / 60;
+      const state = createStateFixture({
+        mode: "running",
+        elapsed: stepEndElapsed - dt,
+        cars: [player, rival, survivor],
+        playerId: player.id,
+      });
+      state.roundStats.playerContactLedger[rival.id] = {
+        elapsed: 10,
+        severity: 0.74,
+      };
+
+      advanceState(state, dt);
+      return state.roundStats.playerKnockouts;
+    }
+
+    expect(runAt(14)).toContain("Rival");
+    expect(runAt(14 + 1 / 60)).not.toContain("Rival");
   });
 });

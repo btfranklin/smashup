@@ -1,4 +1,4 @@
-import type { Car, GameState } from "./types";
+import type { Car, GameState, RoundPlan } from "./types";
 
 export function getCarById(
   state: GameState,
@@ -12,6 +12,13 @@ export function getCarById(
 
 export function getPlayerCar(state: GameState): Car | undefined {
   return getCarById(state, state.playerId);
+}
+
+export function requireCurrentRoundPlan(state: GameState): RoundPlan {
+  if (!state.currentRoundPlan) {
+    throw new Error(`Mode "${state.mode}" requires an active Career Night round.`);
+  }
+  return state.currentRoundPlan;
 }
 
 export function getWinnerCar(state: GameState): Car | undefined {

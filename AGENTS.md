@@ -7,9 +7,10 @@ Start here before changing code.
 - `docs/README.md`: index of the repo-local system of record
 - `docs/ARCHITECTURE.md`: gameplay/runtime boundaries and where new logic belongs
 - `docs/OPERATIONS.md`: run, validate, and inspect the game locally
-- `docs/QUALITY.md`: golden rules, validation expectations, and recovery paths
+- `docs/QUALITY.md`: architectural guardrails, validation expectations, and recovery paths
 - `docs/references/validation-surfaces.md`: hidden preview contract and browser hook reference
 - `docs/references/gameplay-tuning.md`: intent behind physics, damage, AI, thermal, and spectacle tuning
+- `docs/references/performance-validation.md`: isolated production-build performance smoke and artifact policy
 - `docs/LEGIBILITY-AUDIT.md`: current legibility strengths, gaps, and next investments
 - `LICENSE`: public license terms
 - `docs/exec-plans/tech-debt-tracker.md`: technical future-work tracker
@@ -21,6 +22,7 @@ Start here before changing code.
 - `npm run test:unit`: run the fast Vitest suite once
 - `npm run test:coverage`: run the coverage-gated Vitest suite plus the per-surface coverage check
 - `npm run test:browser`: run the focused real-Chromium integration suite
+- `npm run test:performance`: run the separate single-worker production-build performance smoke
 - `npm run validate`: repo checks + typecheck + build + Vitest coverage + Chromium integration
 
 ## Task Routing
@@ -28,13 +30,18 @@ Start here before changing code.
 - Career Night plan generation, placements, scoring, and standings: `src/game/career.ts`
 - Wreck Award qualification: `src/game/awards.ts`
 - Roster setup and car construction: `src/game/roster.ts`
+- Arena geometry and authored-layout materialization: `src/game/arena.ts`
 - Upgrade effects and condition servicing: `src/game/upgrades.ts`
 - Per-round stat lifecycle: `src/game/roundStats.ts`
 - Event feed appends: `src/game/events.ts`
 - Per-frame simulation, event expiration, eliminations: `src/game/runtime.ts`
 - Text/debug payloads for automation: `src/game/debug.ts`
 - Preview URL parsing and contract errors: `src/game/preview.ts`
-- Browser bootstrap, menus, and browser hook wiring: `src/app/bootstrap.ts`
+- Browser controller lifecycle and browser hook wiring: `src/app/bootstrap.ts`
+- Fixed-step scheduling, deterministic advancement, and spectator skip: `src/app/loop.ts`
+- Menu presentation and menu event binding: `src/app/menu.ts`
+- Bounded diagnostic timing and runtime-context collection: `src/app/performance.ts`
+- Stable render façade: `src/game/render.ts`; focused drawing internals: `src/game/render/`
 - Thin browser entrypoint and CSS import: `src/main.ts`
 
 ## Working Rules

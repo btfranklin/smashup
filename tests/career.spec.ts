@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  CAREER_ROUND_BLUEPRINT,
+  CAREER_ROUND_COUNT,
   PLACEMENT_POINTS,
   buildCareerStandings,
   generateCareerRoundPlans,
@@ -33,14 +35,15 @@ function placement(
 }
 
 function summary(
-  roundIndex: number,
+  roundNumber: number,
   placements: RoundPlacement[],
 ): RoundSummary {
   const winner = placements.find((entry) => entry.place === 1);
   return {
-    roundIndex,
-    title: `Round ${roundIndex + 1}`,
+    roundNumber,
+    title: `Round ${roundNumber}`,
     playerWon: winner?.isPlayer ?? false,
+    playerWrecked: false,
     winnerLabel: winner?.label ?? null,
     survivalTime: 60,
     eliminatedByLabel: null,
@@ -58,6 +61,8 @@ describe("Career Night round generation", () => {
     const plans = generateCareerRoundPlans(20260726);
 
     expect(generateCareerRoundPlans(20260726)).toEqual(plans);
+    expect(plans).toHaveLength(CAREER_ROUND_COUNT);
+    expect(CAREER_ROUND_COUNT).toBe(CAREER_ROUND_BLUEPRINT.length);
     expect(plans.map((plan) => plan.id)).toEqual([1, 2, 3, 4, 5]);
     expect(plans.map((plan) => plan.modifier).slice(0, 2)).toEqual([
       "none",
@@ -157,7 +162,7 @@ describe("Career Night standings", () => {
     const placements = [3, 0, 5, 1, 7, 2, 6, 4].map((driverId, index) =>
       placement(driverId, index + 1),
     );
-    const standings = buildCareerStandings([summary(0, placements)]);
+    const standings = buildCareerStandings([summary(1, placements)]);
 
     expect(standings).toHaveLength(8);
     expect(standings.map((entry) => entry.driverId)).toEqual([
@@ -172,25 +177,25 @@ describe("Career Night standings", () => {
 
   it("breaks ties by wins, podiums, final placement, then driver id", () => {
     const wins = buildCareerStandings([
-      summary(0, [placement(0, 1, 5), placement(1, 2, 5)]),
-      summary(1, [placement(0, 8, 5), placement(1, 4, 5)]),
+      summary(1, [placement(0, 1, 5), placement(1, 2, 5)]),
+      summary(2, [placement(0, 8, 5), placement(1, 4, 5)]),
     ]);
     expect(wins.map((entry) => entry.driverId)).toEqual([0, 1]);
 
     const podiums = buildCareerStandings([
-      summary(0, [placement(0, 2, 5), placement(1, 3, 5)]),
-      summary(1, [placement(0, 8, 5), placement(1, 2, 5)]),
+      summary(1, [placement(0, 2, 5), placement(1, 3, 5)]),
+      summary(2, [placement(0, 8, 5), placement(1, 2, 5)]),
     ]);
     expect(podiums.map((entry) => entry.driverId)).toEqual([1, 0]);
 
     const finalPlacement = buildCareerStandings([
-      summary(0, [placement(0, 2, 5), placement(1, 3, 5)]),
-      summary(1, [placement(0, 4, 5), placement(1, 5, 5)]),
+      summary(1, [placement(0, 2, 5), placement(1, 3, 5)]),
+      summary(2, [placement(0, 4, 5), placement(1, 5, 5)]),
     ]);
     expect(finalPlacement.map((entry) => entry.driverId)).toEqual([0, 1]);
 
     const driverId = buildCareerStandings([
-      summary(0, [placement(1, 4, 5), placement(0, 4, 5)]),
+      summary(1, [placement(1, 4, 5), placement(0, 4, 5)]),
     ]);
     expect(driverId.map((entry) => entry.driverId)).toEqual([0, 1]);
   });

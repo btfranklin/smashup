@@ -1,9 +1,13 @@
 import { describe, expect, it } from "vitest";
 
+import { createArena } from "../src/game/arena";
 import { renderGameToText } from "../src/game/debug";
 import { createCarPreviewState, createInitialState } from "../src/game/session";
-import { getArenaObjects } from "../src/game/content";
-import { createCarFixture, createRunningState, getPlayerFixture } from "./helpers/fixtures";
+import {
+  createCarFixture,
+  createRunningState,
+  getPlayerFixture,
+} from "./helpers/fixtures";
 import {
   expectPreviewPayload,
   expectRunningPayload,
@@ -33,7 +37,7 @@ describe("renderGameToText", () => {
     player.angle = Math.PI / 3;
     player.vx = 12.34;
     player.vy = -56.78;
-    state.arena.objects = getArenaObjects("junkyard").concat(
+    state.arena.objects = createArena("junkyard").objects.concat(
       Array.from({ length: 4 }, (_, index) => ({
         id: 100 + index,
         kind: "junk" as const,
@@ -77,6 +81,10 @@ describe("renderGameToText", () => {
       {
         aId: player.id,
         bId: state.cars[1].id,
+        aActiveAtImpact: true,
+        bActiveAtImpact: true,
+        aDisabledByImpact: false,
+        bDisabledByImpact: false,
         point: { x: 0, y: 0 },
         pointA: { x: -6, y: 0 },
         pointB: { x: 6, y: 0 },
@@ -149,18 +157,70 @@ describe("renderGameToText", () => {
     ]);
   });
 
-  it("handles missing player and null round plan branches", () => {
+  it("handles a missing player in a menu presentation state", () => {
     const state = createInitialState();
     state.mode = "menu";
     state.playerId = 999;
-    state.session.roundPlan = null;
     state.cars = [createCarFixture({ id: 2, isPlayer: false, label: "Rival" })];
 
     const payload = parsePayload(renderGameToText(state));
 
     expect(payload.player).toBeNull();
-    expect((payload.session as { modifierLabel: string | null }).modifierLabel).toBeNull();
+    expect(
+      (payload.session as { modifierLabel: string | null }).modifierLabel,
+    ).toBeNull();
+    expect(payload.session).toMatchObject({
+      runSeed: null,
+      roundNumber: null,
+      totalRounds: 0,
+      roundTitle: null,
+      modifierLabel: null,
+      roundPlans: [],
+    });
+    expect(payload.arena).toMatchObject({
+      variant: null,
+      modifier: null,
+      title: null,
+    });
     expect((payload.cars as Array<{ label: string }>)[0].label).toBe("Rival");
+  });
+
+  it("keeps active Career Night debug fields coherent in every runtime mode", () => {
+    for (const mode of [
+      "running",
+      "spectating",
+      "round_results",
+      "career_over",
+    ] as const) {
+      const state = createRunningState();
+      state.mode = mode;
+      const payload = parsePayload(renderGameToText(state));
+
+      expect(payload.mode).toBe(mode);
+      expect(payload.session).toMatchObject({
+        roundNumber: state.currentRoundPlan?.id,
+        totalRounds: state.session.roundPlans.length,
+        roundTitle: state.currentRoundPlan?.title,
+        modifierLabel: expect.any(String),
+      });
+      expect(payload.arena).toMatchObject({
+        variant: state.currentRoundPlan?.arenaVariant,
+        modifier: state.currentRoundPlan?.modifier,
+        title: state.currentRoundPlan?.title,
+      });
+    }
+  });
+
+  it("derives debug phases directly from current system health", () => {
+    const state = createRunningState();
+    const player = getPlayerFixture(state);
+    player.systems.engine = 0.1;
+
+    const payload = parsePayload(renderGameToText(state));
+
+    expect(payload.player).toMatchObject({
+      phases: expect.objectContaining({ engine: "critical" }),
+    });
   });
 
   it("falls back to the first preview car when the preview player id is missing", () => {

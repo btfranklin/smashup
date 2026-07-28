@@ -10,6 +10,7 @@ import type {
   CollisionEvent,
   GameState,
   MudZone,
+  RoundModifierId,
   Vec2,
 } from "./types";
 
@@ -135,16 +136,16 @@ export function stepCar(
   car: Car,
   dt: number,
   arena: GameState["arena"],
-  mudZones: MudZone[],
+  modifier: RoundModifierId,
 ): void {
-  updateSubsystemWear(car, dt, arena.modifier);
+  updateSubsystemWear(car, dt, modifier);
 
   const forwardX = Math.cos(car.angle);
   const forwardY = Math.sin(car.angle);
   const rightX = -forwardY;
   const rightY = forwardX;
   const forwardSpeed = car.vx * forwardX + car.vy * forwardY;
-  const groundGrip = getGroundGrip(car, mudZones);
+  const groundGrip = getGroundGrip(car, arena.mudZones);
 
   if (car.disabled) {
     car.controls.forward = 0;
@@ -260,10 +261,14 @@ export function stepCar(
 
   const halfLength = car.length * 0.5;
   const halfWidth = car.width * 0.5;
-  const xMin = halfLength + arena.wallPadding;
-  const xMax = arena.width - halfLength - arena.wallPadding;
-  const yMin = halfWidth + arena.wallPadding;
-  const yMax = arena.height - halfWidth - arena.wallPadding;
+  const absoluteCosine = Math.abs(Math.cos(car.angle));
+  const absoluteSine = Math.abs(Math.sin(car.angle));
+  const xExtent = absoluteCosine * halfLength + absoluteSine * halfWidth;
+  const yExtent = absoluteSine * halfLength + absoluteCosine * halfWidth;
+  const xMin = xExtent + arena.wallPadding;
+  const xMax = arena.width - xExtent - arena.wallPadding;
+  const yMin = yExtent + arena.wallPadding;
+  const yMax = arena.height - yExtent - arena.wallPadding;
 
   if (car.x < xMin) {
     car.x = xMin;
@@ -356,15 +361,30 @@ export function resolveArenaObjectInteractions(
       const dx = localX - closestX;
       const dy = localY - closestY;
       const distance = Math.hypot(dx, dy);
-      if (distance >= object.radius || distance === 0) {
+      if (distance >= object.radius) {
         continue;
       }
 
-      const worldNormal = normalize({
-        x: forward.x * dx + right.x * dy,
-        y: forward.y * dx + right.y * dy,
-      });
-      const overlap = object.radius - distance;
+      let localNormal: Vec2;
+      let overlap: number;
+      if (distance === 0) {
+        const xClearance = halfLength - Math.abs(localX);
+        const yClearance = halfWidth - Math.abs(localY);
+        if (xClearance <= yClearance) {
+          localNormal = { x: localX >= 0 ? 1 : -1, y: 0 };
+          overlap = object.radius + xClearance;
+        } else {
+          localNormal = { x: 0, y: localY >= 0 ? 1 : -1 };
+          overlap = object.radius + yClearance;
+        }
+      } else {
+        localNormal = { x: dx / distance, y: dy / distance };
+        overlap = object.radius - distance;
+      }
+      const worldNormal = {
+        x: forward.x * localNormal.x + right.x * localNormal.y,
+        y: forward.y * localNormal.x + right.y * localNormal.y,
+      };
       car.x -= worldNormal.x * overlap * 0.3;
       car.y -= worldNormal.y * overlap * 0.3;
       object.x += worldNormal.x * overlap * 0.7;
@@ -439,6 +459,8 @@ export function resolveCarCollisions(cars: Car[]): CollisionEvent[] {
       const relativeVelocity = { x: b.vx - a.vx, y: b.vy - a.vy };
       const separatingSpeed = dot(relativeVelocity, normal);
       if (separatingSpeed < 0) {
+        const aActiveAtImpact = !a.disabled;
+        const bActiveAtImpact = !b.disabled;
         const restitution = 0.44;
         const impulse =
           (-(1 + restitution) * separatingSpeed) / (1 / a.mass + 1 / b.mass);
@@ -502,9 +524,15 @@ export function resolveCarCollisions(cars: Car[]): CollisionEvent[] {
               damageTakenB,
               normal,
             );
+            const aDisabledByImpact = aActiveAtImpact && a.disabled;
+            const bDisabledByImpact = bActiveAtImpact && b.disabled;
             collisions.push({
               aId: a.id,
               bId: b.id,
+              aActiveAtImpact,
+              bActiveAtImpact,
+              aDisabledByImpact,
+              bDisabledByImpact,
               point,
               pointA: pointOnA,
               pointB: pointOnB,
@@ -522,6 +550,10 @@ export function resolveCarCollisions(cars: Car[]): CollisionEvent[] {
             collisions.push({
               aId: a.id,
               bId: b.id,
+              aActiveAtImpact,
+              bActiveAtImpact,
+              aDisabledByImpact: false,
+              bDisabledByImpact: false,
               point,
               pointA: pointOnA,
               pointB: pointOnB,

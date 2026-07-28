@@ -10,7 +10,12 @@ import {
   restartState,
 } from "../src/game/session";
 import { CAR_PREVIEW_SCENARIOS } from "../src/game/content";
-import { createRoundSummaryFixture } from "./helpers/fixtures";
+import { getKnockoutCause } from "../src/game/damage";
+import type { CarCondition, SessionUpgradeId } from "../src/game/types";
+import {
+  createCarFixture,
+  createRoundSummaryFixture,
+} from "./helpers/fixtures";
 
 describe("session flow", () => {
   it("creates an initial menu state with preview cars", () => {
@@ -18,6 +23,7 @@ describe("session flow", () => {
 
     expect(state.mode).toBe("menu");
     expect(state.preview).toBeNull();
+    expect(state.currentRoundPlan).toBeNull();
     expect(state.session.playerBuild).toBeNull();
     expect(state.cars.length).toBeGreaterThan(1);
   });
@@ -26,6 +32,7 @@ describe("session flow", () => {
     const state = createCarPreviewState("darter", "critical");
 
     expect(state.mode).toBe("car_preview");
+    expect(state.currentRoundPlan).toBeNull();
     expect(state.preview).toEqual({
       kind: "car",
       presetId: "darter",
@@ -72,7 +79,7 @@ describe("session flow", () => {
     expect(state.session.roundPlans).toHaveLength(5);
     expect(state.session.roundIndex).toBe(0);
     expect(state.cars[0].presetId).toBe("backstab");
-    expect(state.session.roundPlan?.id).toBe(1);
+    expect(state.currentRoundPlan?.id).toBe(1);
     expect(state.events[0]?.kind).toBe("countdown");
   });
 
@@ -139,9 +146,13 @@ describe("session flow", () => {
       },
     };
 
-    for (let roundIndex = 1; roundIndex < state.session.totalRounds; roundIndex += 1) {
+    for (
+      let roundIndex = 1;
+      roundIndex < state.session.roundPlans.length;
+      roundIndex += 1
+    ) {
       state.session.lastRoundSummary = createRoundSummaryFixture({
-        roundIndex,
+        roundNumber: roundIndex,
       });
       state.session.playerCondition = {
         systems: { ...state.cars[0].systems },
@@ -149,12 +160,12 @@ describe("session flow", () => {
         lights: { ...state.cars[0].lights },
       };
       applySessionUpgrade(state, "ram_rig");
-      expect(state.arena.modifier).toBe(
+      expect(state.currentRoundPlan?.modifier).toBe(
         state.session.roundPlans[roundIndex].modifier,
       );
     }
 
-    expect(state.arena.modifier).toBe("redline");
+    expect(state.currentRoundPlan?.modifier).toBe("redline");
     expect(state.cars.every((car) => car.systems.overheat >= 0.55)).toBe(true);
     expect(state.cars.every((car) => car.lights.rearLeft === false)).toBe(true);
   });
@@ -168,15 +179,16 @@ describe("session flow", () => {
     expect(state.mode).toBe("upgrade");
 
     state.session.lastRoundSummary = createRoundSummaryFixture({
-      roundIndex: 5,
+      roundNumber: 5,
     });
-    state.session.roundIndex = state.session.totalRounds - 1;
+    state.session.roundIndex = state.session.roundPlans.length - 1;
     advanceAfterRound(state);
     expect(state.mode).toBe("career_over");
 
     state.session.roundIndex = 0;
     state.session.lastRoundSummary = createRoundSummaryFixture({
       playerWon: false,
+      playerWrecked: true,
       winnerLabel: "Rimshot",
       eliminatedByLabel: "Rimshot",
     });
@@ -189,6 +201,7 @@ describe("session flow", () => {
     chooseStarterCar(state, "darter", 42);
     state.session.lastRoundSummary = createRoundSummaryFixture({
       playerWon: false,
+      playerWrecked: true,
       winnerLabel: "Rimshot",
       eliminatedByLabel: "Rimshot",
     });
@@ -205,10 +218,162 @@ describe("session flow", () => {
 
     applySessionUpgrade(state, "ram_rig");
 
-    expect(state.cars[0].systems.engine).toBeGreaterThanOrEqual(0.48);
+    expect(state.cars[0].systems.engine).toBeCloseTo(0.62);
     expect(state.cars[0].systems.radiator).toBeGreaterThanOrEqual(0.4);
     expect(state.cars[0].systems.overheat).toBeLessThanOrEqual(0.45);
     expect(state.cars[0].body.front).toBeCloseTo(0.66);
+    expect(getKnockoutCause(state.cars[0])).toBeNull();
+  });
+
+  it("returns every upgrade to a runnable state after each knockout condition", () => {
+    const upgrades: SessionUpgradeId[] = [
+      "pit_patch",
+      "ram_rig",
+      "steering_clinic",
+    ];
+    const lights = {
+      frontLeft: false,
+      frontRight: false,
+      rearLeft: false,
+      rearRight: false,
+    };
+    const wrecks: Array<{ name: string; condition: CarCondition }> = [
+      {
+        name: "catastrophic front",
+        condition: {
+          systems: {
+            engine: 0.4,
+            radiator: 0.4,
+            transmission: 0.4,
+            steering: 0.4,
+            overheat: 0,
+          },
+          body: { front: 0.8, rear: 0, left: 0, right: 0 },
+          lights,
+        },
+      },
+      {
+        name: "thermal",
+        condition: {
+          systems: {
+            engine: 0.9,
+            radiator: 0.9,
+            transmission: 0.9,
+            steering: 0.9,
+            overheat: 1,
+          },
+          body: { front: 0, rear: 0, left: 0, right: 0 },
+          lights,
+        },
+      },
+      {
+        name: "system",
+        condition: {
+          systems: {
+            engine: 0.02,
+            radiator: 0.03,
+            transmission: 0.05,
+            steering: 0.05,
+            overheat: 0,
+          },
+          body: { front: 0, rear: 0, left: 0, right: 0 },
+          lights,
+        },
+      },
+      {
+        name: "body collapse",
+        condition: {
+          systems: {
+            engine: 0.25,
+            radiator: 0.25,
+            transmission: 0.2,
+            steering: 0.2,
+            overheat: 0,
+          },
+          body: { front: 0.19, rear: 0.6, left: 0.6, right: 0.6 },
+          lights,
+        },
+      },
+    ];
+
+    for (const wreck of wrecks) {
+      expect(
+        getKnockoutCause(
+          createCarFixture({
+            systems: { ...wreck.condition.systems },
+            body: { ...wreck.condition.body },
+          }),
+        ),
+        wreck.name,
+      ).not.toBeNull();
+      for (const upgrade of upgrades) {
+        const state = createInitialState();
+        chooseStarterCar(state, "bulldozer", 42);
+        state.session.lastRoundSummary = createRoundSummaryFixture({
+          playerWrecked: true,
+        });
+        state.session.playerCondition = {
+          systems: { ...wreck.condition.systems },
+          body: { ...wreck.condition.body },
+          lights: { ...wreck.condition.lights },
+        };
+
+        applySessionUpgrade(state, upgrade);
+
+        expect(
+          getKnockoutCause(state.cars[0]),
+          `${wreck.name} with ${upgrade}`,
+        ).toBeNull();
+      }
+    }
+  });
+
+  it("tows a disabled first-place player but not a surviving non-winner", () => {
+    const wreckedWinner = createInitialState();
+    chooseStarterCar(wreckedWinner, "darter", 42);
+    wreckedWinner.session.lastRoundSummary = createRoundSummaryFixture({
+      playerWon: true,
+      playerWrecked: true,
+    });
+    const wreckedCondition = wreckedWinner.session.playerCondition;
+    if (!wreckedCondition) {
+      throw new Error("Wrecked winner condition missing.");
+    }
+    wreckedCondition.systems = {
+      engine: 0.04,
+      radiator: 0.06,
+      transmission: 0.08,
+      steering: 0.1,
+      overheat: 0.98,
+    };
+
+    applySessionUpgrade(wreckedWinner, "steering_clinic");
+
+    expect(wreckedWinner.cars[0].systems.engine).toBeCloseTo(0.54);
+    expect(getKnockoutCause(wreckedWinner.cars[0])).toBeNull();
+
+    const survivingNonWinner = createInitialState();
+    chooseStarterCar(survivingNonWinner, "darter", 42);
+    survivingNonWinner.session.lastRoundSummary = createRoundSummaryFixture({
+      playerWon: false,
+      playerWrecked: false,
+      winnerLabel: "Rimshot",
+    });
+    const survivingCondition = survivingNonWinner.session.playerCondition;
+    if (!survivingCondition) {
+      throw new Error("Surviving non-winner condition missing.");
+    }
+    survivingCondition.systems = {
+      engine: 0.2,
+      radiator: 0.8,
+      transmission: 0.8,
+      steering: 0.8,
+      overheat: 0.2,
+    };
+
+    applySessionUpgrade(survivingNonWinner, "steering_clinic");
+
+    expect(survivingNonWinner.cars[0].systems.engine).toBeCloseTo(0.28);
   });
 
   it("keeps mode unchanged when advancing without a round summary", () => {

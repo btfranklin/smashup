@@ -43,11 +43,19 @@ function requireContains(relativePath, fragments, remediation) {
   "docs/LEGIBILITY-AUDIT.md",
   "docs/references/validation-surfaces.md",
   "docs/references/gameplay-tuning.md",
+  "docs/references/performance-validation.md",
   "docs/exec-plans/tech-debt-tracker.md",
   "scripts/check-test-coverage.mjs",
   "playwright.config.ts",
+  "playwright.performance.config.ts",
+  "vite.browser.config.ts",
+  "vite.performance.config.ts",
   "src/app/bootstrap.ts",
+  "src/app/loop.ts",
+  "src/app/menu.ts",
+  "src/app/performance.ts",
   "src/vite-env.d.ts",
+  "src/game/arena.ts",
   "src/game/content.ts",
   "src/game/career.ts",
   "src/game/awards.ts",
@@ -59,14 +67,27 @@ function requireContains(relativePath, fragments, remediation) {
   "src/game/runtime.ts",
   "src/game/debug.ts",
   "src/game/preview.ts",
+  "src/game/render.ts",
+  "src/game/render/arena.ts",
+  "src/game/render/car.ts",
+  "src/game/render/effects.ts",
+  "src/game/render/overlays.ts",
   "vitest.config.ts",
+  "tests/arena.spec.ts",
   "tests/events.spec.ts",
   "tests/round-stats.spec.ts",
   "tests/roster.spec.ts",
   "tests/upgrades.spec.ts",
   "tests/audio-transitions.spec.ts",
+  "tests/awards.spec.ts",
   "tests/bootstrap.spec.ts",
+  "tests/loop.spec.ts",
+  "tests/menu.spec.ts",
+  "tests/career.spec.ts",
+  "tests/career-lifecycle.spec.ts",
   "tests/content.spec.ts",
+  "tests/performance.spec.ts",
+  "tests/render.spec.ts",
   "tests/render-game-to-text.spec.ts",
   "tests/helpers/fixtures.ts",
   "tests/helpers/canvas-recorder.ts",
@@ -76,6 +97,8 @@ function requireContains(relativePath, fragments, remediation) {
   "tests/browser/app-flow.spec.ts",
   "tests/browser/audio-lifecycle.spec.ts",
   "tests/browser/canvas-lifecycle.spec.ts",
+  "tests/browser/career-finale.spec.ts",
+  "tests/browser/performance.spec.ts",
   "tests/browser/controller-fixture.html",
   "tests/browser/controller-fixture.ts",
   "tests/browser/fixtures.ts",
@@ -96,10 +119,16 @@ requireContains(
     "docs/QUALITY.md",
     "docs/references/validation-surfaces.md",
     "docs/references/gameplay-tuning.md",
+    "docs/references/performance-validation.md",
     "docs/exec-plans/tech-debt-tracker.md",
     "LICENSE",
     "src/game/career.ts",
+    "src/game/arena.ts",
     "src/game/awards.ts",
+    "src/app/loop.ts",
+    "src/app/menu.ts",
+    "src/app/performance.ts",
+    "src/game/render/",
   ],
   "AGENTS.md should stay a short map that routes the agent to deeper sources of truth.",
 );
@@ -113,11 +142,17 @@ requireContains(
     "./QUALITY.md",
     "./references/validation-surfaces.md",
     "./references/gameplay-tuning.md",
+    "./references/performance-validation.md",
     "./LEGIBILITY-AUDIT.md",
     "../LICENSE",
     "./exec-plans/tech-debt-tracker.md",
     "src/game/career.ts",
+    "src/game/arena.ts",
     "src/game/awards.ts",
+    "src/app/loop.ts",
+    "src/app/menu.ts",
+    "src/app/performance.ts",
+    "src/game/render/",
   ],
   "docs/README.md must index the deeper docs and future-work artifacts.",
 );
@@ -144,6 +179,8 @@ requireContains(
     "src/game/career.ts",
     "window.advanceTime(ms)",
     "window.render_game_to_text()",
+    "tests/career-lifecycle.spec.ts",
+    "npm run test:performance",
   ],
   "docs/QUALITY.md must preserve the executable architectural guardrails for content ids, split gameplay modules, and browser hooks.",
 );
@@ -242,9 +279,36 @@ if (
   );
 }
 
-if (!scripts["test:browser"]) {
+if (
+  typeof scripts["build:browser"] !== "string" ||
+  !scripts["build:browser"].includes("vite.browser.config.ts")
+) {
   failures.push(
-    'package.json: add a "test:browser" script so Chromium integration coverage is executable rather than ad hoc.',
+    'package.json: "build:browser" must create the ordinary production browser-test bundle with vite.browser.config.ts.',
+  );
+}
+if (
+  typeof scripts["test:browser"] !== "string" ||
+  !scripts["test:browser"].includes("--grep-invert @performance")
+) {
+  failures.push(
+    'package.json: "test:browser" must run the ordinary Chromium suite while excluding the hardware-sensitive @performance smoke.',
+  );
+}
+if (
+  typeof scripts["test:performance"] !== "string" ||
+  !scripts["test:performance"].includes("playwright.performance.config.ts")
+) {
+  failures.push(
+    'package.json: "test:performance" must use the isolated single-worker Playwright performance configuration.',
+  );
+}
+if (
+  typeof scripts["build:performance"] !== "string" ||
+  !scripts["build:performance"].includes("vite.performance.config.ts")
+) {
+  failures.push(
+    'package.json: "build:performance" must use the dedicated Vite configuration for the ignored multi-page fixture bundle.',
   );
 }
 

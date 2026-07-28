@@ -43,23 +43,39 @@ function readAudioProbe(page: import("@playwright/test").Page) {
   }));
 }
 
-test("initializes native Web Audio under activation and resumes suspension", async ({
+test("prepares native Web Audio while idle and resumes it under activation", async ({
   page,
 }) => {
   await installNativeAudioProbe(page);
   await page.goto("/");
-  expect(await readAudioProbe(page)).toMatchObject({ count: 0, states: [] });
+  await expect.poll(async () => (await readAudioProbe(page)).count).toBe(1);
+  await expect.poll(async () => (await readAudioProbe(page)).states).toEqual([
+    "suspended",
+  ]);
+  expect(await readAudioProbe(page)).toMatchObject({ resumeCalls: 0 });
 
   await page.getByRole("button", { name: "Start Career Night" }).click();
-  await expect.poll(async () => (await readAudioProbe(page)).count).toBe(1);
-  await expect.poll(async () => (await readAudioProbe(page)).states).toEqual(["running"]);
+  await expect.poll(async () => (await readAudioProbe(page)).states).toEqual([
+    "running",
+  ]);
+  expect(await readAudioProbe(page)).toMatchObject({
+    count: 1,
+    resumeCalls: 1,
+  });
 
   await page.evaluate(() => window.__audioProbe.contexts[0]?.suspend());
-  await expect.poll(async () => (await readAudioProbe(page)).states).toEqual(["suspended"]);
+  await expect.poll(async () => (await readAudioProbe(page)).states).toEqual([
+    "suspended",
+  ]);
   await page.getByRole("button", { name: /Bulldozer/ }).click();
 
-  await expect.poll(async () => (await readAudioProbe(page)).states).toEqual(["running"]);
-  expect(await readAudioProbe(page)).toMatchObject({ count: 1, resumeCalls: 1 });
+  await expect.poll(async () => (await readAudioProbe(page)).states).toEqual([
+    "running",
+  ]);
+  expect(await readAudioProbe(page)).toMatchObject({
+    count: 1,
+    resumeCalls: 2,
+  });
   await page.keyboard.press("w");
   expect((await readAudioProbe(page)).count).toBe(1);
 });

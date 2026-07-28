@@ -126,6 +126,10 @@ export type CarFrameState = {
 export type CollisionEvent = {
   aId: number;
   bId: number;
+  aActiveAtImpact: boolean;
+  bActiveAtImpact: boolean;
+  aDisabledByImpact: boolean;
+  bDisabledByImpact: boolean;
   point: Vec2;
   pointA: Vec2;
   pointB: Vec2;
@@ -219,6 +223,17 @@ export type ArenaObject = {
   spin: number;
 };
 
+export type ArenaGeometry = {
+  width: number;
+  height: number;
+  wallPadding: number;
+};
+
+export type ArenaState = ArenaGeometry & {
+  mudZones: MudZone[];
+  objects: ArenaObject[];
+};
+
 export type EventMessage = {
   id: number;
   text: string;
@@ -281,9 +296,10 @@ export type CareerStanding = {
 };
 
 export type RoundSummary = {
-  roundIndex: number;
+  roundNumber: number;
   title: string;
   playerWon: boolean;
+  playerWrecked: boolean;
   winnerLabel: string | null;
   survivalTime: number;
   eliminatedByLabel: string | null;
@@ -296,9 +312,7 @@ export type RoundSummary = {
 };
 
 export type SessionState = {
-  totalRounds: number;
   roundIndex: number;
-  roundPlan: RoundPlan | null;
   runSeed: number | null;
   roundPlans: RoundPlan[];
   playerBuild: PlayerBuild | null;
@@ -316,11 +330,16 @@ export type RoundStats = {
   knockoutReason: string | null;
   playerKnockouts: string[];
   strongestPlayerHitSeverity: number;
-  lastPlayerTargetId: number | null;
-  lastPlayerTargetElapsed: number | null;
-  lastPlayerTargetSeverity: number;
+  playerContactLedger: Record<
+    number,
+    {
+      elapsed: number;
+      severity: number;
+    }
+  >;
   strongestPlayerKnockoutSeverity: number;
   finalTwoAnnounced: boolean;
+  lastPlayerSystemPhases: SystemPhaseState | null;
 };
 
 export type Car = {
@@ -358,7 +377,6 @@ export type Car = {
   tractionBias: number;
   engineTone: number;
   systems: SystemsState;
-  phases: SystemPhaseState;
   body: BodyState;
   frame: CarFrameState;
   lights: LightState;
@@ -376,17 +394,8 @@ export type Car = {
 
 export type GameState = {
   mode: Mode;
-  arena: {
-    width: number;
-    height: number;
-    wallPadding: number;
-    variant: ArenaVariantId;
-    modifier: RoundModifierId;
-    title: string;
-    introLine: string;
-    mudZones: MudZone[];
-    objects: ArenaObject[];
-  };
+  currentRoundPlan: RoundPlan | null;
+  arena: ArenaState;
   preview: null | {
     kind: "car";
     presetId: CarPresetId;
