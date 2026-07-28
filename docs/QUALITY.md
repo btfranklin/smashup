@@ -25,9 +25,12 @@
   - roster, event, round-stat, and upgrade helpers preserve their current behavior
   - browser hooks survive bootstrap and deterministic stepping in `jsdom`
   - audio transition, countdown, crash cooldown, and mix helpers behave deterministically
-  - render and effect systems stay branch-covered without browser-driving
+  - render and effect systems stay branch-covered without browser-driving,
+    including presentation coalescing, reusable car/fragment paths, bounded
+    smoke sprites, and a deterministic maximum-density command workload
   - bounded performance collection preserves sample ordering, context, capacity,
-    optional timeline evidence, and teardown behavior
+    optional timeline evidence, phase summaries, presentation counts, and
+    teardown behavior
   - the production session/runtime path carries five completed summaries into
     exact eight-driver scoring, final standings, and populated debug output
 - `npm run test:browser` verifies in real Chromium:
@@ -48,6 +51,9 @@
 
 ## When To Extend Validation
 - Add or update Vitest coverage when a change affects the preview URL contract, startup errors, browser hooks, round-start flow, Career Night generation/scoring, Wreck Awards, or documented tuning regressions.
+- Keep rendering-performance unit assertions structural: operation counts,
+  cache reuse, cache capacity, and state immutability are stable; elapsed-time
+  thresholds belong only in the standalone controlled performance suite.
 - Add or update focused browser coverage only when a change affects native DOM, Canvas, layout/fullscreen/RAF, Web Audio, or controller ownership behavior.
 - Keep `tests/career-lifecycle.spec.ts` on the production session/runtime path;
   it must not inject completed summaries or derive expected placement points

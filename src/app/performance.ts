@@ -12,6 +12,7 @@ export type PerformanceSample = {
   phase: PerformancePhase;
   timestampMs: number;
   durationMs: number;
+  presented: boolean;
   frameIntervalMs: number | null;
   fixedSteps: number;
   droppedWallTimeMs: number;
@@ -50,6 +51,7 @@ export type PerformanceRecord = {
   timestampMs: number;
   durationMs: number;
   state: GameState;
+  presented?: boolean;
   frameIntervalMs?: number;
   fixedSteps?: number;
   droppedWallTimeMs?: number;
@@ -60,6 +62,40 @@ export type PerformanceCollector = {
   record: (record: PerformanceRecord) => void;
   snapshot: () => PerformanceSnapshot;
   destroy: () => void;
+};
+
+export type PerformancePhaseSummary = {
+  sampleCount: number;
+  p50Ms: number;
+  p95Ms: number;
+  p99Ms: number;
+  maxMs: number;
+};
+
+export type PerformanceSamplesSummary = {
+  phases: Partial<Record<PerformancePhase, PerformancePhaseSummary>>;
+  loadPeaks: {
+    fixedSteps: number;
+    droppedWallTimeMs: number;
+    collisionCount: number;
+    effects: {
+      smoke: number;
+      debris: number;
+      dust: number;
+      fragments: number;
+      total: number;
+    };
+    scarCount: number;
+    audioVoicesCreated: number;
+    jsHeapBytes: number | null;
+  };
+  framePresentationCounts: {
+    total: number;
+    presented: number;
+    skipped: number;
+    zeroStep: number;
+    zeroStepPresented: number;
+  };
 };
 
 type HeapPerformance = Performance & {
@@ -84,6 +120,14 @@ const DEFAULT_SAMPLE_CAPACITY = 1_200;
 const DEFAULT_TIMELINE_CAPACITY = 120;
 const MAX_SAMPLE_CAPACITY = 10_000;
 const MAX_TIMELINE_CAPACITY = 1_000;
+const PERFORMANCE_PHASES: readonly PerformancePhase[] = [
+  "frame",
+  "simulation",
+  "audio",
+  "render",
+  "menu",
+  "skip",
+];
 
 function boundedCapacity(
   value: number | undefined,
@@ -130,6 +174,122 @@ function captureStateContext(state: GameState): Pick<
       fragments: state.carFragments.length,
     },
     scarCount,
+  };
+}
+
+function percentile(sortedValues: readonly number[], ratio: number): number {
+  const index = Math.max(0, Math.ceil(sortedValues.length * ratio) - 1);
+  return sortedValues[index] ?? 0;
+}
+
+export function summarizePerformanceSamples(
+  samples: readonly PerformanceSample[],
+): PerformanceSamplesSummary {
+  const phases: PerformanceSamplesSummary["phases"] = {};
+  for (const phase of PERFORMANCE_PHASES) {
+    const durations = samples
+      .filter((sample) => sample.phase === phase)
+      .map((sample) => sample.durationMs)
+      .sort((a, b) => a - b);
+    if (durations.length === 0) {
+      continue;
+    }
+    phases[phase] = {
+      sampleCount: durations.length,
+      p50Ms: percentile(durations, 0.5),
+      p95Ms: percentile(durations, 0.95),
+      p99Ms: percentile(durations, 0.99),
+      maxMs: durations[durations.length - 1],
+    };
+  }
+
+  const loadPeaks: PerformanceSamplesSummary["loadPeaks"] = {
+    fixedSteps: 0,
+    droppedWallTimeMs: 0,
+    collisionCount: 0,
+    effects: {
+      smoke: 0,
+      debris: 0,
+      dust: 0,
+      fragments: 0,
+      total: 0,
+    },
+    scarCount: 0,
+    audioVoicesCreated: 0,
+    jsHeapBytes: null,
+  };
+  let totalFrames = 0;
+  let presentedFrames = 0;
+  let zeroStepFrames = 0;
+  let zeroStepPresentedFrames = 0;
+  for (const sample of samples) {
+    loadPeaks.fixedSteps = Math.max(loadPeaks.fixedSteps, sample.fixedSteps);
+    loadPeaks.droppedWallTimeMs = Math.max(
+      loadPeaks.droppedWallTimeMs,
+      sample.droppedWallTimeMs,
+    );
+    loadPeaks.collisionCount = Math.max(
+      loadPeaks.collisionCount,
+      sample.collisionCount,
+    );
+    loadPeaks.effects.smoke = Math.max(
+      loadPeaks.effects.smoke,
+      sample.effects.smoke,
+    );
+    loadPeaks.effects.debris = Math.max(
+      loadPeaks.effects.debris,
+      sample.effects.debris,
+    );
+    loadPeaks.effects.dust = Math.max(
+      loadPeaks.effects.dust,
+      sample.effects.dust,
+    );
+    loadPeaks.effects.fragments = Math.max(
+      loadPeaks.effects.fragments,
+      sample.effects.fragments,
+    );
+    loadPeaks.effects.total = Math.max(
+      loadPeaks.effects.total,
+      sample.effects.smoke +
+        sample.effects.debris +
+        sample.effects.dust +
+        sample.effects.fragments,
+    );
+    loadPeaks.scarCount = Math.max(loadPeaks.scarCount, sample.scarCount);
+    loadPeaks.audioVoicesCreated = Math.max(
+      loadPeaks.audioVoicesCreated,
+      sample.audioVoicesCreated,
+    );
+    if (sample.jsHeapBytes !== null) {
+      loadPeaks.jsHeapBytes = Math.max(
+        loadPeaks.jsHeapBytes ?? 0,
+        sample.jsHeapBytes,
+      );
+    }
+    if (sample.phase === "frame") {
+      totalFrames += 1;
+      if (sample.presented) {
+        presentedFrames += 1;
+      }
+      if (sample.fixedSteps === 0) {
+        zeroStepFrames += 1;
+        if (sample.presented) {
+          zeroStepPresentedFrames += 1;
+        }
+      }
+    }
+  }
+
+  return {
+    phases,
+    loadPeaks,
+    framePresentationCounts: {
+      total: totalFrames,
+      presented: presentedFrames,
+      skipped: totalFrames - presentedFrames,
+      zeroStep: zeroStepFrames,
+      zeroStepPresented: zeroStepPresentedFrames,
+    },
   };
 }
 
@@ -244,6 +404,7 @@ export function createPerformanceCollector({
         phase: record.phase,
         timestampMs: record.timestampMs,
         durationMs: Math.max(0, record.durationMs),
+        presented: record.presented ?? false,
         frameIntervalMs: record.frameIntervalMs ?? null,
         fixedSteps: record.fixedSteps ?? 0,
         droppedWallTimeMs: Math.max(0, record.droppedWallTimeMs ?? 0),

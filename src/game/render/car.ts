@@ -1,5 +1,7 @@
-import { getCarSystemPhases } from "../damage";
+import { getSystemPhase } from "../damage";
 import type { Car } from "../types";
+
+let windshieldPath: Path2D | undefined;
 
 function drawLight(
   ctx: CanvasRenderingContext2D,
@@ -8,72 +10,106 @@ function drawLight(
   active: boolean,
   color: string,
 ): void {
-  ctx.save();
-  ctx.translate(x, y);
   ctx.fillStyle = active ? color : "rgba(25, 20, 18, 0.82)";
   ctx.beginPath();
-  ctx.ellipse(0, 0, 3.2, 5.2, 0, 0, Math.PI * 2);
+  ctx.ellipse(x, y, 3.2, 5.2, 0, 0, Math.PI * 2);
   ctx.fill();
   if (active) {
+    const inheritedShadowColor = ctx.shadowColor;
+    const inheritedShadowBlur = ctx.shadowBlur;
     ctx.shadowColor = color;
     ctx.shadowBlur = 8;
     ctx.beginPath();
-    ctx.ellipse(0, 0, 1.6, 2.8, 0, 0, Math.PI * 2);
+    ctx.ellipse(x, y, 1.6, 2.8, 0, 0, Math.PI * 2);
     ctx.fill();
+    ctx.shadowColor = inheritedShadowColor;
+    ctx.shadowBlur = inheritedShadowBlur;
   }
+}
+
+function drawLights(
+  ctx: CanvasRenderingContext2D,
+  car: Car,
+  frontEdge: number,
+  rearEdge: number,
+): void {
+  ctx.save();
+  drawLight(ctx, frontEdge - 6, -15, car.lights.frontLeft, "#ffe9ac");
+  drawLight(ctx, frontEdge - 6, 15, car.lights.frontRight, "#ffe9ac");
+  drawLight(ctx, rearEdge + 6, -14, car.lights.rearLeft, "#ff6245");
+  drawLight(ctx, rearEdge + 6, 14, car.lights.rearRight, "#ff6245");
   ctx.restore();
 }
 
-function traceCarBodyPath(ctx: CanvasRenderingContext2D, car: Car): void {
-  ctx.beginPath();
-  const [first, ...rest] = car.frame.vertices;
-  ctx.moveTo(first.x, first.y);
-  for (const vertex of rest) {
-    ctx.lineTo(vertex.x, vertex.y);
+function createCarBodyPath(car: Car): {
+  path: Path2D;
+  frontEdge: number;
+  rearEdge: number;
+} {
+  const path = new Path2D();
+  const vertices = car.frame.vertices;
+  const first = vertices[0];
+  let frontEdge = first.x;
+  let rearEdge = first.x;
+  path.moveTo(first.x, first.y);
+  for (let index = 1; index < vertices.length; index += 1) {
+    const vertex = vertices[index];
+    path.lineTo(vertex.x, vertex.y);
+    frontEdge = Math.max(frontEdge, vertex.x);
+    rearEdge = Math.min(rearEdge, vertex.x);
   }
-  ctx.closePath();
+  path.closePath();
+  return { path, frontEdge, rearEdge };
 }
 
-function traceRoofPanelPath(ctx: CanvasRenderingContext2D, car: Car): void {
+function createRoofPanelPath(car: Car): Path2D {
   const crush = car.frame.crush;
   const skew = (crush.left - crush.right) * 5;
   const frontShorten = crush.front * 3;
   const rearShorten = crush.rear * 2;
   const widthLoss = Math.max(crush.left, crush.right) * 3.5;
-  ctx.beginPath();
-  ctx.moveTo(12 - frontShorten, -16 + widthLoss + skew);
-  ctx.lineTo(15 - frontShorten, 0);
-  ctx.lineTo(12 - frontShorten, 16 - widthLoss + skew);
-  ctx.lineTo(-13 + rearShorten, 15 - widthLoss - skew);
-  ctx.lineTo(-16 + rearShorten, 0);
-  ctx.lineTo(-13 + rearShorten, -15 + widthLoss - skew);
-  ctx.closePath();
+  const path = new Path2D();
+  path.moveTo(12 - frontShorten, -16 + widthLoss + skew);
+  path.lineTo(15 - frontShorten, 0);
+  path.lineTo(12 - frontShorten, 16 - widthLoss + skew);
+  path.lineTo(-13 + rearShorten, 15 - widthLoss - skew);
+  path.lineTo(-16 + rearShorten, 0);
+  path.lineTo(-13 + rearShorten, -15 + widthLoss - skew);
+  path.closePath();
+  return path;
 }
 
-function traceHoodPanelPath(ctx: CanvasRenderingContext2D, car: Car): void {
+function createHoodPanelPath(car: Car): Path2D {
   const frontCrush = car.frame.crush.front;
-  ctx.beginPath();
-  ctx.moveTo(car.length * 0.17 - frontCrush * 12, -17);
-  ctx.lineTo(car.length * 0.36 - frontCrush * 18, -12);
-  ctx.lineTo(car.length * 0.34 - frontCrush * 20, 12);
-  ctx.lineTo(car.length * 0.16 - frontCrush * 12, 17);
-  ctx.closePath();
+  const path = new Path2D();
+  path.moveTo(car.length * 0.17 - frontCrush * 12, -17);
+  path.lineTo(car.length * 0.36 - frontCrush * 18, -12);
+  path.lineTo(car.length * 0.34 - frontCrush * 20, 12);
+  path.lineTo(car.length * 0.16 - frontCrush * 12, 17);
+  path.closePath();
+  return path;
 }
 
-function traceWindshieldPath(ctx: CanvasRenderingContext2D): void {
-  ctx.beginPath();
-  ctx.moveTo(-7, -14);
-  ctx.lineTo(2, -12);
-  ctx.lineTo(1, 12);
-  ctx.lineTo(-8, 14);
-  ctx.closePath();
+function getWindshieldPath(): Path2D {
+  if (!windshieldPath) {
+    windshieldPath = new Path2D();
+    windshieldPath.moveTo(-7, -14);
+    windshieldPath.lineTo(2, -12);
+    windshieldPath.lineTo(1, 12);
+    windshieldPath.lineTo(-8, 14);
+    windshieldPath.closePath();
+  }
+  return windshieldPath;
 }
 
-function drawRoofNumberDecal(ctx: CanvasRenderingContext2D, car: Car): void {
+function drawRoofNumberDecal(
+  ctx: CanvasRenderingContext2D,
+  car: Car,
+  roofPath: Path2D,
+): void {
   const fontSize = Math.max(12, Math.min(18, car.length * 0.18));
   ctx.save();
-  traceRoofPanelPath(ctx, car);
-  ctx.clip();
+  ctx.clip(roofPath);
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   ctx.font = `700 ${fontSize}px 'Trebuchet MS', sans-serif`;
@@ -87,7 +123,12 @@ function drawRoofNumberDecal(ctx: CanvasRenderingContext2D, car: Car): void {
   ctx.restore();
 }
 
-function drawPanelSeams(ctx: CanvasRenderingContext2D, car: Car): void {
+function drawPanelSeams(
+  ctx: CanvasRenderingContext2D,
+  car: Car,
+  roofPath: Path2D,
+  hoodPath: Path2D,
+): void {
   const halfWidth = car.width * 0.46;
   const crush = car.frame.crush;
   const leftBodyEdge = -halfWidth + crush.left * 7;
@@ -97,18 +138,13 @@ function drawPanelSeams(ctx: CanvasRenderingContext2D, car: Car): void {
   const frontDoorX = car.length * 0.08 - crush.front * 4;
   const rearDoorX = -car.length * 0.16 + crush.rear * 4;
 
-  ctx.save();
-  traceCarBodyPath(ctx, car);
-  ctx.clip();
   ctx.strokeStyle = "rgba(28, 21, 18, 0.46)";
   ctx.lineWidth = 1.25;
   ctx.lineCap = "round";
   ctx.lineJoin = "round";
 
-  traceRoofPanelPath(ctx, car);
-  ctx.stroke();
-  traceHoodPanelPath(ctx, car);
-  ctx.stroke();
+  ctx.stroke(roofPath);
+  ctx.stroke(hoodPath);
 
   ctx.beginPath();
   ctx.moveTo(frontDoorX + 2, leftBodyEdge);
@@ -120,7 +156,6 @@ function drawPanelSeams(ctx: CanvasRenderingContext2D, car: Car): void {
   ctx.moveTo(rearDoorX, rightCabinEdge);
   ctx.lineTo(rearDoorX - 2, rightBodyEdge);
   ctx.stroke();
-  ctx.restore();
 }
 
 function drawPresetCharacterLines(
@@ -130,9 +165,6 @@ function drawPresetCharacterLines(
   const frontCrush = car.frame.crush.front;
   const rearCrush = car.frame.crush.rear;
 
-  ctx.save();
-  traceCarBodyPath(ctx, car);
-  ctx.clip();
   ctx.strokeStyle = car.disabled ? "rgba(174, 164, 151, 0.42)" : car.accent;
   ctx.lineWidth = 2.2;
   ctx.lineCap = "round";
@@ -168,17 +200,16 @@ function drawPresetCharacterLines(
   }
 
   ctx.stroke();
-  ctx.restore();
 }
 
-function drawExposedCrush(ctx: CanvasRenderingContext2D, car: Car): void {
+function drawExposedCrush(
+  ctx: CanvasRenderingContext2D,
+  car: Car,
+  front: number,
+  rear: number,
+): void {
   const halfLength = car.length * 0.5;
   const halfWidth = car.width * 0.48;
-  ctx.save();
-  traceCarBodyPath(ctx, car);
-  ctx.clip();
-  const front = Math.max(car.body.front, car.frame.crush.front);
-  const rear = Math.max(car.body.rear, car.frame.crush.rear);
   if (front > 0.28) {
     const depth = 8 + front * 22;
     ctx.fillStyle = `rgba(24, 21, 19, ${0.2 + front * 0.34})`;
@@ -201,18 +232,12 @@ function drawExposedCrush(ctx: CanvasRenderingContext2D, car: Car): void {
     ctx.closePath();
     ctx.fill();
   }
-  ctx.restore();
 }
 
 function drawCrumpleScars(ctx: CanvasRenderingContext2D, car: Car): void {
-  if (car.frame.scars.length === 0) {
-    return;
-  }
-  ctx.save();
-  traceCarBodyPath(ctx, car);
-  ctx.clip();
   ctx.lineCap = "round";
-  for (const scar of car.frame.scars) {
+  for (let index = 0; index < car.frame.scars.length; index += 1) {
+    const scar = car.frame.scars[index];
     const half = scar.length * 0.5;
     const dx = Math.cos(scar.angle) * half;
     const dy = Math.sin(scar.angle) * half;
@@ -235,15 +260,11 @@ function drawCrumpleScars(ctx: CanvasRenderingContext2D, car: Car): void {
     );
     ctx.stroke();
   }
-  ctx.restore();
 }
 
 function drawDamageScrapes(ctx: CanvasRenderingContext2D, car: Car): void {
   const halfLength = car.length * 0.49;
   const halfWidth = car.width * 0.48;
-  ctx.save();
-  traceCarBodyPath(ctx, car);
-  ctx.clip();
 
   ctx.lineCap = "round";
   ctx.strokeStyle = "rgba(33, 26, 22, 0.58)";
@@ -309,9 +330,6 @@ function drawDamageScrapes(ctx: CanvasRenderingContext2D, car: Car): void {
     ctx.lineTo(18, halfWidth - band + 1);
     ctx.stroke();
   }
-
-  ctx.restore();
-  drawCrumpleScars(ctx, car);
 }
 
 function drawUndercarriage(ctx: CanvasRenderingContext2D, car: Car): void {
@@ -324,17 +342,21 @@ function drawUndercarriage(ctx: CanvasRenderingContext2D, car: Car): void {
   ctx.save();
 
   ctx.fillStyle = car.disabled ? "#201c19" : "#11100f";
-  for (const axleX of [frontWheelX, rearWheelX]) {
-    ctx.fillRect(
-      axleX - axleWidth * 0.5,
-      -wheelY,
-      axleWidth,
-      wheelY * 2,
-    );
-  }
+  ctx.fillRect(
+    frontWheelX - axleWidth * 0.5,
+    -wheelY,
+    axleWidth,
+    wheelY * 2,
+  );
+  ctx.fillRect(
+    rearWheelX - axleWidth * 0.5,
+    -wheelY,
+    axleWidth,
+    wheelY * 2,
+  );
 
   ctx.fillStyle = car.disabled ? "#3f3a36" : "#1f1510";
-  for (const side of [-1, 1]) {
+  for (let side = -1; side <= 1; side += 2) {
     ctx.save();
     ctx.translate(frontWheelX, wheelY * side);
     ctx.rotate(car.steerAngle * 0.9);
@@ -356,16 +378,6 @@ function drawUndercarriage(ctx: CanvasRenderingContext2D, car: Car): void {
   ctx.restore();
 }
 
-function getBodyEdge(car: Car): { front: number; rear: number } {
-  return car.frame.vertices.reduce(
-    (edges, vertex) => ({
-      front: Math.max(edges.front, vertex.x),
-      rear: Math.min(edges.rear, vertex.x),
-    }),
-    { front: -Infinity, rear: Infinity },
-  );
-}
-
 export function drawCar(
   ctx: CanvasRenderingContext2D,
   car: Car,
@@ -374,7 +386,20 @@ export function drawCar(
   },
 ): void {
   const showPlayerOutline = options?.showPlayerOutline ?? true;
-  const phases = getCarSystemPhases(car);
+  const { path: bodyPath, frontEdge, rearEdge } = createCarBodyPath(car);
+  const roofPath = createRoofPanelPath(car);
+  const hoodPath = createHoodPanelPath(car);
+  const frontCrush = Math.max(car.body.front, car.frame.crush.front);
+  const rearCrush = Math.max(car.body.rear, car.frame.crush.rear);
+  const hasExposedCrush = frontCrush > 0.28 || rearCrush > 0.32;
+  const hasDamageScrapes =
+    car.body.front > 0.08 ||
+    car.body.rear > 0.08 ||
+    car.body.left > 0.08 ||
+    car.body.right > 0.08;
+  const hasCrumpleScars = car.frame.scars.length > 0;
+  const enginePhase = getSystemPhase(car.systems.engine);
+
   ctx.save();
   ctx.translate(car.x, car.y);
   ctx.rotate(car.angle);
@@ -384,59 +409,72 @@ export function drawCar(
     ctx.lineWidth = 7;
     ctx.shadowColor = "rgba(255, 229, 176, 0.42)";
     ctx.shadowBlur = 12;
-    traceCarBodyPath(ctx, car);
-    ctx.stroke();
+    ctx.stroke(bodyPath);
     ctx.restore();
   }
 
   drawUndercarriage(ctx, car);
 
-  const bodyGradient = ctx.createLinearGradient(
-    -car.length * 0.5,
-    0,
-    car.length * 0.5,
-    0,
-  );
-  bodyGradient.addColorStop(0, car.disabled ? "#4b443e" : "#2d2520");
-  bodyGradient.addColorStop(0.18, car.disabled ? "#6f665f" : car.color);
-  bodyGradient.addColorStop(0.72, car.disabled ? "#6a6058" : car.accent);
-  bodyGradient.addColorStop(1, car.disabled ? "#3b3530" : "#221712");
-  ctx.fillStyle = car.disabled ? "#6f665f" : bodyGradient;
-  traceCarBodyPath(ctx, car);
-  ctx.fill();
-  drawExposedCrush(ctx, car);
+  if (car.disabled) {
+    ctx.fillStyle = "#6f665f";
+  } else {
+    const bodyGradient = ctx.createLinearGradient(
+      -car.length * 0.5,
+      0,
+      car.length * 0.5,
+      0,
+    );
+    bodyGradient.addColorStop(0, "#2d2520");
+    bodyGradient.addColorStop(0.18, car.color);
+    bodyGradient.addColorStop(0.72, car.accent);
+    bodyGradient.addColorStop(1, "#221712");
+    ctx.fillStyle = bodyGradient;
+  }
+  ctx.fill(bodyPath);
+
+  if (hasExposedCrush) {
+    ctx.save();
+    ctx.clip(bodyPath);
+    drawExposedCrush(ctx, car, frontCrush, rearCrush);
+    ctx.restore();
+  }
 
   ctx.fillStyle =
-    phases.engine === "critical" || car.disabled
+    enginePhase === "critical" || car.disabled
       ? "rgba(63, 61, 58, 0.9)"
       : "rgba(118, 142, 150, 0.72)";
-  traceRoofPanelPath(ctx, car);
-  ctx.fill();
+  ctx.fill(roofPath);
 
   ctx.fillStyle = car.disabled ? "#48423d" : "rgba(34, 28, 24, 0.9)";
-  traceHoodPanelPath(ctx, car);
-  ctx.fill();
+  ctx.fill(hoodPath);
 
   ctx.fillStyle = "rgba(210, 229, 232, 0.28)";
-  traceWindshieldPath(ctx);
-  ctx.fill();
+  ctx.fill(getWindshieldPath());
 
-  drawPanelSeams(ctx, car);
+  ctx.save();
+  ctx.clip(bodyPath);
+  drawPanelSeams(ctx, car, roofPath, hoodPath);
   drawPresetCharacterLines(ctx, car);
+  ctx.restore();
 
   ctx.strokeStyle = car.disabled ? "#3a3430" : "rgba(30, 17, 10, 0.78)";
   ctx.lineWidth = 3;
-  traceCarBodyPath(ctx, car);
-  ctx.stroke();
+  ctx.stroke(bodyPath);
 
-  drawDamageScrapes(ctx, car);
-  drawRoofNumberDecal(ctx, car);
+  if (hasDamageScrapes || hasCrumpleScars) {
+    ctx.save();
+    ctx.clip(bodyPath);
+    if (hasDamageScrapes) {
+      drawDamageScrapes(ctx, car);
+    }
+    if (hasCrumpleScars) {
+      drawCrumpleScars(ctx, car);
+    }
+    ctx.restore();
+  }
 
-  const edges = getBodyEdge(car);
-  drawLight(ctx, edges.front - 6, -15, car.lights.frontLeft, "#ffe9ac");
-  drawLight(ctx, edges.front - 6, 15, car.lights.frontRight, "#ffe9ac");
-  drawLight(ctx, edges.rear + 6, -14, car.lights.rearLeft, "#ff6245");
-  drawLight(ctx, edges.rear + 6, 14, car.lights.rearRight, "#ff6245");
+  drawRoofNumberDecal(ctx, car, roofPath);
+  drawLights(ctx, car, frontEdge, rearEdge);
 
   ctx.restore();
 }

@@ -5,7 +5,7 @@ Smashup Derby is a browser-only Vite + TypeScript + canvas game with one authori
 ## Runtime Shape
 - `src/main.ts` is a thin entrypoint that imports styles and mounts the app.
 - `src/app/bootstrap.ts` owns the browser controller lifecycle, parses preview URLs, wires platform events and browser hooks, and disposes everything it installs.
-- `src/app/loop.ts` owns requestAnimationFrame scheduling, fixed-step accumulation, deterministic automation carry, catch-up limits, and bounded spectator-skip batches.
+- `src/app/loop.ts` owns requestAnimationFrame scheduling, coalesced presentation invalidation, fixed-step accumulation, deterministic automation carry, catch-up limits, and bounded spectator-skip batches.
 - `src/app/menu.ts` presents mode-specific menu DOM and binds menu actions supplied by the controller.
 - `src/app/performance.ts` provides a bounded, opt-in collector for timing samples and their simulation context; it does not alter gameplay decisions.
 - `src/game/session.ts` owns state construction, preview-state creation, and Career Night mode transitions outside the per-frame loop.
@@ -40,7 +40,7 @@ Smashup Derby is a browser-only Vite + TypeScript + canvas game with one authori
 ## Supporting Modules
 - `src/game/physics.ts`, `damage.ts`, `ai.ts`: gameplay tuning and simulation rules
 - `src/game/render.ts`: stable rendering façade
-- `src/game/render/`: focused arena/cache, car, transient-effect, and overlay drawing
+- `src/game/render/`: focused arena/cache, car, transient-effect, and overlay drawing; canvas caches remain rendering-owned and never enter `GameState`
 - `src/game/audio.ts`: procedural audio with idle graph preparation,
   gesture-time resume, and game-state-driven updates
 - `src/game/conditions.ts`: shared condition cloning/capture helpers
@@ -52,11 +52,14 @@ Smashup Derby is a browser-only Vite + TypeScript + canvas game with one authori
 - Keep award thresholds and priority in `src/game/awards.ts`; rendering consumes the selected ids and content definitions.
 - Keep `render_game_to_text()` in `src/game/debug.ts` as a read-only view of current state. Do not hide state mutations inside debug helpers.
 - Keep browser bootstrap concerns in `src/app/bootstrap.ts`. Simulation modules should not import from the browser entrypoint.
-- Keep clocks, frame handles, catch-up policy, deterministic stepping carry, and spectator-skip batching in `src/app/loop.ts`; bootstrap supplies callbacks and owns DOM/audio/input presentation.
+- Keep clocks, frame handles, presentation invalidation, catch-up policy, deterministic stepping carry, and spectator-skip batching in `src/app/loop.ts`; bootstrap supplies callbacks and owns DOM/audio/input presentation. A completed fixed-step batch or explicit invalidation may present once, while zero-step RAF callbacks continue scheduling without repainting.
 - Keep authored menu presentation in `src/app/menu.ts`; the controller supplies actions and owns their effects.
 - Keep performance instrumentation bounded and diagnostic-only in `src/app/performance.ts`; callers own when to record and when to destroy it.
 - Keep static arena caching inside rendering and key it from the authoritative
   active plan; simulation state must not depend on cached canvas resources.
+- Keep reusable car paths, smoke sprites, and fragment paths inside rendering.
+  Cache lifetimes must be bounded or weakly keyed by canvas/effect ownership,
+  and render caches must not annotate simulation objects.
 - Keep arena geometry and coordinate materialization in `src/game/arena.ts`.
   `src/game/content.ts` owns normalized mud and object layouts, while roster
   owns normalized lineup slots, membership, orientation, and car-extent

@@ -10,12 +10,15 @@ export type LoopPerformanceDetails = {
   frameIntervalMs?: number;
   fixedSteps?: number;
   droppedWallTimeMs?: number;
+  presented?: boolean;
 };
 
 export type AppLoop = {
   start: () => void;
   destroy: () => void;
   resetClock: () => void;
+  requestPresentation: () => void;
+  presentNow: () => void;
   advanceTime: (ms: number) => void;
   startSpectatorSkip: () => void;
 };
@@ -72,6 +75,7 @@ export function createAppLoop({
   let automationStepRemainder = 0;
   let skipNextFrameCatchup = false;
   let lastFrameTimestamp: number | null = null;
+  let presentationPending = false;
 
   function performanceStart(): number {
     return performanceEnabled ? performanceNow() : 0;
@@ -98,12 +102,35 @@ export function createAppLoop({
     onSpectatorSkipActive(active);
   }
 
+  function requestPresentation(): void {
+    if (!destroyed) {
+      presentationPending = true;
+    }
+  }
+
+  function presentNow(): void {
+    if (destroyed) {
+      return;
+    }
+    presentationPending = false;
+    present();
+  }
+
+  function presentIfRequested(): boolean {
+    if (!presentationPending) {
+      return false;
+    }
+    presentNow();
+    return true;
+  }
+
   function resetClock(): void {
     wallClockAccumulator = 0;
     automationStepRemainder = 0;
     lastTime = performanceNow();
     lastFrameTimestamp = null;
     skipNextFrameCatchup = true;
+    requestPresentation();
   }
 
   function finishSkipBatch(
@@ -111,11 +138,11 @@ export function createAppLoop({
     completedSteps: number,
   ): void {
     setSpectatorSkipActive(false);
-    present();
+    resetClock();
+    presentNow();
     recordPerformance("skip", batchStartedAt, {
       fixedSteps: completedSteps,
     });
-    resetClock();
     scheduleNextFrame();
   }
 
@@ -166,7 +193,7 @@ export function createAppLoop({
       afterSpectatorBatch();
 
       if (isSpectating()) {
-        present();
+        presentNow();
         recordPerformance("skip", batchStartedAt, {
           fixedSteps: completedSteps,
         });
@@ -204,7 +231,7 @@ export function createAppLoop({
       runStep(FIXED_STEP_SECONDS, false);
     }
     if (steps > 0) {
-      present();
+      presentNow();
     }
   }
 
@@ -219,24 +246,33 @@ export function createAppLoop({
     if (spectatorSkipActive) {
       lastTime = now;
       wallClockAccumulator = 0;
-      recordPerformance("frame", frameStartedAt, { frameIntervalMs });
+      recordPerformance("frame", frameStartedAt, {
+        frameIntervalMs,
+        presented: false,
+      });
       return;
     }
     if (automatedStepping) {
       lastTime = now;
       wallClockAccumulator = 0;
-      present();
+      const presented = presentIfRequested();
       scheduleNextFrame();
-      recordPerformance("frame", frameStartedAt, { frameIntervalMs });
+      recordPerformance("frame", frameStartedAt, {
+        frameIntervalMs,
+        presented,
+      });
       return;
     }
     if (skipNextFrameCatchup) {
       lastTime = now;
       wallClockAccumulator = 0;
       skipNextFrameCatchup = false;
-      present();
+      const presented = presentIfRequested();
       scheduleNextFrame();
-      recordPerformance("frame", frameStartedAt, { frameIntervalMs });
+      recordPerformance("frame", frameStartedAt, {
+        frameIntervalMs,
+        presented,
+      });
       return;
     }
 
@@ -250,12 +286,19 @@ export function createAppLoop({
       wallClockAccumulator -= FIXED_STEP_SECONDS;
       fixedSteps += 1;
     }
-    present();
+    let presented = false;
+    if (fixedSteps > 0) {
+      presentNow();
+      presented = true;
+    } else {
+      presented = presentIfRequested();
+    }
     scheduleNextFrame();
     recordPerformance("frame", frameStartedAt, {
       frameIntervalMs,
       fixedSteps,
       droppedWallTimeMs: Math.max(0, rawDeltaMs - 50),
+      presented,
     });
   }
 
@@ -285,6 +328,8 @@ export function createAppLoop({
       scheduledFrames.clear();
     },
     resetClock,
+    requestPresentation,
+    presentNow,
     advanceTime,
     startSpectatorSkip,
   };

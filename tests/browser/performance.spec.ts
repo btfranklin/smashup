@@ -3,7 +3,10 @@ import path from "node:path";
 
 import type { Page } from "@playwright/test";
 
-import type { PerformanceSnapshot } from "../../src/app/performance";
+import {
+  summarizePerformanceSamples,
+  type PerformanceSnapshot,
+} from "../../src/app/performance";
 import { expect, test } from "./fixtures";
 
 const DESKTOP_P95_BUDGET_MS = 12;
@@ -133,6 +136,12 @@ function postWarmupLongTasks(result: SceneResult) {
   );
 }
 
+function measuredSamples(result: SceneResult) {
+  return result.snapshot.samples.filter(
+    (sample) => sample.timestampMs >= result.markerMs,
+  );
+}
+
 test("@performance profiles deterministic clean, collision, and damaged scenes", async ({
   page,
 }, testInfo) => {
@@ -157,6 +166,7 @@ test("@performance profiles deterministic clean, collision, and damaged scenes",
       longTasks: postWarmupLongTasks(scene),
       droppedSamples: scene.snapshot.droppedSamples,
       sampleCount: scene.snapshot.samples.length,
+      telemetry: summarizePerformanceSamples(measuredSamples(scene)),
     })),
     combined: {
       p95Ms: percentile(combinedDurations, 0.95),
@@ -364,6 +374,7 @@ test("@performance yields spectator skip within its exact work cap", async ({
       0.95,
     ),
     maximumMs: Math.max(...skipSamples.map((sample) => sample.durationMs)),
+    telemetry: summarizePerformanceSamples(snapshot.samples),
   };
   await testInfo.attach("spectator-skip.json", {
     body: JSON.stringify(metrics, null, 2),
@@ -398,6 +409,7 @@ test("@performance stays responsive with Chromium at 4x CPU throttling", async (
       p99Ms: percentile(result.durationsMs, 0.99),
       maximumMs: Math.max(...result.durationsMs),
       longTasks: postWarmupLongTasks(result),
+      telemetry: summarizePerformanceSamples(measuredSamples(result)),
     };
     await testInfo.attach("chromium-4x.json", {
       body: JSON.stringify(metrics, null, 2),

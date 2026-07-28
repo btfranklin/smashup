@@ -17,7 +17,11 @@ import {
   applyPlayerControls,
   finishSpectatingRound,
 } from "../game/runtime";
-import type { CarPresetId, GameState } from "../game/types";
+import type {
+  CarPresetId,
+  GameState,
+  SessionUpgradeId,
+} from "../game/types";
 import {
   createAppLoop,
   type AppLoop,
@@ -362,30 +366,43 @@ export function createAppController({
       recordPerformance("menu", startedAt);
     }
 
+    function syncMenuAndRequestPresentation(force = false): void {
+      syncMenu(force);
+      appLoop?.requestPresentation();
+    }
+
     function restartFromMenu(): void {
       restartState(state);
       appLoop?.resetClock();
       syncMenu(true);
     }
 
+    function beginCarSelection(): void {
+      beginCarSelect(state);
+      syncMenuAndRequestPresentation();
+    }
+
+    function selectStarterCar(presetId: CarPresetId): void {
+      chooseStarterCar(state, presetId);
+      appLoop?.resetClock();
+      syncMenu();
+    }
+
+    function showNextSessionScreen(): void {
+      advanceAfterRound(state);
+      syncMenuAndRequestPresentation();
+    }
+
+    function chooseSessionUpgrade(upgradeId: SessionUpgradeId): void {
+      applySessionUpgrade(state, upgradeId);
+      syncMenuAndRequestPresentation();
+    }
+
     menuPresenter = createMenuPresenter(menu, state, {
-      beginCarSelect: () => {
-        beginCarSelect(state);
-        syncMenu();
-      },
-      chooseStarterCar: (presetId) => {
-        chooseStarterCar(state, presetId);
-        appLoop?.resetClock();
-        syncMenu();
-      },
-      advanceAfterRound: () => {
-        advanceAfterRound(state);
-        syncMenu();
-      },
-      applySessionUpgrade: (upgradeId) => {
-        applySessionUpgrade(state, upgradeId);
-        syncMenu();
-      },
+      beginCarSelect: beginCarSelection,
+      chooseStarterCar: selectStarterCar,
+      advanceAfterRound: showNextSessionScreen,
+      applySessionUpgrade: chooseSessionUpgrade,
       skipSpectatingRound: () => {
         appLoop?.startSpectatorSkip();
       },
@@ -402,6 +419,7 @@ export function createAppController({
       );
       canvas.style.width = `${size.width}px`;
       canvas.style.height = `${size.height}px`;
+      appLoop?.requestPresentation();
     }
 
     function activateAudio(): void {
@@ -456,11 +474,9 @@ export function createAppController({
       }
       if (event.code === "Enter") {
         if (state.mode === "menu") {
-          beginCarSelect(state);
-          syncMenu();
+          beginCarSelection();
         } else if (state.mode === "round_results") {
-          advanceAfterRound(state);
-          syncMenu();
+          showNextSessionScreen();
         } else if (state.mode === "spectating") {
           appLoop?.startSpectatorSkip();
         } else if (state.mode === "career_over") {
@@ -475,9 +491,7 @@ export function createAppController({
         ? CAR_PRESET_IDS[Number(presetShortcut[1]) - 1]
         : null;
       if (presetId && state.mode === "car_select") {
-        chooseStarterCar(state, presetId as CarPresetId);
-        appLoop?.resetClock();
-        syncMenu();
+        selectStarterCar(presetId as CarPresetId);
       }
       if (
         event.code === "KeyR" &&
@@ -564,7 +578,7 @@ export function createAppController({
       recordPerformance("audio", audioStartedAt);
     }
 
-    function present(): void {
+    function renderPresentation(): void {
       const renderStartedAt = performanceCollector ? performanceNow() : 0;
       renderGame(renderContext, state);
       recordPerformance("render", renderStartedAt);
@@ -586,7 +600,7 @@ export function createAppController({
         audio.update(state);
         recordPerformance("audio", audioStartedAt);
       },
-      present,
+      present: renderPresentation,
       onSpectatorSkipActive: (active) => {
         menuPresenter?.setSpectatorSkipActive(active);
       },
@@ -604,7 +618,7 @@ export function createAppController({
 
     resizeCanvas();
     syncMenu(true);
-    present();
+    activeLoop.presentNow();
     activeLoop.start();
     idleTaskHandle = scheduleIdleTask(() => {
       idleTaskHandle = null;
@@ -618,7 +632,7 @@ export function createAppController({
       menu,
       input,
       tick,
-      present,
+      present: activeLoop.presentNow,
       syncMenu,
       resizeCanvas,
       advanceTime: activeLoop.advanceTime,

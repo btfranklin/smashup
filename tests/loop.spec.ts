@@ -131,22 +131,110 @@ describe("app loop", () => {
     );
   });
 
-  it("resets without catch-up and keeps automated frames presentation-only", () => {
+  it("coalesces requested paints across reset and automated frames", () => {
     const normal = createLoopHarness();
     normal.loop.start();
     normal.setNow(10_000);
     normal.loop.resetClock();
+    normal.loop.requestPresentation();
     normal.flushFrame(10_000);
     expect(normal.runStep).not.toHaveBeenCalled();
     expect(normal.present).toHaveBeenCalledTimes(1);
+    expect(normal.recordPerformance).toHaveBeenLastCalledWith(
+      "frame",
+      10_000,
+      expect.objectContaining({ presented: true }),
+    );
 
     const automated = createLoopHarness({ automatedStepping: true });
     automated.loop.start();
     automated.setNow(1_000);
     automated.flushFrame(1_000);
     expect(automated.runStep).not.toHaveBeenCalled();
+    expect(automated.present).not.toHaveBeenCalled();
+
+    automated.loop.requestPresentation();
+    automated.loop.requestPresentation();
+    automated.flushFrame(1_016);
     expect(automated.present).toHaveBeenCalledTimes(1);
     expect(automated.pendingFrames()).toBe(1);
+    expect(automated.recordPerformance).toHaveBeenLastCalledWith(
+      "frame",
+      1_000,
+      expect.objectContaining({ presented: true }),
+    );
+
+    automated.flushFrame(1_032);
+    expect(automated.present).toHaveBeenCalledTimes(1);
+    expect(automated.recordPerformance).toHaveBeenLastCalledWith(
+      "frame",
+      1_000,
+      expect.objectContaining({ presented: false }),
+    );
+  });
+
+  it("skips zero-step paints unless requested and always paints stepped frames", () => {
+    const harness = createLoopHarness();
+    harness.loop.start();
+
+    harness.setNow(8);
+    harness.flushFrame(8);
+    expect(harness.runStep).not.toHaveBeenCalled();
+    expect(harness.present).not.toHaveBeenCalled();
+    expect(harness.recordPerformance).toHaveBeenLastCalledWith(
+      "frame",
+      8,
+      expect.objectContaining({
+        fixedSteps: 0,
+        presented: false,
+      }),
+    );
+
+    harness.loop.requestPresentation();
+    harness.loop.requestPresentation();
+    harness.setNow(16);
+    harness.flushFrame(16);
+    expect(harness.runStep).not.toHaveBeenCalled();
+    expect(harness.present).toHaveBeenCalledTimes(1);
+    expect(harness.recordPerformance).toHaveBeenLastCalledWith(
+      "frame",
+      16,
+      expect.objectContaining({
+        fixedSteps: 0,
+        presented: true,
+      }),
+    );
+
+    harness.setNow(24);
+    harness.flushFrame(24);
+    expect(harness.runStep).toHaveBeenCalledTimes(1);
+    expect(harness.present).toHaveBeenCalledTimes(2);
+    expect(harness.recordPerformance).toHaveBeenLastCalledWith(
+      "frame",
+      24,
+      expect.objectContaining({
+        fixedSteps: 1,
+        presented: true,
+      }),
+    );
+  });
+
+  it("presents deterministic advancement immediately without a guard-frame repaint", () => {
+    const harness = createLoopHarness();
+    harness.loop.start();
+    harness.loop.requestPresentation();
+
+    harness.loop.advanceTime(1_000 / 60);
+    expect(harness.runStep).toHaveBeenCalledTimes(1);
+    expect(harness.present).toHaveBeenCalledTimes(1);
+
+    harness.flushFrame();
+    expect(harness.present).toHaveBeenCalledTimes(1);
+    expect(harness.recordPerformance).toHaveBeenLastCalledWith(
+      "frame",
+      0,
+      expect.objectContaining({ presented: false }),
+    );
   });
 
   it("yields spectator work in bounded batches and stops at the exact cap", () => {
@@ -218,6 +306,8 @@ describe("app loop", () => {
     harness.loop.destroy();
     harness.loop.destroy();
     harness.loop.start();
+    harness.loop.requestPresentation();
+    harness.loop.presentNow();
     harness.loop.advanceTime(1_000);
     harness.setSpectating(true);
     harness.loop.startSpectatorSkip();
@@ -226,6 +316,7 @@ describe("app loop", () => {
     expect(harness.pendingFrames()).toBe(0);
     expect(harness.runStep).not.toHaveBeenCalled();
     expect(harness.runSpectatorStep).not.toHaveBeenCalled();
+    expect(harness.present).not.toHaveBeenCalled();
   });
 
   it("continues cleanup when a frame cancellation fails", () => {

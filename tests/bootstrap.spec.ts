@@ -210,6 +210,39 @@ describe("jsdom bootstrap and app-controller contract", () => {
     expect(controller.canvas.style.height).toBe("360px");
   });
 
+  it("coalesces resize and session invalidations while preserving immediate presentation", () => {
+    const controller = createTestController({
+      nav: { ...window.navigator, webdriver: true } as Navigator,
+    });
+    const initialPaints = harness.canvas.count("clearRect");
+
+    harness.flushAnimationFrames(16);
+    expect(harness.canvas.count("clearRect")).toBe(initialPaints);
+
+    controller.resizeCanvas();
+    controller.resizeCanvas();
+    harness.flushAnimationFrames(32);
+    expect(harness.canvas.count("clearRect")).toBe(initialPaints + 1);
+
+    harness.flushAnimationFrames(48);
+    expect(harness.canvas.count("clearRect")).toBe(initialPaints + 1);
+
+    harness.appRoot.querySelector<HTMLButtonElement>("#start-btn")?.click();
+    harness.flushAnimationFrames(64);
+    expect(controller.state.mode).toBe("car_select");
+    expect(harness.canvas.count("clearRect")).toBe(initialPaints + 2);
+
+    harness.appRoot
+      .querySelector<HTMLButtonElement>('[data-preset-id="bulldozer"]')
+      ?.click();
+    harness.flushAnimationFrames(80);
+    expect(controller.state.mode).toBe("intro");
+    expect(harness.canvas.count("clearRect")).toBe(initialPaints + 3);
+
+    controller.present();
+    expect(harness.canvas.count("clearRect")).toBe(initialPaints + 4);
+  });
+
   it("routes fullscreen calls from supplied stub state", () => {
     const controller = createTestController();
     harness.attachFullscreenStub(controller.frame);
@@ -388,6 +421,14 @@ describe("jsdom bootstrap and app-controller contract", () => {
       record.mock.calls.some(
         (call) =>
           (call[0] as { audioVoicesCreated: number }).audioVoicesCreated === 7,
+      ),
+    ).toBe(true);
+    expect(
+      record.mock.calls.some(
+        (call) =>
+          (call[0] as { phase: string; presented?: boolean }).phase ===
+            "frame" &&
+          (call[0] as { presented?: boolean }).presented === false,
       ),
     ).toBe(true);
 

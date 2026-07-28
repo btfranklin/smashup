@@ -9,8 +9,10 @@ records frame interval and callback duration; simulation, audio, render, menu,
 and spectator-skip phases; fixed-step and dropped-wall-time counts; gameplay
 mode; collisions and hit-stop state; effect, scar, and audio-voice counts; and
 heap or timeline evidence where the browser exposes it. Sample and timeline
-rings have hard capacity limits. The collector is injected by tests or
-development callers and is never exposed through a production browser hook.
+rings have hard capacity limits. Pure summary helpers report per-phase
+percentiles, peak rendering load, and zero-step presentation counts without
+adding browser work. The collector is injected by tests or development callers
+and is never exposed through a production browser hook.
 
 ## Command
 
@@ -29,14 +31,17 @@ test controller fixture.
 
 | Workload | Enforced gate |
 | --- | --- |
-| Clean seeded eight-car round, repeated heavy collisions, and a late damaged round saturated with effects and scars | Combined fixed-step p95 below 12 ms, p99 below 16.7 ms, no post-warmup application long task at or above 50 ms |
+| Clean seeded eight-car round, repeated heavy collisions, and a representative late damaged round with persistent fragments and scars | Combined fixed-step p95 below 12 ms, p99 below 16.7 ms, no post-warmup application long task at or above 50 ms |
 | Idle audio preparation followed by a real menu gesture | A prepared-audio sample with at least three voices exists before the gesture; next-menu paint, resolved on the second animation frame after the interaction, stays below 50 ms; audio-off run creates none |
 | Spectator skip | Batches below 12 ms unless one indivisible step exceeds it, UI heartbeat remains active, no more than 5,400 fixed steps, completion within 5 seconds |
 | Damaged round under Chromium 4x CPU throttling | Fixed-step p95 below 25 ms and no post-warmup application long task at or above 50 ms |
 
-Unit coverage separately verifies the collector bounds and the exact
-5,400-step/90-second spectator cap. The browser workload may end naturally
-before that cap.
+Unit coverage separately verifies collector bounds, phase summaries,
+presentation invalidation, the exact 5,400-step/90-second spectator cap, and a
+maximum-density fake-canvas render containing the production caps for smoke,
+dust, debris, fragments, and scars. These structural checks assert cache reuse
+and command budgets without introducing wall-clock noise or a browser launch.
+The browser workload may end naturally before the spectator cap.
 
 ## Reference Profile: 2026-07-26
 
@@ -77,10 +82,17 @@ Chrome scenes.
 - Spectator skip now performs sequential fixed steps until 60 steps or an 8 ms
   target budget is reached, then yields through `requestAnimationFrame`. It
   retains one render/audio update per batch and the exact simulation cap.
-- Crash-voice pooling, smoke-sprite replacement, fragment settling/spatial
-  bounds, and AI/particle allocation rewrites were considered but not applied.
-  The post-cache traces did not implicate those paths, so changing them would
-  have been speculative.
+- The normal RAF remains live for scheduling and lifecycle behavior, but a
+  zero-step frame no longer redraws unless browser or session work explicitly
+  invalidated presentation. Completed fixed-step batches still present once.
+- Car drawing reuses one body/roof/hood path per car presentation, disabled
+  cars skip discarded gradients, immutable fragment polygons use weak path
+  caches, and smoke uses bounded normalized shell/flame sprite caches. The
+  maximum-density Vitest workload protects these construction budgets without
+  changing effect simulation or adding a second browser benchmark.
+- Crash-voice pooling, fragment settling/spatial bounds, and AI/particle
+  allocation rewrites remain intentionally unapplied because they would cross
+  into unrelated or gameplay-sensitive work.
 
 The existing one-tick heavy-impact hit-stop is unchanged.
 
@@ -118,6 +130,11 @@ reported as unverified rather than claimed fixed.
 All are ignored. Preserve JSON only when a regression needs comparison or
 handoff evidence; remove screenshots, videos, traces, reports, and fixture
 builds after inspection when a clean artifact state is required.
+
+Scene JSON includes whole-step timing plus post-warmup per-phase summaries and
+peak effect/scar context. Render-phase values measure JavaScript and Canvas
+command submission; they do not claim native raster, composite, or display
+presentation time.
 
 ## Interpreting and Recalibrating
 

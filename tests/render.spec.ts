@@ -6,9 +6,20 @@ import {
   getPhaseColor,
   renderGame,
 } from "../src/game/render";
+import {
+  drawCarFragments,
+  drawSmokePuffs,
+} from "../src/game/render/effects";
 import { createCarPreviewState } from "../src/game/session";
-import { createCanvasRecorder } from "./helpers/canvas-recorder";
-import { createCarFixture, createRunningState } from "./helpers/fixtures";
+import {
+  createCanvasRecorder,
+  RecordedPath2D,
+} from "./helpers/canvas-recorder";
+import {
+  createCarFixture,
+  createRunningState,
+  createSaturatedRenderState,
+} from "./helpers/fixtures";
 
 function getRoundPlan(state: ReturnType<typeof createRunningState>) {
   const plan = state.currentRoundPlan;
@@ -46,6 +57,67 @@ describe("Canvas command orchestration", () => {
         showPlayerOutline: false,
       }),
     ).not.toThrow();
+  });
+
+  it("reuses one body path per car and skips disabled body gradients", () => {
+    const activeCanvas = createCanvasRecorder();
+    const activeCar = createCarFixture({ isPlayer: true });
+
+    drawCar(activeCanvas.ctx, activeCar);
+
+    const bodyPath = activeCanvas
+      .paths("fill")
+      .find(
+        (path) =>
+          path.operations.filter((operation) => operation.type === "lineTo")
+            .length ===
+          activeCar.frame.vertices.length - 1,
+      );
+    expect(bodyPath).toBeDefined();
+    expect(
+      activeCanvas
+        .paths()
+        .filter((path) => path === bodyPath),
+    ).toHaveLength(4);
+    expect(activeCanvas.count("clip")).toBe(2);
+    expect(activeCanvas.count("createLinearGradient")).toBe(1);
+
+    const disabledCanvas = createCanvasRecorder();
+    drawCar(
+      disabledCanvas.ctx,
+      createCarFixture({ disabled: true, isPlayer: false }),
+      { showPlayerOutline: false },
+    );
+
+    expect(disabledCanvas.count("createLinearGradient")).toBe(0);
+  });
+
+  it("keeps body clipping within the damaged-car structural budget", () => {
+    const canvas = createCanvasRecorder();
+    const car = createCarFixture({
+      body: { front: 0.7, rear: 0.6, left: 0.5, right: 0.4 },
+    });
+    car.frame.crush = {
+      front: 0.4,
+      rear: 0.4,
+      left: 0.3,
+      right: 0.3,
+    };
+    car.frame.scars = [
+      {
+        id: 1,
+        x: 4,
+        y: 2,
+        angle: 0.4,
+        length: 8,
+        depth: 0.7,
+        width: 2,
+      },
+    ];
+
+    drawCar(canvas.ctx, car, { showPlayerOutline: false });
+
+    expect(canvas.count("clip")).toBe(4);
   });
 
   it("draws a distinct character line for each car preset", () => {
@@ -173,8 +245,12 @@ describe("Canvas command orchestration", () => {
     expect(textCalls).toContain("System");
     expect(textCalls).toContain("Result");
     const contourStrokes = canvas.find("stroke");
+    const spriteCanvases = new Set<unknown>(
+      canvas.surfaces.map((surface) => surface.ctx.canvas),
+    );
     const smokeIndex = canvas.operations.findIndex(
-      (entry) => entry.type === "createRadialGradient",
+      (entry) =>
+        entry.type === "drawImage" && spriteCanvases.has(entry.args[0]),
     );
     expect(contourStrokes.length).toBeGreaterThan(0);
     expect(smokeIndex).toBeGreaterThan(0);
@@ -205,7 +281,14 @@ describe("Canvas command orchestration", () => {
 
     renderGame(canvas.ctx, state);
 
-    expect(canvas.count("lineTo")).toBeGreaterThan(30);
+    const fragmentPath = canvas
+      .paths("fill")
+      .find(
+        (path) =>
+          path.operations.filter((operation) => operation.type === "lineTo")
+            .length === 2,
+      );
+    expect(fragmentPath).toBeInstanceOf(RecordedPath2D);
   });
 
   it("draws transient debris, dust, and non-flaming smoke", () => {
@@ -252,9 +335,214 @@ describe("Canvas command orchestration", () => {
 
     renderGame(canvas.ctx, state);
 
-    expect(canvas.count("createRadialGradient")).toBeGreaterThan(0);
+    expect(canvas.count("createRadialGradient")).toBe(0);
+    expect(
+      canvas.surfaces.reduce(
+        (total, surface) =>
+          total + surface.count("createRadialGradient"),
+        0,
+      ),
+    ).toBeGreaterThan(0);
+    expect(canvas.count("drawImage")).toBeGreaterThan(0);
     expect(canvas.count("fillRect")).toBeGreaterThan(0);
     expect(canvas.count("arc")).toBeGreaterThan(0);
+  });
+
+  it("reuses smoke sprites and immutable fragment paths", () => {
+    const smokeCanvas = createCanvasRecorder();
+    const puffs = [
+      {
+        id: 1,
+        sourceCarId: 1,
+        x: 100,
+        y: 100,
+        vx: 0,
+        vy: 0,
+        age: 0.25,
+        ttl: 1,
+        size: 10,
+        density: 0.5,
+        flame: 0.75,
+      },
+      {
+        id: 2,
+        sourceCarId: 1,
+        x: 130,
+        y: 100,
+        vx: 0,
+        vy: 0,
+        age: 0.25,
+        ttl: 1,
+        size: 12,
+        density: 0.5,
+        flame: 0.75,
+      },
+    ];
+
+    drawSmokePuffs(smokeCanvas.ctx, puffs);
+    const surfaceCount = smokeCanvas.surfaces.length;
+    const spriteGradientCount = smokeCanvas.surfaces.reduce(
+      (total, surface) =>
+        total + surface.count("createRadialGradient"),
+      0,
+    );
+    expect(smokeCanvas.count("createRadialGradient")).toBe(0);
+    expect(surfaceCount).toBe(2);
+    expect(
+      smokeCanvas.surfaces.map((surface) => [
+        surface.ctx.canvas.width,
+        surface.ctx.canvas.height,
+      ]),
+    ).toEqual([
+      [96, 96],
+      [96, 96],
+    ]);
+    expect(smokeCanvas.surfaces[0].gradients[0].stops).toEqual([
+      { offset: 0, color: "rgba(94, 92, 88, 0.8)" },
+      { offset: 0.55, color: "rgba(57, 54, 51, 1)" },
+      { offset: 1, color: "rgba(16, 14, 13, 0.82)" },
+    ]);
+    expect(smokeCanvas.count("drawImage")).toBe(4);
+    expect(smokeCanvas.find("drawImage")[0].args.slice(1)).toEqual([
+      86,
+      86,
+      28,
+      28,
+    ]);
+    const smokeAlphas = smokeCanvas
+      .find("set:globalAlpha")
+      .slice(0, 2)
+      .map((operation) => Number(operation.args[0]));
+    expect(smokeAlphas[0]).toBeCloseTo(0.2475);
+    expect(smokeAlphas[1]).toBeCloseTo(0.5625);
+
+    drawSmokePuffs(smokeCanvas.ctx, puffs);
+
+    expect(smokeCanvas.surfaces).toHaveLength(surfaceCount);
+    expect(
+      smokeCanvas.surfaces.reduce(
+        (total, surface) =>
+          total + surface.count("createRadialGradient"),
+        0,
+      ),
+    ).toBe(spriteGradientCount);
+    expect(smokeCanvas.count("drawImage")).toBe(8);
+
+    const fragmentCanvas = createCanvasRecorder();
+    const fragment = {
+      id: 1,
+      sourceCarId: 1,
+      x: 10,
+      y: 20,
+      vx: 0,
+      vy: 0,
+      radius: 5,
+      mass: 30,
+      rotation: 0.2,
+      spin: 0,
+      color: "#446688",
+      edgeColor: "#111111",
+      points: [
+        { x: -4, y: -3 },
+        { x: 5, y: -2 },
+        { x: 1, y: 4 },
+      ],
+    };
+    drawCarFragments(fragmentCanvas.ctx, [fragment]);
+    drawCarFragments(fragmentCanvas.ctx, [fragment]);
+    const fragmentFillPaths = fragmentCanvas.paths("fill");
+    expect(fragmentFillPaths).toHaveLength(2);
+    expect(fragmentFillPaths[1]).toBe(fragmentFillPaths[0]);
+  });
+
+  it("bounds the flame sprite cache with least-recently-used eviction", () => {
+    const canvas = createCanvasRecorder();
+    const puffs = Array.from({ length: 129 }, (_, index) => {
+      const flameIndex = 1 + Math.floor(index / 32);
+      const lifeIndex = 1 + (index % 32);
+      return {
+        id: index + 1,
+        sourceCarId: 1,
+        x: 100 + index,
+        y: 100,
+        vx: 0,
+        vy: 0,
+        age: 1 - lifeIndex / 32,
+        ttl: 1,
+        size: 10,
+        density: 0.5,
+        flame: flameIndex / 32,
+      };
+    });
+
+    drawSmokePuffs(canvas.ctx, puffs);
+    expect(canvas.surfaces).toHaveLength(130);
+
+    drawSmokePuffs(canvas.ctx, [puffs[0]]);
+    expect(canvas.surfaces).toHaveLength(131);
+  });
+
+  it("keeps the maximum-density warm render structurally bounded and pure", () => {
+    const canvas = createCanvasRecorder();
+    const state = createSaturatedRenderState();
+    const stateBefore = JSON.stringify(state);
+
+    renderGame(canvas.ctx, state);
+    const surfaceCount = canvas.surfaces.length;
+    const spriteGradientCount = canvas.surfaces.reduce(
+      (total, surface) =>
+        total + surface.count("createRadialGradient"),
+      0,
+    );
+    const bodyPathCountAfterFirstRender = new Set(
+      canvas
+        .paths()
+        .filter(
+          (path) =>
+            path.operations.filter(
+              (operation) => operation.type === "lineTo",
+            ).length ===
+            state.cars[0].frame.vertices.length - 1,
+        ),
+    ).size;
+
+    renderGame(canvas.ctx, state);
+
+    expect(JSON.stringify(state)).toBe(stateBefore);
+    expect(state.cars).toHaveLength(8);
+    expect(state.cars.every((car) => car.frame.scars.length === 42)).toBe(
+      true,
+    );
+    expect(state.smokePuffs).toHaveLength(180);
+    expect(state.dustPuffs).toHaveLength(180);
+    expect(state.debrisParticles).toHaveLength(220);
+    expect(state.carFragments).toHaveLength(220);
+    expect(canvas.count("createRadialGradient")).toBe(0);
+    expect(canvas.count("clip")).toBeLessThanOrEqual(
+      state.cars.length * 4 * 2,
+    );
+    expect(bodyPathCountAfterFirstRender).toBe(state.cars.length);
+    expect(
+      new Set(
+        canvas
+          .paths()
+          .filter(
+            (path) =>
+              path.operations.filter(
+                (operation) => operation.type === "lineTo",
+              ).length ===
+              state.cars[0].frame.vertices.length - 1,
+          ),
+      ).size,
+    ).toBe(state.cars.length * 2);
+    expect(canvas.surfaces).toHaveLength(surfaceCount);
+    expect(
+      canvas.surfaces.reduce(
+        (total, surface) =>
+          total + surface.count("createRadialGradient"),
+        0,
+      ),
+    ).toBe(spriteGradientCount);
   });
 
   it("emits intro overlay commands with the countdown and title", () => {
@@ -280,11 +568,12 @@ describe("Canvas command orchestration", () => {
 
     renderGame(canvas.ctx, state);
 
-    expect(canvas.operations.slice(-3).map((entry) => entry.type)).toEqual([
-      "save",
-      "fillRect",
-      "restore",
-    ]);
+    expect(
+      canvas.operations
+        .filter((entry) => !entry.type.startsWith("set:"))
+        .slice(-3)
+        .map((entry) => entry.type),
+    ).toEqual(["save", "fillRect", "restore"]);
   });
 
   it("emits gradient and rounded-rectangle commands for mud zones", () => {

@@ -1,6 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { createPerformanceCollector } from "../src/app/performance";
+import {
+  createPerformanceCollector,
+  summarizePerformanceSamples,
+} from "../src/app/performance";
 import { createInitialState } from "../src/game/session";
 
 describe("bounded performance collector", () => {
@@ -68,6 +71,7 @@ describe("bounded performance collector", () => {
       fixedSteps: 3,
       collisionCount: 1,
       hitStopActive: true,
+      presented: false,
       effects: {
         smoke: 1,
         debris: 0,
@@ -83,7 +87,9 @@ describe("bounded performance collector", () => {
     const state = createInitialState();
     const performanceTarget = {
       memory: { usedJSHeapSize: 1_000 },
-    } as unknown as Performance;
+    } as unknown as Performance & {
+      memory: { usedJSHeapSize: number };
+    };
     const collector = createPerformanceCollector({
       performance: performanceTarget,
       observerFactory: null,
@@ -96,11 +102,7 @@ describe("bounded performance collector", () => {
       durationMs: 2,
       state,
     });
-    (
-      performanceTarget as Performance & {
-        memory: { usedJSHeapSize: number };
-      }
-    ).memory.usedJSHeapSize = 600;
+    performanceTarget.memory.usedJSHeapSize = 600;
     collector.record({
       phase: "frame",
       timestampMs: 16,
@@ -111,11 +113,137 @@ describe("bounded performance collector", () => {
     });
 
     expect(collector.snapshot().samples[1]).toMatchObject({
+      presented: false,
       jsHeapBytes: 600,
       jsHeapDeltaBytes: -400,
       inferredGarbageCollection: true,
       frameIntervalMs: 16,
       droppedWallTimeMs: 4,
+    });
+  });
+
+  it("summarizes phase percentiles, load peaks, and zero-step presentation cadence", () => {
+    const state = createInitialState();
+    const performanceTarget = {
+      memory: { usedJSHeapSize: 1_000 },
+    } as unknown as Performance & {
+      memory: { usedJSHeapSize: number };
+    };
+    const collector = createPerformanceCollector({
+      performance: performanceTarget,
+      observerFactory: null,
+      supportedEntryTypes: [],
+    });
+
+    for (const [index, durationMs] of [1, 2, 3, 4, 20].entries()) {
+      state.smokePuffs.length = index;
+      state.debrisParticles.length = index + 1;
+      state.dustPuffs.length = index + 2;
+      state.carFragments.length = index + 3;
+      state.cars[0].frame.scars.length = index;
+      performanceTarget.memory.usedJSHeapSize = 1_000 + index * 100;
+      collector.record({
+        phase: "simulation",
+        timestampMs: index * 10,
+        durationMs,
+        state,
+        fixedSteps: index + 1,
+        droppedWallTimeMs: index * 2,
+        audioVoicesCreated: index + 2,
+      });
+    }
+    collector.record({
+      phase: "frame",
+      timestampMs: 60,
+      durationMs: 2,
+      state,
+      fixedSteps: 0,
+      presented: false,
+    });
+    collector.record({
+      phase: "frame",
+      timestampMs: 70,
+      durationMs: 4,
+      state,
+      fixedSteps: 0,
+      presented: true,
+    });
+    collector.record({
+      phase: "frame",
+      timestampMs: 80,
+      durationMs: 6,
+      state,
+      fixedSteps: 1,
+      presented: true,
+    });
+
+    const samples = collector.snapshot().samples;
+    const originalSamples = JSON.stringify(samples);
+    expect(summarizePerformanceSamples(samples)).toEqual({
+      phases: {
+        frame: {
+          sampleCount: 3,
+          p50Ms: 4,
+          p95Ms: 6,
+          p99Ms: 6,
+          maxMs: 6,
+        },
+        simulation: {
+          sampleCount: 5,
+          p50Ms: 3,
+          p95Ms: 20,
+          p99Ms: 20,
+          maxMs: 20,
+        },
+      },
+      loadPeaks: {
+        fixedSteps: 5,
+        droppedWallTimeMs: 8,
+        collisionCount: 0,
+        effects: {
+          smoke: 4,
+          debris: 5,
+          dust: 6,
+          fragments: 7,
+          total: 22,
+        },
+        scarCount: 4,
+        audioVoicesCreated: 6,
+        jsHeapBytes: 1_400,
+      },
+      framePresentationCounts: {
+        total: 3,
+        presented: 2,
+        skipped: 1,
+        zeroStep: 2,
+        zeroStepPresented: 1,
+      },
+    });
+    expect(JSON.stringify(samples)).toBe(originalSamples);
+    expect(summarizePerformanceSamples([])).toEqual({
+      phases: {},
+      loadPeaks: {
+        fixedSteps: 0,
+        droppedWallTimeMs: 0,
+        collisionCount: 0,
+        effects: {
+          smoke: 0,
+          debris: 0,
+          dust: 0,
+          fragments: 0,
+          total: 0,
+        },
+        scarCount: 0,
+        audioVoicesCreated: 0,
+        jsHeapBytes: null,
+      },
+      framePresentationCounts: {
+        total: 0,
+        presented: 0,
+        skipped: 0,
+        zeroStep: 0,
+        zeroStepPresented: 0,
+      },
     });
   });
 
