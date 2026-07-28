@@ -101,16 +101,20 @@ function prepareRound(state: GameState, roundIndex: number): void {
       car.systems.overheat = Math.max(0.55, car.systems.overheat);
     }
   }
-  if (
-    roundPlan.modifier === "lights_out" ||
-    roundPlan.modifier === "redline"
-  ) {
+  if (roundPlan.modifier === "lights_out") {
+    for (const car of state.cars) {
+      car.lights.frontLeft = false;
+      car.lights.frontRight = false;
+      car.lights.rearLeft = false;
+      car.lights.rearRight = false;
+    }
+  }
+  if (roundPlan.modifier === "redline") {
     for (const car of state.cars) {
       car.lights.rearLeft = false;
       if (!car.isPlayer) {
         car.lights.rearRight = false;
       }
-      car.body.rear = Math.min(1, car.body.rear + 0.04);
     }
   }
 

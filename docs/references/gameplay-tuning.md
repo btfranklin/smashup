@@ -28,7 +28,8 @@ This document captures the current intent behind the hand-tuned gameplay rules. 
   radiator, transmission, and steering to 32%, caps overheat at 70%, then
   applies ordinary service and the chosen pit upgrade. Body and frame damage
   still carry forward.
-- Light breakage is part of visible damage readability, especially in the `lights_out` round.
+- `lights_out` starts every car with all headlights and taillights dark, making
+  its orientation harder to read without adding body damage.
 
 ## AI
 - AI drivers are simple flock-like attackers, not perfect racers.

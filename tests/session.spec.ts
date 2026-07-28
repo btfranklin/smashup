@@ -170,6 +170,31 @@ describe("session flow", () => {
     expect(state.cars.every((car) => car.lights.rearLeft === false)).toBe(true);
   });
 
+  it("starts Lights Out with every light dark and no added body damage", () => {
+    const state = createInitialState();
+    chooseStarterCar(state, "bulldozer", 42);
+    const lightsOutIndex = state.session.roundPlans.findIndex(
+      (plan) => plan.modifier === "lights_out",
+    );
+
+    expect(lightsOutIndex).toBeGreaterThan(0);
+
+    for (let roundIndex = 1; roundIndex <= lightsOutIndex; roundIndex += 1) {
+      state.session.lastRoundSummary = createRoundSummaryFixture({
+        roundNumber: roundIndex,
+      });
+      applySessionUpgrade(state, "ram_rig");
+    }
+
+    expect(state.currentRoundPlan?.modifier).toBe("lights_out");
+    expect(
+      state.cars.every((car) =>
+        Object.values(car.lights).every((active) => !active),
+      ),
+    ).toBe(true);
+    expect(state.cars.every((car) => car.body.rear === 0)).toBe(true);
+  });
+
   it("advances every non-final result to upgrades and the finale to career over", () => {
     const state = createInitialState();
     chooseStarterCar(state, "darter", 42);

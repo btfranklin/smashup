@@ -321,7 +321,8 @@ export const ROUND_MODIFIER_DEFINITIONS: Record<
   lights_out: {
     id: "lights_out",
     title: "Lights Out",
-    introLine: "Busted lights turn every hit into a surprise.",
+    introLine:
+      "Every headlight and taillight is dead, making each car harder to read.",
   },
   redline: {
     id: "redline",
