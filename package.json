@@ -20,12 +20,12 @@
     "validate": "npm run check:repo && npm run typecheck && npm run build && npm run test:coverage && npm run test:browser"
   },
   "devDependencies": {
-    "@playwright/test": ">=1.61.1",
-    "@types/node": ">=26.1.1",
+    "@playwright/test": ">=1.62.0",
+    "@types/node": ">=26.1.2",
     "@vitest/coverage-v8": ">=4.1.10",
-    "jsdom": ">=29.1.1",
+    "jsdom": ">=30.0.0",
     "typescript": ">=7.0.2",
-    "vite": ">=8.1.4",
+    "vite": ">=8.1.5",
     "vitest": ">=4.1.10"
   },
   "allowScripts": {
