@@ -378,14 +378,22 @@ function drawUndercarriage(ctx: CanvasRenderingContext2D, car: Car): void {
   ctx.restore();
 }
 
-export function drawCar(
+function drawCarUndercarriage(
   ctx: CanvasRenderingContext2D,
   car: Car,
-  options?: {
-    showPlayerOutline?: boolean;
-  },
 ): void {
-  const showPlayerOutline = options?.showPlayerOutline ?? true;
+  ctx.save();
+  ctx.translate(car.x, car.y);
+  ctx.rotate(car.angle);
+  drawUndercarriage(ctx, car);
+  ctx.restore();
+}
+
+function drawCarBody(
+  ctx: CanvasRenderingContext2D,
+  car: Car,
+  showPlayerOutline: boolean,
+): void {
   const { path: bodyPath, frontEdge, rearEdge } = createCarBodyPath(car);
   const roofPath = createRoofPanelPath(car);
   const hoodPath = createHoodPanelPath(car);
@@ -412,8 +420,6 @@ export function drawCar(
     ctx.stroke(bodyPath);
     ctx.restore();
   }
-
-  drawUndercarriage(ctx, car);
 
   if (car.disabled) {
     ctx.fillStyle = "#6f665f";
@@ -477,4 +483,21 @@ export function drawCar(
   drawLights(ctx, car, frontEdge, rearEdge);
 
   ctx.restore();
+}
+
+export function drawCars(
+  ctx: CanvasRenderingContext2D,
+  cars: Car[],
+  options?: {
+    showPlayerOutline?: boolean;
+  },
+): void {
+  for (const car of cars) {
+    drawCarUndercarriage(ctx, car);
+  }
+
+  const showPlayerOutline = options?.showPlayerOutline ?? true;
+  for (const car of cars) {
+    drawCarBody(ctx, car, showPlayerOutline);
+  }
 }

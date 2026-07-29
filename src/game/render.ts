@@ -1,5 +1,5 @@
 import { drawArenaObject, drawCachedArena } from "./render/arena";
-import { drawCar } from "./render/car";
+import { drawCars } from "./render/car";
 import {
   drawCarFragments,
   drawDebrisParticles,
@@ -16,7 +16,7 @@ import {
 import { requirePlayerCar } from "./selectors";
 import type { GameState } from "./types";
 
-export { drawCar } from "./render/car";
+export { drawCars } from "./render/car";
 export { getPhaseColor } from "./render/overlays";
 
 export function renderGame(
@@ -33,9 +33,7 @@ export function renderGame(
     ctx.translate(state.arena.width * 0.5, state.arena.height * 0.52);
     ctx.scale(previewScale, previewScale);
     ctx.translate(-previewCar.x, -previewCar.y);
-    for (const car of state.cars) {
-      drawCar(ctx, car, { showPlayerOutline: false });
-    }
+    drawCars(ctx, state.cars, { showPlayerOutline: false });
     drawSmokePuffs(ctx, state.smokePuffs);
     ctx.restore();
     return;
@@ -52,9 +50,7 @@ export function renderGame(
   drawCarFragments(ctx, state.carFragments);
   drawDustPuffs(ctx, state.dustPuffs);
   drawDebrisParticles(ctx, state.debrisParticles);
-  for (const car of state.cars) {
-    drawCar(ctx, car);
-  }
+  drawCars(ctx, state.cars);
   drawSmokePuffs(ctx, state.smokePuffs);
   ctx.restore();
 

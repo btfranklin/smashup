@@ -8,85 +8,316 @@ import { clamp, normalizeAngle } from "./math";
 import type {
   ArenaObject,
   Car,
+  CarFrameState,
   CollisionEvent,
   GameState,
   MudZone,
   Vec2,
 } from "./types";
 
+const COLLISION_EPSILON = 1e-7;
+
+type LocalHullCacheEntry = {
+  coordinates: number[];
+  hull: Vec2[];
+};
+
+type WorldHullCacheEntry = {
+  localHull: Vec2[];
+  hull: Vec2[];
+  x: number;
+  y: number;
+  angle: number;
+};
+
+const localCollisionHullCache = new WeakMap<
+  CarFrameState,
+  LocalHullCacheEntry
+>();
+const worldCollisionHullCache = new WeakMap<Car, WorldHullCacheEntry>();
+
 function dot(a: Vec2, b: Vec2): number {
   return a.x * b.x + a.y * b.y;
-}
-
-function normalize(vector: Vec2): Vec2 {
-  const length = Math.hypot(vector.x, vector.y) || 1;
-  return { x: vector.x / length, y: vector.y / length };
 }
 
 function perpendicular(axis: Vec2): Vec2 {
   return { x: -axis.y, y: axis.x };
 }
 
-function getAxes(car: Car): [Vec2, Vec2] {
-  const forward = { x: Math.cos(car.angle), y: Math.sin(car.angle) };
-  const right = { x: -forward.y, y: forward.x };
-  return [forward, right];
+function cross(origin: Vec2, a: Vec2, b: Vec2): number {
+  return (
+    (a.x - origin.x) * (b.y - origin.y) -
+    (a.y - origin.y) * (b.x - origin.x)
+  );
 }
 
-function getCorners(car: Car): Vec2[] {
-  const [forward, right] = getAxes(car);
-  const halfLength = car.length * 0.5;
-  const halfWidth = car.width * 0.5;
-  return [
-    {
-      x: car.x + forward.x * halfLength + right.x * halfWidth,
-      y: car.y + forward.y * halfLength + right.y * halfWidth,
-    },
-    {
-      x: car.x + forward.x * halfLength - right.x * halfWidth,
-      y: car.y + forward.y * halfLength - right.y * halfWidth,
-    },
-    {
-      x: car.x - forward.x * halfLength - right.x * halfWidth,
-      y: car.y - forward.y * halfLength - right.y * halfWidth,
-    },
-    {
-      x: car.x - forward.x * halfLength + right.x * halfWidth,
-      y: car.y - forward.y * halfLength + right.y * halfWidth,
-    },
-  ];
-}
-
-function supportPoint(car: Car, direction: Vec2): Vec2 {
-  const corners = getCorners(car);
-  let best = corners[0];
-  let bestScore = dot(best, direction);
-  for (let i = 1; i < corners.length; i += 1) {
-    const score = dot(corners[i], direction);
-    if (score > bestScore) {
-      best = corners[i];
-      bestScore = score;
+function getLocalCollisionHull(car: Car): Vec2[] {
+  const cached = localCollisionHullCache.get(car.frame);
+  const coordinateCount = car.frame.vertices.length * 2;
+  if (cached && cached.coordinates.length === coordinateCount) {
+    let unchanged = true;
+    for (let index = 0; index < car.frame.vertices.length; index += 1) {
+      const vertex = car.frame.vertices[index];
+      if (
+        cached.coordinates[index * 2] !== vertex.x ||
+        cached.coordinates[index * 2 + 1] !== vertex.y
+      ) {
+        unchanged = false;
+        break;
+      }
+    }
+    if (unchanged) {
+      return cached.hull;
     }
   }
-  return best;
-}
 
-function project(corners: Vec2[], axis: Vec2): { min: number; max: number } {
-  let min = dot(corners[0], axis);
-  let max = min;
-  for (let i = 1; i < corners.length; i += 1) {
-    const projection = dot(corners[i], axis);
-    min = Math.min(min, projection);
-    max = Math.max(max, projection);
+  const coordinates = new Array<number>(coordinateCount);
+  const points = car.frame.vertices
+    .map((vertex, index) => {
+      coordinates[index * 2] = vertex.x;
+      coordinates[index * 2 + 1] = vertex.y;
+      return { x: vertex.x, y: vertex.y };
+    })
+    .sort((a, b) => a.x - b.x || a.y - b.y);
+  const lower: Vec2[] = [];
+  const upper: Vec2[] = [];
+
+  for (const point of points) {
+    while (
+      lower.length >= 2 &&
+      cross(lower[lower.length - 2], lower[lower.length - 1], point) <=
+        COLLISION_EPSILON
+    ) {
+      lower.pop();
+    }
+    lower.push(point);
   }
-  return { min, max };
+  for (let index = points.length - 1; index >= 0; index -= 1) {
+    const point = points[index];
+    while (
+      upper.length >= 2 &&
+      cross(upper[upper.length - 2], upper[upper.length - 1], point) <=
+        COLLISION_EPSILON
+    ) {
+      upper.pop();
+    }
+    upper.push(point);
+  }
+
+  lower.pop();
+  upper.pop();
+  const hull = lower.concat(upper);
+  localCollisionHullCache.set(car.frame, { coordinates, hull });
+  return hull;
 }
 
-function overlapAmount(
-  a: { min: number; max: number },
-  b: { min: number; max: number },
-): number {
-  return Math.min(a.max, b.max) - Math.max(a.min, b.min);
+function getWorldCollisionHull(car: Car, localHull: Vec2[]): Vec2[] {
+  let cached = worldCollisionHullCache.get(car);
+  if (!cached || cached.localHull !== localHull) {
+    cached = {
+      localHull,
+      hull: localHull.map(() => ({ x: 0, y: 0 })),
+      x: Number.NaN,
+      y: Number.NaN,
+      angle: Number.NaN,
+    };
+    worldCollisionHullCache.set(car, cached);
+  }
+  if (cached.x === car.x && cached.y === car.y && cached.angle === car.angle) {
+    return cached.hull;
+  }
+
+  const cosine = Math.cos(car.angle);
+  const sine = Math.sin(car.angle);
+  for (let index = 0; index < localHull.length; index += 1) {
+    const localPoint = localHull[index];
+    const worldPoint = cached.hull[index];
+    worldPoint.x = car.x + localPoint.x * cosine - localPoint.y * sine;
+    worldPoint.y = car.y + localPoint.x * sine + localPoint.y * cosine;
+  }
+  cached.x = car.x;
+  cached.y = car.y;
+  cached.angle = car.angle;
+  return cached.hull;
+}
+
+function translateHull(hull: Vec2[], x: number, y: number): void {
+  for (const point of hull) {
+    point.x += x;
+    point.y += y;
+  }
+}
+
+function supportPoint(hull: Vec2[], direction: Vec2): Vec2 {
+  let bestScore = dot(hull[0], direction);
+  let x = hull[0].x;
+  let y = hull[0].y;
+  let count = 1;
+  for (let index = 1; index < hull.length; index += 1) {
+    const point = hull[index];
+    const score = dot(point, direction);
+    if (score > bestScore + COLLISION_EPSILON) {
+      bestScore = score;
+      x = point.x;
+      y = point.y;
+      count = 1;
+    } else if (Math.abs(score - bestScore) <= COLLISION_EPSILON) {
+      x += point.x;
+      y += point.y;
+      count += 1;
+    }
+  }
+  return { x: x / count, y: y / count };
+}
+
+function getCollisionOverlap(
+  firstHull: Vec2[],
+  secondHull: Vec2[],
+): { amount: number; axis: Vec2 } | null {
+  let minimumOverlap = Infinity;
+  let smallestAxisX = 0;
+  let smallestAxisY = 0;
+
+  for (let hullIndex = 0; hullIndex < 2; hullIndex += 1) {
+    const sourceHull = hullIndex === 0 ? firstHull : secondHull;
+    for (let index = 0; index < sourceHull.length; index += 1) {
+      const point = sourceHull[index];
+      const next = sourceHull[(index + 1) % sourceHull.length];
+      const edgeX = next.x - point.x;
+      const edgeY = next.y - point.y;
+      const edgeLength = Math.hypot(edgeX, edgeY);
+      const axisX = -edgeY / edgeLength;
+      const axisY = edgeX / edgeLength;
+
+      let firstMin = firstHull[0].x * axisX + firstHull[0].y * axisY;
+      let firstMax = firstMin;
+      for (
+        let pointIndex = 1;
+        pointIndex < firstHull.length;
+        pointIndex += 1
+      ) {
+        const projection =
+          firstHull[pointIndex].x * axisX + firstHull[pointIndex].y * axisY;
+        firstMin = Math.min(firstMin, projection);
+        firstMax = Math.max(firstMax, projection);
+      }
+
+      let secondMin = secondHull[0].x * axisX + secondHull[0].y * axisY;
+      let secondMax = secondMin;
+      for (
+        let pointIndex = 1;
+        pointIndex < secondHull.length;
+        pointIndex += 1
+      ) {
+        const projection =
+          secondHull[pointIndex].x * axisX + secondHull[pointIndex].y * axisY;
+        secondMin = Math.min(secondMin, projection);
+        secondMax = Math.max(secondMax, projection);
+      }
+
+      const overlap =
+        Math.min(firstMax, secondMax) - Math.max(firstMin, secondMin);
+      if (overlap <= 0) {
+        return null;
+      }
+      if (overlap < minimumOverlap) {
+        minimumOverlap = overlap;
+        smallestAxisX = axisX;
+        smallestAxisY = axisY;
+      }
+    }
+  }
+
+  return {
+    amount: minimumOverlap,
+    axis: { x: smallestAxisX, y: smallestAxisY },
+  };
+}
+
+function getCircleCollisionOverlap(
+  hull: Vec2[],
+  center: Vec2,
+  radius: number,
+): { amount: number; axis: Vec2 } | null {
+  let inside = true;
+  let closestDistanceSquared = Infinity;
+  let closestX = 0;
+  let closestY = 0;
+  let nearestFaceDistance = Infinity;
+  let nearestFaceNormalX = 0;
+  let nearestFaceNormalY = 1;
+
+  for (let index = 0; index < hull.length; index += 1) {
+    const point = hull[index];
+    const next = hull[(index + 1) % hull.length];
+    const edgeX = next.x - point.x;
+    const edgeY = next.y - point.y;
+    const edgeLengthSquared = edgeX * edgeX + edgeY * edgeY;
+    const edgeLength = Math.sqrt(edgeLengthSquared);
+    const signedDistance = cross(point, next, center) / edgeLength;
+    const outwardNormalX = edgeY / edgeLength;
+    const outwardNormalY = -edgeX / edgeLength;
+    const tiedFace =
+      Math.abs(signedDistance - nearestFaceDistance) <= COLLISION_EPSILON;
+    const preferredTie =
+      outwardNormalY > nearestFaceNormalY + COLLISION_EPSILON ||
+      (Math.abs(outwardNormalY - nearestFaceNormalY) <= COLLISION_EPSILON &&
+        outwardNormalX > nearestFaceNormalX);
+    if (
+      signedDistance < nearestFaceDistance - COLLISION_EPSILON ||
+      (tiedFace && preferredTie)
+    ) {
+      nearestFaceDistance = signedDistance;
+      nearestFaceNormalX = outwardNormalX;
+      nearestFaceNormalY = outwardNormalY;
+    }
+    if (signedDistance < -COLLISION_EPSILON) {
+      inside = false;
+    }
+
+    const pointToCenterX = center.x - point.x;
+    const pointToCenterY = center.y - point.y;
+    const segmentPosition = clamp(
+      (pointToCenterX * edgeX + pointToCenterY * edgeY) / edgeLengthSquared,
+      0,
+      1,
+    );
+    const segmentX = point.x + edgeX * segmentPosition;
+    const segmentY = point.y + edgeY * segmentPosition;
+    const distanceX = center.x - segmentX;
+    const distanceY = center.y - segmentY;
+    const distanceSquared = distanceX * distanceX + distanceY * distanceY;
+    if (distanceSquared < closestDistanceSquared) {
+      closestDistanceSquared = distanceSquared;
+      closestX = segmentX;
+      closestY = segmentY;
+    }
+  }
+
+  if (inside) {
+    return {
+      amount: radius + Math.max(0, nearestFaceDistance),
+      axis: { x: nearestFaceNormalX, y: nearestFaceNormalY },
+    };
+  }
+  if (closestDistanceSquared >= radius * radius) {
+    return null;
+  }
+
+  const distance = Math.sqrt(closestDistanceSquared);
+  if (distance <= COLLISION_EPSILON) {
+    return {
+      amount: radius,
+      axis: { x: nearestFaceNormalX, y: nearestFaceNormalY },
+    };
+  }
+  return {
+    amount: radius - distance,
+    axis: {
+      x: (center.x - closestX) / distance,
+      y: (center.y - closestY) / distance,
+    },
+  };
 }
 
 function damageScaleForZones(
@@ -259,27 +490,32 @@ export function stepCar(
   car.x += car.vx * dt;
   car.y += car.vy * dt;
 
-  const halfLength = car.length * 0.5;
-  const halfWidth = car.width * 0.5;
-  const absoluteCosine = Math.abs(Math.cos(car.angle));
-  const absoluteSine = Math.abs(Math.sin(car.angle));
-  const xExtent = absoluteCosine * halfLength + absoluteSine * halfWidth;
-  const yExtent = absoluteSine * halfLength + absoluteCosine * halfWidth;
-  const xMin = xExtent + arena.wallPadding;
-  const xMax = arena.width - xExtent - arena.wallPadding;
-  const yMin = yExtent + arena.wallPadding;
-  const yMax = arena.height - yExtent - arena.wallPadding;
+  const wallHull = getWorldCollisionHull(car, getLocalCollisionHull(car));
+  let minimumX = wallHull[0].x;
+  let maximumX = minimumX;
+  let minimumY = wallHull[0].y;
+  let maximumY = minimumY;
+  for (let index = 1; index < wallHull.length; index += 1) {
+    minimumX = Math.min(minimumX, wallHull[index].x);
+    maximumX = Math.max(maximumX, wallHull[index].x);
+    minimumY = Math.min(minimumY, wallHull[index].y);
+    maximumY = Math.max(maximumY, wallHull[index].y);
+  }
 
-  if (car.x < xMin) {
-    car.x = xMin;
+  if (minimumX < arena.wallPadding) {
+    const correction = arena.wallPadding - minimumX;
+    car.x += correction;
+    translateHull(wallHull, correction, 0);
     resolveWallResponse(
       car,
       { x: 1, y: 0 },
       { x: 0, y: 1 },
       Math.max(0, -car.vx),
     );
-  } else if (car.x > xMax) {
-    car.x = xMax;
+  } else if (maximumX > arena.width - arena.wallPadding) {
+    const correction = arena.width - arena.wallPadding - maximumX;
+    car.x += correction;
+    translateHull(wallHull, correction, 0);
     resolveWallResponse(
       car,
       { x: -1, y: 0 },
@@ -288,16 +524,20 @@ export function stepCar(
     );
   }
 
-  if (car.y < yMin) {
-    car.y = yMin;
+  if (minimumY < arena.wallPadding) {
+    const correction = arena.wallPadding - minimumY;
+    car.y += correction;
+    translateHull(wallHull, 0, correction);
     resolveWallResponse(
       car,
       { x: 0, y: 1 },
       { x: 1, y: 0 },
       Math.max(0, -car.vy),
     );
-  } else if (car.y > yMax) {
-    car.y = yMax;
+  } else if (maximumY > arena.height - arena.wallPadding) {
+    const correction = arena.height - arena.wallPadding - maximumY;
+    car.y += correction;
+    translateHull(wallHull, 0, correction);
     resolveWallResponse(
       car,
       { x: 0, y: -1 },
@@ -348,58 +588,35 @@ export function resolveArenaObjectInteractions(
   arena: GameState["arena"],
 ): void {
   for (const car of cars) {
-    const [forward, right] = getAxes(car);
-    const halfLength = car.length * 0.5;
-    const halfWidth = car.width * 0.5;
+    const carHull = getWorldCollisionHull(car, getLocalCollisionHull(car));
     for (const object of objects) {
-      const localX =
-        (object.x - car.x) * forward.x + (object.y - car.y) * forward.y;
-      const localY =
-        (object.x - car.x) * right.x + (object.y - car.y) * right.y;
-      const closestX = clamp(localX, -halfLength, halfLength);
-      const closestY = clamp(localY, -halfWidth, halfWidth);
-      const dx = localX - closestX;
-      const dy = localY - closestY;
-      const distance = Math.hypot(dx, dy);
-      if (distance >= object.radius) {
+      const overlap = getCircleCollisionOverlap(
+        carHull,
+        object,
+        object.radius,
+      );
+      if (!overlap) {
         continue;
       }
 
-      let localNormal: Vec2;
-      let overlap: number;
-      if (distance === 0) {
-        const xClearance = halfLength - Math.abs(localX);
-        const yClearance = halfWidth - Math.abs(localY);
-        if (xClearance <= yClearance) {
-          localNormal = { x: localX >= 0 ? 1 : -1, y: 0 };
-          overlap = object.radius + xClearance;
-        } else {
-          localNormal = { x: 0, y: localY >= 0 ? 1 : -1 };
-          overlap = object.radius + yClearance;
-        }
-      } else {
-        localNormal = { x: dx / distance, y: dy / distance };
-        overlap = object.radius - distance;
-      }
-      const worldNormal = {
-        x: forward.x * localNormal.x + right.x * localNormal.y,
-        y: forward.y * localNormal.x + right.y * localNormal.y,
-      };
-      car.x -= worldNormal.x * overlap * 0.3;
-      car.y -= worldNormal.y * overlap * 0.3;
-      object.x += worldNormal.x * overlap * 0.7;
-      object.y += worldNormal.y * overlap * 0.7;
+      const carCorrectionX = -overlap.axis.x * overlap.amount * 0.3;
+      const carCorrectionY = -overlap.axis.y * overlap.amount * 0.3;
+      car.x += carCorrectionX;
+      car.y += carCorrectionY;
+      object.x += overlap.axis.x * overlap.amount * 0.7;
+      object.y += overlap.axis.y * overlap.amount * 0.7;
+      translateHull(carHull, carCorrectionX, carCorrectionY);
 
       const relativeVelocity = {
         x: car.vx - object.vx,
         y: car.vy - object.vy,
       };
-      const normalSpeed = dot(relativeVelocity, worldNormal);
+      const normalSpeed = dot(relativeVelocity, overlap.axis);
       if (normalSpeed > 0) {
-        object.vx += worldNormal.x * normalSpeed * 0.9;
-        object.vy += worldNormal.y * normalSpeed * 0.9;
-        car.vx -= worldNormal.x * normalSpeed * 0.18;
-        car.vy -= worldNormal.y * normalSpeed * 0.18;
+        object.vx += overlap.axis.x * normalSpeed * 0.9;
+        object.vy += overlap.axis.y * normalSpeed * 0.9;
+        car.vx -= overlap.axis.x * normalSpeed * 0.18;
+        car.vy -= overlap.axis.y * normalSpeed * 0.18;
         object.spin +=
           normalSpeed * 0.01 * (object.kind === "tire" ? 1.4 : 0.8);
       }
@@ -410,51 +627,42 @@ export function resolveArenaObjectInteractions(
 
 export function resolveCarCollisions(cars: Car[]): CollisionEvent[] {
   const collisions: CollisionEvent[] = [];
+  const localHulls = cars.map((car) => getLocalCollisionHull(car));
+  const worldHulls = cars.map((car, index) =>
+    getWorldCollisionHull(car, localHulls[index]),
+  );
 
   for (let i = 0; i < cars.length; i += 1) {
     const a = cars[i];
     for (let j = i + 1; j < cars.length; j += 1) {
       const b = cars[j];
-      const cornersA = getCorners(a);
-      const cornersB = getCorners(b);
-      const [forwardA, rightA] = getAxes(a);
-      const [forwardB, rightB] = getAxes(b);
-      const axes = [forwardA, rightA, forwardB, rightB].map(normalize);
-
-      let minimumOverlap = Infinity;
-      let smallestAxis: Vec2 | null = null;
-      let separated = false;
-
-      for (const axis of axes) {
-        const projectionA = project(cornersA, axis);
-        const projectionB = project(cornersB, axis);
-        const overlap = overlapAmount(projectionA, projectionB);
-        if (overlap <= 0) {
-          separated = true;
-          break;
-        }
-        if (overlap < minimumOverlap) {
-          minimumOverlap = overlap;
-          smallestAxis = axis;
-        }
-      }
-
-      if (separated || !smallestAxis) {
+      const hullA = worldHulls[i];
+      const hullB = worldHulls[j];
+      const overlap = getCollisionOverlap(hullA, hullB);
+      if (!overlap) {
         continue;
       }
 
       const between = { x: b.x - a.x, y: b.y - a.y };
-      let normal = smallestAxis;
+      let normal = overlap.axis;
       if (dot(between, normal) < 0) {
         normal = { x: -normal.x, y: -normal.y };
       }
 
       const totalMass = a.mass + b.mass;
-      const correction = minimumOverlap + 1.5;
-      a.x -= normal.x * correction * (b.mass / totalMass);
-      a.y -= normal.y * correction * (b.mass / totalMass);
-      b.x += normal.x * correction * (a.mass / totalMass);
-      b.y += normal.y * correction * (a.mass / totalMass);
+      const correction = overlap.amount + 1.5;
+      const correctionA = correction * (b.mass / totalMass);
+      const correctionB = correction * (a.mass / totalMass);
+      const correctionAX = -normal.x * correctionA;
+      const correctionAY = -normal.y * correctionA;
+      const correctionBX = normal.x * correctionB;
+      const correctionBY = normal.y * correctionB;
+      a.x += correctionAX;
+      a.y += correctionAY;
+      b.x += correctionBX;
+      b.y += correctionBY;
+      translateHull(hullA, correctionAX, correctionAY);
+      translateHull(hullB, correctionBX, correctionBY);
 
       const relativeVelocity = { x: b.vx - a.vx, y: b.vy - a.vy };
       const separatingSpeed = dot(relativeVelocity, normal);
@@ -484,8 +692,11 @@ export function resolveCarCollisions(cars: Car[]): CollisionEvent[] {
         b.angularVelocity += tangentSpeed * 0.00055;
 
         const closingSpeed = -separatingSpeed;
-        const pointOnA = supportPoint(a, normal);
-        const pointOnB = supportPoint(b, { x: -normal.x, y: -normal.y });
+        const pointOnA = supportPoint(hullA, normal);
+        const pointOnB = supportPoint(
+          hullB,
+          { x: -normal.x, y: -normal.y },
+        );
         const zoneA = impactZoneForPoint(a, pointOnA);
         const zoneB = impactZoneForPoint(b, pointOnB);
         const frontClipBonus =
@@ -524,6 +735,10 @@ export function resolveCarCollisions(cars: Car[]): CollisionEvent[] {
               damageTakenB,
               normal,
             );
+            localHulls[i] = getLocalCollisionHull(a);
+            localHulls[j] = getLocalCollisionHull(b);
+            worldHulls[i] = getWorldCollisionHull(a, localHulls[i]);
+            worldHulls[j] = getWorldCollisionHull(b, localHulls[j]);
             const aDisabledByImpact = aActiveAtImpact && a.disabled;
             const bDisabledByImpact = bActiveAtImpact && b.disabled;
             collisions.push({

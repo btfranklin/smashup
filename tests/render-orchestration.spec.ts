@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  drawCar,
+  drawCars,
   getCameraOffset,
   getPhaseColor,
   renderGame,
@@ -42,10 +42,10 @@ describe("render facade, cars, and overlays", () => {
   it("emits car commands for active and disabled states without throwing", () => {
     const canvas = createCanvasRecorder();
     expect(() =>
-      drawCar(canvas.ctx, createCarFixture({ isPlayer: true })),
+      drawCars(canvas.ctx, [createCarFixture({ isPlayer: true })]),
     ).not.toThrow();
     expect(() =>
-      drawCar(canvas.ctx, createCarFixture({ disabled: true }), {
+      drawCars(canvas.ctx, [createCarFixture({ disabled: true })], {
         showPlayerOutline: false,
       }),
     ).not.toThrow();
@@ -55,7 +55,7 @@ describe("render facade, cars, and overlays", () => {
     const activeCanvas = createCanvasRecorder();
     const activeCar = createCarFixture({ isPlayer: true });
 
-    drawCar(activeCanvas.ctx, activeCar);
+    drawCars(activeCanvas.ctx, [activeCar]);
 
     const bodyPath = activeCanvas
       .paths("fill")
@@ -75,9 +75,9 @@ describe("render facade, cars, and overlays", () => {
     expect(activeCanvas.count("createLinearGradient")).toBe(1);
 
     const disabledCanvas = createCanvasRecorder();
-    drawCar(
+    drawCars(
       disabledCanvas.ctx,
-      createCarFixture({ disabled: true, isPlayer: false }),
+      [createCarFixture({ disabled: true, isPlayer: false })],
       { showPlayerOutline: false },
     );
 
@@ -107,7 +107,7 @@ describe("render facade, cars, and overlays", () => {
       },
     ];
 
-    drawCar(canvas.ctx, car, { showPlayerOutline: false });
+    drawCars(canvas.ctx, [car], { showPlayerOutline: false });
 
     expect(canvas.count("clip")).toBe(4);
   });
@@ -132,7 +132,7 @@ describe("render facade, cars, and overlays", () => {
       const canvas = createCanvasRecorder();
       const car = createCarFixture({}, presetId);
 
-      drawCar(canvas.ctx, car, { showPlayerOutline: false });
+      drawCars(canvas.ctx, [car], { showPlayerOutline: false });
 
       expect(canvas.operations).toContainEqual({
         type: "moveTo",
@@ -141,24 +141,28 @@ describe("render facade, cars, and overlays", () => {
     }
   });
 
-  it("orders axle and tire commands below the deformed car body", () => {
+  it("draws every axle and tire before any car body", () => {
     const canvas = createCanvasRecorder();
+    const cars = [
+      createCarFixture({ id: 201, isPlayer: true }),
+      createCarFixture({ id: 202, disabled: true }),
+    ];
 
-    drawCar(canvas.ctx, createCarFixture({ isPlayer: true }));
+    drawCars(canvas.ctx, cars);
 
-    const firstFillRect = canvas.operations.findIndex(
-      (entry) => entry.type === "fillRect",
+    const lastWheelOrAxle = canvas.operations.findLastIndex(
+      (operation) => operation.type === "fillRect",
     );
-    const bodyGradient = canvas.operations.findIndex(
-      (entry) => entry.type === "createLinearGradient",
+    const firstBodyFill = canvas.operations.findIndex(
+      (operation) => operation.type === "fill",
     );
     const axleRects = canvas
       .find("fillRect")
       .filter((entry) => Number(entry.args[2]) === 4);
 
-    expect(firstFillRect).toBeGreaterThanOrEqual(0);
-    expect(bodyGradient).toBeGreaterThan(firstFillRect);
-    expect(axleRects).toHaveLength(2);
+    expect(lastWheelOrAxle).toBeGreaterThanOrEqual(0);
+    expect(firstBodyFill).toBeGreaterThan(lastWheelOrAxle);
+    expect(axleRects).toHaveLength(cars.length * 2);
   });
 
   it("omits HUD and event-feed commands in preview mode", () => {

@@ -26,7 +26,8 @@ Open the local Vite URL shown in the terminal, usually `http://localhost:5173/`.
 
 - Five-round Career Night with a seeded sequence of arenas and modifiers, between-round pit choices, and a Redline finale.
 - Three player car presets and multiple arena variants.
-- Physics-based impacts with directional damage to engines, radiators, steering, lights, and body panels.
+- Physics-based impacts that follow each car's live deformed silhouette, with
+  directional damage to engines, radiators, steering, lights, and body panels.
 - Disabled cars remain in the arena as hulks; if the player is wrecked, the remaining fight can be watched or skipped to its result.
 - Post-round Wreck Awards celebrate impact, survival, and style.
 - All eight drivers earn placement points toward a final standings table and top-three podium.

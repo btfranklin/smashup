@@ -4,6 +4,7 @@ import {
   createAppLoop,
   FIXED_STEP_SECONDS,
   MAX_ADVANCE_TIME_MS,
+  SPECTATOR_SKIP_FRAME_BUDGET_MS,
   SPECTATOR_SKIP_MAX_STEPS,
   SPECTATOR_SKIP_MAX_STEPS_PER_BATCH,
   type AppLoopOptions,
@@ -275,7 +276,7 @@ describe("app loop", () => {
   it("honors the skip time budget and resumes if spectating ends before work", () => {
     let now = 0;
     const budgetedStep = vi.fn(() => {
-      now += 9;
+      now += SPECTATOR_SKIP_FRAME_BUDGET_MS + 1;
     });
     const budgeted = createLoopHarness({
       performanceNow: () => now,

@@ -4,9 +4,12 @@ This document captures the current intent behind the hand-tuned gameplay rules. 
 
 ## Physics
 - Cars should feel heavy enough to commit to a line, but responsive enough that reverse attacks are intentional rather than random.
+- Car, wall, and loose-object contact should closely follow each current
+  deformed frame. Physics may flatten shallow concave dents into a convex hull
+  for stable, predictable contact rather than returning to a fixed rectangle.
 - Walls should trap and punish bad angles without creating permanent stuck states.
-- Wall containment uses each rotated car's projected extents so every angle
-  meets the same visible boundary.
+- Wall containment uses each rotated live frame's projected extents so every
+  angle and deformation state meets the same visible boundary.
 - Mud should reduce grip and make steering messier, not turn the round into a different control scheme.
 - Junkyard objects should add readable chaos while staying secondary to car-on-car collisions.
 - An object embedded inside a car resolves toward the nearest local face, with
@@ -54,3 +57,5 @@ This document captures the current intent behind the hand-tuned gameplay rules. 
 - A player wreck should leave a physical hulk and let the AI finish; skipping must advance the same simulation to a bounded result.
 - Smoke should escalate from light smoke to dark smoke and flame only near critical failure.
 - Car panel lines should describe believable sheet-metal joins rather than cross the cabin, while each preset keeps one simple visual signature that remains legible under damage.
+- Every car's wheels and axles stay below every chassis in the global paint
+  order; overlapping cars must never show a wheel on top of another body.

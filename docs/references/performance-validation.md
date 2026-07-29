@@ -79,7 +79,7 @@ Chrome scenes.
   canvas dimensions and active arena plan reduced the same targeted scene from
   p95 5.7 ms, p99 8.9 ms, and max 25.8 ms to p95 5.1 ms, p99 7.3 ms, and max
   13.3 ms, with no long tasks. The final full 4x run is recorded above.
-- Spectator skip now performs sequential fixed steps until 60 steps or an 8 ms
+- Spectator skip now performs sequential fixed steps until 60 steps or a 2 ms
   target budget is reached, then yields through `requestAnimationFrame`. It
   retains one render/audio update per batch and the exact simulation cap.
 - The normal RAF remains live for scheduling and lifecycle behavior, but a

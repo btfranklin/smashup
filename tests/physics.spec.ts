@@ -7,6 +7,7 @@ import {
   stepCar,
 } from "../src/game/physics";
 import { CAR_PRESETS } from "../src/game/content";
+import { applyFrameImpact } from "../src/game/deformation";
 import { signedSpeedForCar } from "../src/game/math";
 import { createCarFixture, createRunningState, createStateFixture } from "./helpers/fixtures";
 
@@ -75,7 +76,7 @@ describe("physics", () => {
       [0, Math.PI / 4, Math.PI / 2].map((angle) => [presetId, angle] as const),
     ),
   )(
-    "contains a rotated %s car at angle %f by its projected extents",
+    "contains a rotated %s car at angle %f by its live frame extents",
     (presetId, angle) => {
       const state = createStateFixture();
       const car = createCarFixture(
@@ -89,18 +90,46 @@ describe("physics", () => {
 
       stepCar(car, 0, state.arena, "none");
 
-      const halfLength = car.length * 0.5;
-      const halfWidth = car.width * 0.5;
-      const expectedXExtent =
-        Math.abs(Math.cos(angle)) * halfLength +
-        Math.abs(Math.sin(angle)) * halfWidth;
-      const expectedYExtent =
-        Math.abs(Math.sin(angle)) * halfLength +
-        Math.abs(Math.cos(angle)) * halfWidth;
-      expect(car.x).toBeCloseTo(state.arena.wallPadding + expectedXExtent);
-      expect(car.y).toBeCloseTo(state.arena.wallPadding + expectedYExtent);
+      const cosine = Math.cos(angle);
+      const sine = Math.sin(angle);
+      const rotatedVertices = car.frame.vertices.map((vertex) => ({
+        x: vertex.x * cosine - vertex.y * sine,
+        y: vertex.x * sine + vertex.y * cosine,
+      }));
+      const expectedX = state.arena.wallPadding - Math.min(
+        ...rotatedVertices.map((vertex) => vertex.x),
+      );
+      const expectedY = state.arena.wallPadding - Math.min(
+        ...rotatedVertices.map((vertex) => vertex.y),
+      );
+      expect(car.x).toBeCloseTo(expectedX);
+      expect(car.y).toBeCloseTo(expectedY);
     },
   );
+
+  it("lets a crushed end settle closer to the arena wall", () => {
+    const state = createStateFixture();
+    const car = createCarFixture({ x: 0, y: 300 });
+    for (let index = 0; index < 16; index += 1) {
+      applyFrameImpact(
+        car,
+        { x: -car.length * 0.5, y: 0 },
+        1,
+        "rear",
+        { x: 1, y: 0 },
+      );
+    }
+
+    stepCar(car, 0, state.arena, "none");
+
+    const rearEdge = Math.min(
+      ...car.frame.vertices.map((vertex) => vertex.x),
+    );
+    expect(car.x).toBeLessThan(
+      state.arena.wallPadding + car.length * 0.5,
+    );
+    expect(car.x + rearEdge).toBeCloseTo(state.arena.wallPadding);
+  });
 
   it("slows acceleration inside mud zones", () => {
     const state = createRunningState();
@@ -189,6 +218,30 @@ describe("physics", () => {
     expect(car.vx).toBeLessThan(90);
   });
 
+  it("ignores loose objects that touch only an empty rectangular corner", () => {
+    const state = createStateFixture();
+    const car = createCarFixture({ x: 500, y: 500 });
+    const object = {
+      id: 4,
+      kind: "junk" as const,
+      x: car.x + car.length * 0.5 + 1,
+      y: car.y + car.width * 0.5 + 1,
+      vx: 0,
+      vy: 0,
+      radius: 4,
+      mass: 40,
+      rotation: 0,
+      spin: 0,
+    };
+    const initialCar = { x: car.x, y: car.y };
+    const initialObject = { x: object.x, y: object.y };
+
+    resolveArenaObjectInteractions([car], [object], state.arena);
+
+    expect({ x: car.x, y: car.y }).toEqual(initialCar);
+    expect({ x: object.x, y: object.y }).toEqual(initialObject);
+  });
+
   it("pushes an embedded object through its nearest car face", () => {
     const state = createStateFixture();
     const car = createCarFixture({ x: 500, y: 500 });
@@ -236,9 +289,150 @@ describe("physics", () => {
     expect(Number.isFinite(car.y)).toBe(true);
     expect(Number.isFinite(object.x)).toBe(true);
     expect(Number.isFinite(object.y)).toBe(true);
-    expect(object.x).toBeCloseTo(car.x);
     expect(object.y).toBeGreaterThan(car.y);
-    expect(object.y - car.y).toBeCloseTo(car.width * 0.5 + object.radius);
+    expect(Math.abs(object.x - car.x)).toBeLessThan(2);
+    expect(Math.hypot(object.x - car.x, object.y - car.y)).toBeLessThan(
+      car.width * 0.5 + object.radius,
+    );
+  });
+
+  it("ignores overlap that exists only in pristine rectangular corner bounds", () => {
+    const first = createCarFixture({
+      id: 41,
+      x: 500,
+      y: 500,
+      vx: 100,
+      vy: 100,
+    });
+    const second = createCarFixture({
+      id: 42,
+      x: 585,
+      y: 550,
+    });
+    const initialPositions = {
+      first: { x: first.x, y: first.y },
+      second: { x: second.x, y: second.y },
+    };
+
+    const collisions = resolveCarCollisions([first, second]);
+
+    expect(collisions).toEqual([]);
+    expect({ x: first.x, y: first.y }).toEqual(initialPositions.first);
+    expect({ x: second.x, y: second.y }).toEqual(initialPositions.second);
+  });
+
+  it("flattens shallow concave frame portions for collision purposes", () => {
+    const striker = createCarFixture({
+      id: 43,
+      x: 500,
+      y: 500,
+      vx: 40,
+    });
+    const target = createCarFixture({
+      id: 44,
+      x: 590.5,
+      y: 500,
+    });
+    const strikerFront = Math.max(
+      ...striker.frame.vertices.map((vertex) => vertex.x),
+    );
+    const targetRearTips = target.frame.vertices.filter((vertex) =>
+      vertex.id.startsWith("rear-tip"),
+    );
+    const visibleCenterGap =
+      target.x +
+      Math.min(...targetRearTips.map((vertex) => vertex.x)) -
+      (striker.x + strikerFront);
+
+    const collisions = resolveCarCollisions([striker, target]);
+
+    expect(visibleCenterGap).toBeGreaterThan(0);
+    expect(collisions).toHaveLength(1);
+  });
+
+  it("uses crushed frame extents instead of the original car rectangle", () => {
+    const first = createCarFixture({
+      id: 45,
+      x: 500,
+      y: 500,
+      vx: 120,
+    });
+    const second = createCarFixture({
+      id: 46,
+      x: 580,
+      y: 500,
+    });
+    for (let index = 0; index < 16; index += 1) {
+      applyFrameImpact(
+        first,
+        { x: first.length * 0.5, y: 0 },
+        1,
+        "front",
+        { x: -1, y: 0 },
+      );
+      applyFrameImpact(
+        second,
+        { x: -second.length * 0.5, y: 0 },
+        1,
+        "rear",
+        { x: 1, y: 0 },
+      );
+    }
+    const firstFront = Math.max(
+      ...first.frame.vertices.map((vertex) => vertex.x),
+    );
+    const secondRear = Math.min(
+      ...second.frame.vertices.map((vertex) => vertex.x),
+    );
+    const visibleGap = second.x + secondRear - (first.x + firstFront);
+    const initialFirstX = first.x;
+    const initialSecondX = second.x;
+
+    const collisions = resolveCarCollisions([first, second]);
+
+    expect(visibleGap).toBeGreaterThan(20);
+    expect(collisions).toEqual([]);
+    expect(first.x).toBe(initialFirstX);
+    expect(second.x).toBe(initialSecondX);
+  });
+
+  it("refreshes a deformed hull before later contacts in the same pileup", () => {
+    const first = createCarFixture({
+      id: 47,
+      x: 500,
+      y: 500,
+      vx: 220,
+    });
+    const headOnTarget = createCarFixture({
+      id: 48,
+      x: 555,
+      y: 500,
+      angle: Math.PI,
+    });
+    const nearbyTarget = createCarFixture({
+      id: 49,
+      x: 570,
+      y: 500,
+    });
+    const originalFront = Math.max(
+      ...first.frame.vertices.map((vertex) => vertex.x),
+    );
+
+    const collisions = resolveCarCollisions([
+      first,
+      headOnTarget,
+      nearbyTarget,
+    ]);
+
+    expect(collisions).toContainEqual(
+      expect.objectContaining({ aId: first.id, bId: headOnTarget.id }),
+    );
+    expect(collisions).not.toContainEqual(
+      expect.objectContaining({ aId: first.id, bId: nearbyTarget.id }),
+    );
+    expect(
+      Math.max(...first.frame.vertices.map((vertex) => vertex.x)),
+    ).toBeLessThan(originalFront);
   });
 
   it("detects collisions, separates cars, and softens front-into-rear self-damage", () => {

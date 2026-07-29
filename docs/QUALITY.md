@@ -25,7 +25,10 @@
   - Career Night generation, placements, points, standings, and Wreck Award rules stay deterministic
   - runtime/session/debug modules preserve the documented state contracts across running, spectating, round results, and final results
   - menu states expose null round metadata while every active runtime mode retains a coherent current plan
-  - rotated wall containment, embedded arena objects, and causal disabling-impact attribution remain covered
+  - live-frame wall containment, embedded arena objects, and causal disabling-impact attribution remain covered
+  - live-frame car collision hulls reject empty rectangular-corner overlap for
+    cars and loose objects, honor crushed body extents, and deliberately bridge
+    shallow concavities
   - arena layouts and complete rotated-car extents remain inside the
     wall-bounded playable rectangle at alternate dimensions
   - roster, event, round-stat, and upgrade helpers preserve their current behavior
@@ -33,7 +36,8 @@
   - audio transition, countdown, crash cooldown, and mix helpers behave deterministically
   - render and effect systems stay branch-covered without browser-driving,
     including presentation coalescing, reusable car/fragment paths, bounded
-    smoke sprites, and a deterministic maximum-density command workload
+    smoke sprites, global wheel-before-chassis ordering, and a deterministic
+    maximum-density command workload
   - bounded performance collection preserves sample ordering, context, capacity,
     optional timeline evidence, phase summaries, presentation counts, and
     teardown behavior

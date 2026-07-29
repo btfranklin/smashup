@@ -47,7 +47,8 @@ Smashup Derby is a browser-only Vite + TypeScript + canvas game with one authori
 
 - `src/game/types.ts`: authoritative in-memory state, domain-object, and runtime event shapes
 - `src/game/selectors.ts`: state lookup, active-career predicates, and required-state guards
-- `src/game/physics.ts`, `damage.ts`, `ai.ts`: vehicle motion, collision damage, and driver behavior
+- `src/game/physics.ts`, `damage.ts`, `ai.ts`: vehicle motion, live-frame
+  convex collision hulls, collision damage, and driver behavior
 - `src/game/deformation.ts`: persistent car-frame deformation and impact scars
 - `src/game/debris.ts`, `dust.ts`, `smoke.ts`, `fragments.ts`: transient spectacle state and stepping
 - `src/game/render.ts`: stable rendering façade
@@ -72,6 +73,14 @@ Smashup Derby is a browser-only Vite + TypeScript + canvas game with one authori
 - Keep reusable car paths, smoke sprites, and fragment paths inside rendering.
   Cache lifetimes must be bounded or weakly keyed by canvas/effect ownership,
   and render caches must not annotate simulation objects.
+- Render cars through the single `drawCars` collection operation. It paints
+  every undercarriage and wheel before beginning the chassis pass, so car array
+  order can never place one car's wheels above another car's body.
+- Derive the car physics hull from the current frame vertices and use it for
+  wall containment, loose-object contact, and car-to-car contact. Cache each
+  local convex hull weakly by frame, verify its live vertex coordinates when
+  physics requests it, and refresh it immediately after deformation so later
+  contacts in the same pileup use the new shape.
 - Keep arena geometry and coordinate materialization in `src/game/arena.ts`.
   `src/game/content.ts` owns normalized mud and object layouts, while roster
   owns normalized lineup slots, membership, orientation, and car-extent

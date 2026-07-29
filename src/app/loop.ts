@@ -4,7 +4,7 @@ export const FIXED_STEP_SECONDS = 1 / 60;
 export const MAX_ADVANCE_TIME_MS = 120_000;
 export const SPECTATOR_SKIP_MAX_STEPS = 90 * 60;
 export const SPECTATOR_SKIP_MAX_STEPS_PER_BATCH = 60;
-export const SPECTATOR_SKIP_FRAME_BUDGET_MS = 8;
+export const SPECTATOR_SKIP_FRAME_BUDGET_MS = 2;
 
 export type LoopPerformanceDetails = {
   frameIntervalMs?: number;
