@@ -2,10 +2,10 @@ import {
   ARENA_MUD_ZONE_LAYOUTS,
   ARENA_OBJECT_LAYOUTS,
 } from "./content";
+import type { ArenaVariantId } from "./contentIds";
 import type {
   ArenaGeometry,
   ArenaState,
-  ArenaVariantId,
   Vec2,
 } from "./types";
 

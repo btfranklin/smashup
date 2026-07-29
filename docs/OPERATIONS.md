@@ -1,6 +1,7 @@
 # Operations
 
 ## Setup
+
 - Use Node `26.x`, matching the validated local and CI runtime.
 - Install dependencies with `npm install`.
 - Install the supported browser once with `npx playwright install chromium`.
@@ -8,8 +9,11 @@
 - To mirror CI locally from a clean checkout, run `npm ci && npx playwright install chromium && npm run validate`.
 
 ## Validation Commands
+
 - `npm run check:repo`
-  Verifies the repo map, required docs, validation scripts, and positive module/documentation surfaces.
+  Verifies public and agent entrypoints, resolvable local documentation links,
+  package command wiring, license consistency, ignored generated artifacts, and
+  the CI validation command.
 - `npm run typecheck`
   Runs TypeScript against `src`, `tests`, and `vitest.config.ts` without emitting files.
 - `npm run validate`
@@ -32,6 +36,7 @@
   `npm run validate`.
 
 ## Runtime Inspection Surfaces
+
 - Hidden preview mode: `/?preview=car&preset=<id>&scenario=<id>`
 - Deterministic stepping hook: `window.advanceTime(ms)`
 - Text-state hook: `window.render_game_to_text()`
@@ -39,6 +44,7 @@
 The text-state payload exposes the in-memory Career Night seed and round schedule, placements, points, awards, and current standings alongside the active arena and cars. See [Validation Surfaces](./references/validation-surfaces.md) for the contract details.
 
 ## Artifact Locations
+
 - `dist/`: Vite production build output
 - `output/playwright/`: ignored Playwright reports and test results; ordinary
   browser failures may retain traces, screenshots, and videos, while the
@@ -56,10 +62,11 @@ The text-state payload exposes the in-memory Career Night seed and round schedul
 - `coverage/`: coverage output when generated locally by Vitest
 
 ## Failure Recovery
+
 - If `check:repo` fails, read the remediation text first; it tells you which file or link drifted.
-- If `test:unit` or `test:coverage` fails on preview coverage, inspect `src/game/content.ts`, `src/game/preview.ts`, `tests/preview.spec.ts`, and `tests/bootstrap.spec.ts` together.
-- If Career Night generation, scoring, or award tests fail, inspect `src/game/content.ts`, `src/game/career.ts`, and `src/game/awards.ts` before changing session or browser code.
-- If startup errors appear in preview mode, confirm the requested ids are present in `CAR_PRESET_IDS` and `CAR_PREVIEW_SCENARIO_IDS`.
+- If `test:unit` or `test:coverage` fails on preview coverage, inspect `src/game/contentIds.ts`, `src/game/content.ts`, `src/game/preview.ts`, `tests/preview.spec.ts`, and the relevant `tests/bootstrap*.spec.ts` together.
+- If Career Night generation, scoring, or award tests fail, inspect `src/game/contentIds.ts`, `src/game/content.ts`, `src/game/career.ts`, and `src/game/awards.ts` before changing session or browser code.
+- If startup errors appear in preview mode, confirm the requested ids are present in `CAR_PRESET_IDS` and `CAR_PREVIEW_SCENARIO_IDS` in `src/game/contentIds.ts`.
 - If `test:browser` cannot launch Chromium, rerun `npx playwright install chromium`; on Linux CI use `npx playwright install --with-deps chromium`.
 - If `test:performance` fails, rerun it on an otherwise idle machine and inspect
   the relevant file in `output/performance-samples/` and the collector context

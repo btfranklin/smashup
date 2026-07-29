@@ -8,7 +8,6 @@ export function createRoundStats(startElapsed = 0): RoundStats {
     biggestHitSeverity: 0,
     biggestHitLabel: null,
     eliminatedById: null,
-    knockoutReason: null,
     playerKnockouts: [],
     strongestPlayerHitSeverity: 0,
     playerContactLedger: {},
@@ -35,7 +34,7 @@ export function recordPlayerContact(
 }
 
 export function resetRoundStats(state: GameState): void {
-  state.roundStats = createRoundStats(state.elapsed);
+  state.roundStats = createRoundStats(state.sessionElapsed);
   const player = getPlayerCar(state);
   state.roundStats.lastPlayerSystemPhases = player
     ? getCarSystemPhases(player)

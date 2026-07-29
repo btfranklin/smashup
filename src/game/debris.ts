@@ -56,7 +56,7 @@ export function spawnImpactDebris(state: GameState): void {
     const count = Math.round(3 + (collision.severity - DEBRIS_THRESHOLD) * 10);
     for (let index = 0; index < count; index += 1) {
       const seed =
-        state.tick * 100 +
+        state.roundTick * 100 +
         collision.aId * 17 +
         collision.bId * 29 +
         index * 13 +

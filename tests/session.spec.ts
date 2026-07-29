@@ -10,8 +10,9 @@ import {
   restartState,
 } from "../src/game/session";
 import { CAR_PREVIEW_SCENARIOS } from "../src/game/content";
+import type { SessionUpgradeId } from "../src/game/contentIds";
 import { getKnockoutCause } from "../src/game/damage";
-import type { CarCondition, SessionUpgradeId } from "../src/game/types";
+import type { CarCondition } from "../src/game/types";
 import {
   createCarFixture,
   createRoundSummaryFixture,
@@ -410,14 +411,28 @@ describe("session flow", () => {
     expect(state.mode).toBe("car_select");
   });
 
-  it("ignores upgrade selection until a player condition exists", () => {
+  it("fails clearly when upgrade selection has no player build", () => {
     const state = createInitialState();
+    const beforeUpgrade = structuredClone(state);
 
-    applySessionUpgrade(state, "pit_patch");
+    expect(() => applySessionUpgrade(state, "pit_patch")).toThrow(
+      'Mode "menu" requires an active player build.',
+    );
 
-    expect(state.mode).toBe("menu");
-    expect(state.session.playerBuild).toBeNull();
-    expect(state.session.roundIndex).toBe(0);
+    expect(state).toEqual(beforeUpgrade);
+  });
+
+  it("fails clearly when upgrade selection has no player condition", () => {
+    const state = createInitialState();
+    chooseStarterCar(state, "bulldozer", 42);
+    state.session.playerCondition = null;
+    const beforeUpgrade = structuredClone(state);
+
+    expect(() => applySessionUpgrade(state, "pit_patch")).toThrow(
+      'Mode "intro" requires an active player condition.',
+    );
+
+    expect(state).toEqual(beforeUpgrade);
   });
 
   it("fails loudly when a generated Career Night round is missing", () => {

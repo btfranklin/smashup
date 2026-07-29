@@ -1,18 +1,24 @@
 # Quality
 
 ## Architectural Guardrails
+
 - Keep `npm run validate` green before handoff. It is the authoritative repo, type, build, coverage, and real-browser regression path.
-- Derive preview, Career Night, and Wreck Award ids and display content from `src/game/content.ts`, never duplicated allowlists or authored copies.
+- Derive preview, Career Night, and Wreck Award ids and guards from `src/game/contentIds.ts`, with display and tuning data in `src/game/content.ts`; never add duplicated allowlists or authored copies.
 - Keep `window.advanceTime(ms)` and `window.render_game_to_text()` stable and callable throughout normal gameplay, including spectating and final results.
 - Preserve the dedicated gameplay split: session transitions, per-frame runtime, career generation/scoring, award selection, preview parsing, debug serialization, roster construction, upgrades, events, and round stats belong in their named modules rather than a catch-all file.
 - Generate Career Night schedules through `src/game/career.ts`; do not duplicate authored round-plan sequences in session, bootstrap, fixtures, or tests.
 - Derive Career Night count from the canonical round blueprint; UI and tests must not maintain an independent round-count constant.
-- Treat an active runtime mode without `currentRoundPlan` as invalid. Pre-career debug round and arena-plan fields must be explicit `null`, not placeholder content.
+- Treat active Career Night work without `currentRoundPlan`, a selected player
+  build, persisted player condition, or a player car as invalid. Required-state
+  helpers fail clearly; setup and upgrade paths must not synthesize fallbacks.
+  Pre-career debug round and arena-plan fields remain explicit `null`, not
+  placeholder content.
 - Derive car phases from system health. Only the per-round player transition cursor may persist phase history.
 - Treat documentation and repo navigation as part of correctness. When commands, boundaries, or validation surfaces change, update `AGENTS.md` and `docs/` in the same change.
 
 ## Mechanical Coverage
-- `npm run check:repo` enforces the agent map, public entrypoints, docs presence, validation scripts, preview-source wiring, and ignored artifact hygiene through positive required surfaces.
+
+- `npm run check:repo` enforces public and agent entrypoints, resolvable local Markdown links, package command wiring, license consistency, ignored artifact directories, and the CI validation command. It deliberately does not inventory leaf modules, test files, or required prose fragments.
 - `npm run typecheck` verifies `src`, `tests`, and `vitest.config.ts` under strict TypeScript.
 - `npm run test:coverage` verifies:
   - preview parsing matches source ids and fails visibly on invalid params
@@ -40,16 +46,21 @@
   - native Canvas 2D paints normal and representative preview states without page, console, or request errors
   - browser resize, fullscreen, and requestAnimationFrame lifecycles remain functional
   - native Web Audio starts under user activation, resumes from suspension, and closes during controller teardown/recreation
-- `scripts/check-test-coverage.mjs` enforces calibrated per-surface thresholds so pure rule modules stay near-complete while imperative bootstrap/runtime wrappers still have explicit floors.
-- Every `src/**/*.ts` file must have either a calibrated line, statement,
-  function, and branch floor or an explicit durable exclusion. New source files
-  therefore cannot silently escape the coverage gate.
+- `scripts/check-test-coverage.mjs` assigns each executable source file to a
+  named `strict`, `gameplay`, `rendering`, `orchestration`, or
+  `browser-composition` profile, with sparse per-file overrides where the
+  surface genuinely differs. The effective line, statement, function, branch,
+  and overall floors remain explicit.
+- Every `src/**/*.ts` file must have either a named coverage profile or an
+  explicit durable exclusion. New source files therefore cannot silently
+  escape the coverage gate.
 - `npm run test:performance` is a separate production-build Chromium smoke with
   deterministic scene, percentile, long-task, audio-startup, spectator-skip,
   and 4x CPU gates. It is hardware-sensitive and must not be folded into
   `npm run validate`; use it for performance-affecting handoffs.
 
 ## When To Extend Validation
+
 - Add or update Vitest coverage when a change affects the preview URL contract, startup errors, browser hooks, round-start flow, Career Night generation/scoring, Wreck Awards, or documented tuning regressions.
 - Keep rendering-performance unit assertions structural: operation counts,
   cache reuse, cache capacity, and state immutability are stable; elapsed-time
@@ -64,9 +75,13 @@
 - Keep native Safari audio acceptance human-observed unless a non-invasive,
   repeatable tracing path is available. Playwright WebKit and UI-driven
   Inspector capture are not substitutes.
-- Extend `check:repo` for required docs, command wiring, or positive module surfaces. Do not add checks whose only purpose is proving a removed file or old implementation has not returned.
+- Extend `check:repo` only when a root entrypoint, documentation-link rule,
+  package command, license declaration, ignored artifact class, or CI command
+  becomes part of the durable repository contract. Enforce source behavior and
+  module boundaries through types and tests instead.
 
 ## Recovery Guidance
+
 - If you add a new top-level doc, link it from `docs/README.md` and, if it becomes a common entrypoint, from `AGENTS.md`.
 - If `check:repo` fails because architecture files moved, update the script and the docs together instead of bypassing the check.
 - If a rule repeatedly fails in review, promote it into a doc, helper, test, or repo check rather than leaving it as tribal knowledge.

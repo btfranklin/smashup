@@ -1,14 +1,15 @@
 import { CAR_PRESETS } from "../../src/game/content";
+import type { CarPresetId } from "../../src/game/contentIds";
 import {
   generateCareerRoundPlans,
   PLACEMENT_POINTS,
 } from "../../src/game/career";
 import { createFreshCondition } from "../../src/game/conditions";
 import { createFreshFrame } from "../../src/game/deformation";
+import { isActiveCareerMode } from "../../src/game/selectors";
 import { createInitialState, chooseStarterCar } from "../../src/game/session";
 import type {
   Car,
-  CarPresetId,
   CollisionEvent,
   GameState,
   RoundSummary,
@@ -106,14 +107,7 @@ export function createStateFixture(
   const mode = overrides.mode ?? state.mode;
   if (
     overrides.currentRoundPlan === undefined &&
-    [
-      "intro",
-      "running",
-      "spectating",
-      "round_results",
-      "upgrade",
-      "career_over",
-    ].includes(mode)
+    isActiveCareerMode(mode)
   ) {
     const roundPlan = generateCareerRoundPlans(0)[0];
     state.currentRoundPlan = roundPlan;

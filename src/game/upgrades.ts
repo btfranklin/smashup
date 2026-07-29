@@ -1,14 +1,12 @@
 import { cloneCondition } from "./conditions";
+import type { SessionUpgradeId } from "./contentIds";
 import { repairCarFrame } from "./deformation";
-import type { CarCondition, PlayerBuild, SessionUpgradeId } from "./types";
+import type { CarCondition, PlayerBuild } from "./types";
 
 export function applyBuildUpgrade(
-  build: PlayerBuild | null,
+  build: PlayerBuild,
   upgradeId: SessionUpgradeId,
 ): void {
-  if (!build) {
-    return;
-  }
   if (upgradeId === "pit_patch") {
     build.coolingBonus += 0.05;
     build.repairsUsed += 1;

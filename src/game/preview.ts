@@ -3,8 +3,9 @@ import {
   CAR_PREVIEW_SCENARIO_IDS,
   isCarPresetId,
   isCarPreviewScenarioId,
-} from "./content";
-import type { CarPreviewScenarioId, CarPresetId } from "./types";
+  type CarPresetId,
+  type CarPreviewScenarioId,
+} from "./contentIds";
 
 export type CarPreviewRequest = {
   presetId: CarPresetId;

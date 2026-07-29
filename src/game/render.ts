@@ -13,6 +13,7 @@ import {
   drawNonRunningOverlay,
   drawPreviewBackground,
 } from "./render/overlays";
+import { requirePlayerCar } from "./selectors";
 import type { GameState } from "./types";
 
 export { drawCar } from "./render/car";
@@ -26,7 +27,7 @@ export function renderGame(
 
   if (state.mode === "car_preview") {
     drawPreviewBackground(ctx, state.arena.width, state.arena.height);
-    const previewCar = state.cars[0];
+    const previewCar = requirePlayerCar(state);
     const previewScale = 3.4;
     ctx.save();
     ctx.translate(state.arena.width * 0.5, state.arena.height * 0.52);
@@ -68,14 +69,14 @@ export function renderGame(
 }
 
 export function getCameraOffset(
-  state: Pick<GameState, "tick" | "camera">,
+  state: Pick<GameState, "roundTick" | "camera">,
 ): { x: number; y: number } {
   return {
     x:
-      Math.sin(state.tick * 0.8) * state.camera.shake * 0.5 +
+      Math.sin(state.roundTick * 0.8) * state.camera.shake * 0.5 +
       state.camera.nudgeX * 0.7,
     y:
-      Math.cos(state.tick * 0.9) * state.camera.shake * 0.3 +
+      Math.cos(state.roundTick * 0.9) * state.camera.shake * 0.3 +
       state.camera.nudgeY * 0.7,
   };
 }

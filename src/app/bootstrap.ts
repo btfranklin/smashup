@@ -1,5 +1,9 @@
 import { AudioManager } from "../game/audio";
-import { CAR_PRESET_IDS } from "../game/content";
+import {
+  CAR_PRESET_IDS,
+  type CarPresetId,
+  type SessionUpgradeId,
+} from "../game/contentIds";
 import { renderGameToText } from "../game/debug";
 import { parseCarPreviewRequest } from "../game/preview";
 import { renderGame } from "../game/render";
@@ -17,11 +21,7 @@ import {
   applyPlayerControls,
   finishSpectatingRound,
 } from "../game/runtime";
-import type {
-  CarPresetId,
-  GameState,
-  SessionUpgradeId,
-} from "../game/types";
+import type { GameState } from "../game/types";
 import {
   createAppLoop,
   type AppLoop,
@@ -491,7 +491,7 @@ export function createAppController({
         ? CAR_PRESET_IDS[Number(presetShortcut[1]) - 1]
         : null;
       if (presetId && state.mode === "car_select") {
-        selectStarterCar(presetId as CarPresetId);
+        selectStarterCar(presetId);
       }
       if (
         event.code === "KeyR" &&

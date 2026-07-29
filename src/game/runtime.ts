@@ -26,6 +26,7 @@ import {
   getActiveCars,
   getCarById,
   getPlayerCar,
+  isActiveCareerMode,
   requireCurrentRoundPlan,
 } from "./selectors";
 import { updateSmokeEffects } from "./smoke";
@@ -51,6 +52,11 @@ const SYSTEM_EVENT_EMPHASIS: Record<DamagePhase, number> = {
   wounded: 0.62,
   failing: 0.8,
   critical: 1,
+};
+
+type PendingSystemEvent = {
+  system: SystemName;
+  phase: DamagePhase;
 };
 
 function getKnockoutReason(car: Car): string {
@@ -123,7 +129,10 @@ function makeRoundSummary(
   };
 }
 
-function completeRound(state: GameState, completionElapsed = state.elapsed): void {
+function completeRound(
+  state: GameState,
+  completionElapsed = state.sessionElapsed,
+): void {
   requireCurrentRoundPlan(state);
   const placements = rankRoundCars(state.cars);
   state.winnerId = placements[0]?.driverId ?? null;
@@ -143,7 +152,11 @@ function completeRound(state: GameState, completionElapsed = state.elapsed): voi
   }
 }
 
-function refreshPlayerPhaseEvents(state: GameState, car: Car): void {
+function refreshPlayerPhaseEvents(
+  state: GameState,
+  car: Car,
+  pendingSystemEvents: PendingSystemEvent[],
+): void {
   if (!car.isPlayer) {
     return;
   }
@@ -161,8 +174,7 @@ function refreshPlayerPhaseEvents(state: GameState, car: Car): void {
   ] as const) {
     if (previousPhases[system] !== nextPhases[system]) {
       if (nextPhases[system] !== "healthy") {
-        state.pendingSystemEvents.push({
-          carId: car.id,
+        pendingSystemEvents.push({
           system,
           phase: nextPhases[system],
         });
@@ -172,8 +184,11 @@ function refreshPlayerPhaseEvents(state: GameState, car: Car): void {
   state.roundStats.lastPlayerSystemPhases = nextPhases;
 }
 
-function flushPendingSystemEvents(state: GameState): void {
-  for (const entry of state.pendingSystemEvents.splice(0)) {
+function flushPendingSystemEvents(
+  state: GameState,
+  pendingSystemEvents: PendingSystemEvent[],
+): void {
+  for (const entry of pendingSystemEvents) {
     pushEvent(
       state,
       SYSTEM_EVENT_LABELS[entry.system],
@@ -181,6 +196,18 @@ function flushPendingSystemEvents(state: GameState): void {
       SYSTEM_EVENT_EMPHASIS[entry.phase],
       2.2,
     );
+  }
+}
+
+function captureCarPostMutationTransitions(
+  state: GameState,
+  car: Car,
+  transitionElapsed: number,
+  pendingSystemEvents: PendingSystemEvent[],
+): void {
+  refreshPlayerPhaseEvents(state, car, pendingSystemEvents);
+  if (car.disabled && car.eliminationTime === null) {
+    car.eliminationTime = transitionElapsed;
   }
 }
 
@@ -365,12 +392,12 @@ function registerNewEliminations(
 
     if (car.id === state.playerId) {
       state.roundStats.eliminatedById = attackerId;
-      state.roundStats.knockoutReason = getKnockoutReason(car);
+      const knockoutReason = getKnockoutReason(car);
       pushEvent(
         state,
         attacker
           ? `${attacker.label} finished you`
-          : state.roundStats.knockoutReason,
+          : knockoutReason,
         "result",
         1,
         2.6,
@@ -455,11 +482,7 @@ export function advanceState(state: GameState, dt: number): void {
   if (state.mode === "car_preview") {
     return;
   }
-  if (
-    state.mode === "intro" ||
-    state.mode === "running" ||
-    state.mode === "spectating"
-  ) {
+  if (isActiveCareerMode(state.mode)) {
     requireCurrentRoundPlan(state);
   }
 
@@ -479,15 +502,15 @@ export function advanceState(state: GameState, dt: number): void {
     if (state.session.countdown <= 0) {
       state.mode = "running";
       state.events = [];
-      state.roundStats.startElapsed = state.elapsed + dt;
+      state.roundStats.startElapsed = state.sessionElapsed + dt;
     }
-    state.elapsed += dt;
+    state.sessionElapsed += dt;
     return;
   }
 
   if (state.mode !== "running" && state.mode !== "spectating") {
     state.recentCollisions = [];
-    state.elapsed += dt;
+    state.sessionElapsed += dt;
     return;
   }
 
@@ -499,7 +522,7 @@ export function advanceState(state: GameState, dt: number): void {
   }
 
   if (state.camera.freezeTime > 0) {
-    state.elapsed += dt;
+    state.sessionElapsed += dt;
     return;
   }
 
@@ -520,7 +543,8 @@ export function advanceState(state: GameState, dt: number): void {
     state.cars.map((car) => [car.id, car.disabled]),
   );
   const roundPlan = requireCurrentRoundPlan(state);
-  const stepEndElapsed = state.elapsed + dt;
+  const stepEndElapsed = state.sessionElapsed + dt;
+  const pendingSystemEvents: PendingSystemEvent[] = [];
   for (const car of state.cars) {
     stepCar(
       car,
@@ -528,10 +552,12 @@ export function advanceState(state: GameState, dt: number): void {
       state.arena,
       roundPlan.modifier,
     );
-    refreshPlayerPhaseEvents(state, car);
-    if (car.disabled && car.eliminationTime === null) {
-      car.eliminationTime = stepEndElapsed;
-    }
+    captureCarPostMutationTransitions(
+      state,
+      car,
+      stepEndElapsed,
+      pendingSystemEvents,
+    );
   }
 
   stepArenaObjects(state.arena.objects, dt, state.arena);
@@ -545,10 +571,12 @@ export function advanceState(state: GameState, dt: number): void {
   spawnSlipDust(state);
 
   for (const car of state.cars) {
-    refreshPlayerPhaseEvents(state, car);
-    if (car.disabled && car.eliminationTime === null) {
-      car.eliminationTime = stepEndElapsed;
-    }
+    captureCarPostMutationTransitions(
+      state,
+      car,
+      stepEndElapsed,
+      pendingSystemEvents,
+    );
   }
 
   registerNewEliminations(
@@ -556,7 +584,7 @@ export function advanceState(state: GameState, dt: number): void {
     beforeDisabled,
     stepEndElapsed,
   );
-  flushPendingSystemEvents(state);
+  flushPendingSystemEvents(state, pendingSystemEvents);
   maybeAnnounceFinalTwo(state);
 
   const playerCar = getPlayerCar(state);
@@ -572,8 +600,8 @@ export function advanceState(state: GameState, dt: number): void {
     completeRound(state, stepEndElapsed);
   }
 
-  state.tick += 1;
-  state.elapsed += dt;
+  state.roundTick += 1;
+  state.sessionElapsed += dt;
 }
 
 export function finishSpectatingRound(state: GameState): void {

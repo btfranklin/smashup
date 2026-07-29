@@ -3,8 +3,9 @@
 `docs/` is the repo-local system of record for non-trivial repository knowledge. Start here when you need to understand where logic lives, how to run the game, or what invariants must stay enforced.
 
 ## Core Docs
+
 - [Public README](../README.md): user-facing overview, controls, setup, and validation summary
-- [Architecture](./ARCHITECTURE.md): top-level module map, boundaries, and change guidance
+- [Architecture](./ARCHITECTURE.md): complete code-ownership map, boundaries, and change guidance
 - [Operations](./OPERATIONS.md): setup, local runtime, validation commands, and artifact locations
 - [Quality](./QUALITY.md): architectural guardrails, validation coverage, and recovery guidance
 - [Validation Surfaces](./references/validation-surfaces.md): preview endpoint and browser automation hooks
@@ -14,27 +15,9 @@
 - [License](../LICENSE): MIT license terms
 
 ## Maintenance
+
 - [Tech Debt Tracker](./exec-plans/tech-debt-tracker.md): prioritized follow-on cleanup and legibility work
 
-## Code Map
-- `src/app/bootstrap.ts`: browser controller lifecycle, startup errors, platform events, and runtime hooks
-- `src/app/loop.ts`: fixed-step scheduling, deterministic advancement, and spectator skip
-- `src/app/menu.ts`: menu presentation and menu event binding
-- `src/app/performance.ts`: bounded opt-in diagnostic timing and runtime-context collection
-- `src/main.ts`: thin browser entrypoint and CSS import
-- `src/game/session.ts`: state creation, preview state, and round/Career Night progression
-- `src/game/career.ts`: seeded round generation, placements, points, and standings
-- `src/game/awards.ts`: Wreck Award qualification
-- `src/game/roster.ts`: lineup data and car construction helpers
-- `src/game/arena.ts`: arena geometry and normalized authored-layout materialization
-- `src/game/upgrades.ts`: upgrade bonuses and condition servicing
-- `src/game/roundStats.ts`: round stat defaults and reset lifecycle
-- `src/game/events.ts`: event-feed appends and capping
-- `src/game/runtime.ts`: per-frame advancement, eliminations, event expiration, and camera updates
-- `src/game/debug.ts`: `render_game_to_text()` payload
-- `src/game/render.ts`: stable canvas-rendering façade
-- `src/game/render/`: focused arena, car, effects, and overlay drawing
-- `tests/`: Vitest rule/controller coverage plus focused real-browser boot, Canvas, lifecycle, and Web Audio checks
-
 ## Maintenance Rule
+
 When repo navigation, commands, or validation surfaces change, update this index and the linked deep docs in the same change.

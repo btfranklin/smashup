@@ -49,7 +49,7 @@ export function spawnCollisionDust(state: GameState): void {
         collision.point.x * 0.07 +
         collision.point.y * 0.11 +
         i * 17 +
-        state.tick;
+        state.roundTick;
       state.dustPuffs.push(
         createDustPuff(
           state,

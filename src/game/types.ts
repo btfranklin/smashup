@@ -1,3 +1,13 @@
+import type {
+  AIArchetype,
+  ArenaVariantId,
+  CarPresetId,
+  CarPreviewScenarioId,
+  RoundModifierId,
+  SessionUpgradeId,
+  WreckAwardId,
+} from "./contentIds";
+
 export type Mode =
   | "menu"
   | "car_select"
@@ -25,39 +35,6 @@ export type DamageZone = "front" | "rear" | "left" | "right";
 export type DamagePhase = "healthy" | "wounded" | "failing" | "critical";
 
 export type SystemName = "engine" | "radiator" | "transmission" | "steering";
-
-export type CarPresetId = "bulldozer" | "darter" | "backstab";
-
-export type CarPreviewScenarioId =
-  | "pristine"
-  | "front_light"
-  | "front_heavy"
-  | "left_heavy"
-  | "rear_heavy"
-  | "critical"
-  | "disabled";
-
-export type AIArchetype = "bruiser" | "circler" | "scavenger" | "panic_driver";
-
-export type ArenaVariantId = "classic" | "mud_pit" | "junkyard";
-
-export type RoundModifierId =
-  | "none"
-  | "hot_engines"
-  | "lights_out"
-  | "redline";
-
-export type SessionUpgradeId = "pit_patch" | "ram_rig" | "steering_clinic";
-
-export type WreckAwardId =
-  | "sledgehammer"
-  | "big_swing"
-  | "running_on_fumes"
-  | "lead_with_your_chin"
-  | "last_car_rolling"
-  | "wrecking_crew"
-  | "double_trouble"
-  | "finisher";
 
 export type WreckAwardCategory = "impact" | "survival" | "style";
 
@@ -327,7 +304,6 @@ export type RoundStats = {
   biggestHitSeverity: number;
   biggestHitLabel: string | null;
   eliminatedById: number | null;
-  knockoutReason: string | null;
   playerKnockouts: string[];
   strongestPlayerHitSeverity: number;
   playerContactLedger: Record<
@@ -404,8 +380,8 @@ export type GameState = {
   session: SessionState;
   cars: Car[];
   playerId: number;
-  tick: number;
-  elapsed: number;
+  roundTick: number;
+  sessionElapsed: number;
   winnerId: number | null;
   outlastedDriverIds: number[];
   recentCollisions: CollisionEvent[];
@@ -420,10 +396,5 @@ export type GameState = {
   events: EventMessage[];
   nextEventId: number;
   camera: CameraState;
-  pendingSystemEvents: Array<{
-    carId: number;
-    system: SystemName;
-    phase: DamagePhase;
-  }>;
   roundStats: RoundStats;
 };

@@ -49,7 +49,8 @@ function createSmokePuff(state: GameState, car: Car): SmokePuff {
   const rightX = -forwardY;
   const rightY = forwardX;
   const hoodDistance = car.length * 0.42;
-  const seedBase = car.id * 1000 + car.smokeBurstCount * 17 + state.tick * 0.37;
+  const seedBase =
+    car.id * 1000 + car.smokeBurstCount * 17 + state.roundTick * 0.37;
   const lateralOffset = (pseudoRandom(seedBase + 1) - 0.5) * 14;
   const x = car.x + forwardX * hoodDistance + rightX * lateralOffset;
   const y = car.y + forwardY * hoodDistance + rightY * lateralOffset;

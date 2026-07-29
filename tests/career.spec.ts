@@ -10,10 +10,10 @@ import {
   rankRoundCars,
 } from "../src/game/career";
 import { createDefaultPlayerBuild } from "../src/game/content";
+import type { CarPresetId } from "../src/game/contentIds";
 import { createFreshCondition } from "../src/game/conditions";
 import { createRoundCars } from "../src/game/roster";
 import type {
-  CarPresetId,
   RoundPlacement,
   RoundSummary,
 } from "../src/game/types";

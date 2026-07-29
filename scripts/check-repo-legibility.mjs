@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { spawnSync } from "node:child_process";
 
 const root = process.cwd();
 const failures = [];
@@ -12,323 +13,184 @@ function read(relativePath) {
   return fs.readFileSync(repoPath(relativePath), "utf8");
 }
 
-function requireFile(relativePath, remediation) {
+function requireFile(relativePath, purpose) {
   if (!fs.existsSync(repoPath(relativePath))) {
-    failures.push(`${relativePath}: ${remediation}`);
+    failures.push(`${relativePath}: missing ${purpose}.`);
   }
 }
 
-function requireContains(relativePath, fragments, remediation) {
-  if (!fs.existsSync(repoPath(relativePath))) {
-    failures.push(`${relativePath}: ${remediation}`);
-    return;
+const rootEntrypoints = {
+  "README.md": "public project entrypoint",
+  "LICENSE": "public license",
+  "AGENTS.md": "agent task-routing entrypoint",
+  "docs/README.md": "durable documentation index",
+  "package.json": "package and command manifest",
+};
+
+for (const [relativePath, purpose] of Object.entries(rootEntrypoints)) {
+  requireFile(relativePath, purpose);
+}
+
+function listMarkdownFiles(directory) {
+  const files = [];
+  for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+    const absolutePath = path.join(directory, entry.name);
+    if (entry.isDirectory()) {
+      files.push(...listMarkdownFiles(absolutePath));
+    } else if (entry.isFile() && entry.name.endsWith(".md")) {
+      files.push(absolutePath);
+    }
   }
-  const content = read(relativePath);
-  for (const fragment of fragments) {
-    if (!content.includes(fragment)) {
-      failures.push(`${relativePath}: missing "${fragment}". ${remediation}`);
+  return files;
+}
+
+function validateLocalMarkdownLinks(absolutePath) {
+  const content = fs.readFileSync(absolutePath, "utf8");
+  const sourcePath = path.relative(root, absolutePath);
+  const linkPattern = /!?\[[^\]]*]\(([^)]+)\)/g;
+
+  for (const match of content.matchAll(linkPattern)) {
+    const rawTarget = match[1].trim().replace(/^<|>$/g, "");
+    const targetWithoutTitle = rawTarget.split(/\s+["'][^"']*["']$/)[0];
+    if (
+      targetWithoutTitle.startsWith("#") ||
+      /^[a-z][a-z\d+.-]*:/i.test(targetWithoutTitle)
+    ) {
+      continue;
+    }
+
+    const linkPath = decodeURIComponent(targetWithoutTitle.split(/[?#]/, 1)[0]);
+    if (!linkPath) {
+      continue;
+    }
+
+    const resolvedPath = linkPath.startsWith("/")
+      ? path.join(root, linkPath)
+      : path.resolve(path.dirname(absolutePath), linkPath);
+    const relativeTarget = path.relative(root, resolvedPath);
+    if (
+      relativeTarget.startsWith(`..${path.sep}`) ||
+      relativeTarget === ".."
+    ) {
+      failures.push(
+        `${sourcePath}: local link "${rawTarget}" resolves outside the repository.`,
+      );
+    } else if (!fs.existsSync(resolvedPath)) {
+      failures.push(
+        `${sourcePath}: local link "${rawTarget}" does not resolve to a repository file.`,
+      );
     }
   }
 }
 
-[
-  "README.md",
-  "LICENSE",
-  "AGENTS.md",
-  ".github/workflows/validate.yml",
-  "docs/README.md",
-  "docs/ARCHITECTURE.md",
-  "docs/OPERATIONS.md",
-  "docs/QUALITY.md",
-  "docs/LEGIBILITY-AUDIT.md",
-  "docs/references/validation-surfaces.md",
-  "docs/references/gameplay-tuning.md",
-  "docs/references/performance-validation.md",
-  "docs/exec-plans/tech-debt-tracker.md",
-  "scripts/check-test-coverage.mjs",
-  "playwright.config.ts",
-  "playwright.performance.config.ts",
-  "vite.browser.config.ts",
-  "vite.performance.config.ts",
-  "src/app/bootstrap.ts",
-  "src/app/loop.ts",
-  "src/app/menu.ts",
-  "src/app/performance.ts",
-  "src/vite-env.d.ts",
-  "src/game/arena.ts",
-  "src/game/content.ts",
-  "src/game/career.ts",
-  "src/game/awards.ts",
-  "src/game/events.ts",
-  "src/game/roundStats.ts",
-  "src/game/roster.ts",
-  "src/game/upgrades.ts",
-  "src/game/session.ts",
-  "src/game/runtime.ts",
-  "src/game/debug.ts",
-  "src/game/preview.ts",
-  "src/game/render.ts",
-  "src/game/render/arena.ts",
-  "src/game/render/car.ts",
-  "src/game/render/effects.ts",
-  "src/game/render/overlays.ts",
-  "vitest.config.ts",
-  "tests/arena.spec.ts",
-  "tests/events.spec.ts",
-  "tests/round-stats.spec.ts",
-  "tests/roster.spec.ts",
-  "tests/upgrades.spec.ts",
-  "tests/audio-transitions.spec.ts",
-  "tests/awards.spec.ts",
-  "tests/bootstrap.spec.ts",
-  "tests/loop.spec.ts",
-  "tests/menu.spec.ts",
-  "tests/career.spec.ts",
-  "tests/career-lifecycle.spec.ts",
-  "tests/content.spec.ts",
-  "tests/performance.spec.ts",
-  "tests/render.spec.ts",
-  "tests/render-game-to-text.spec.ts",
-  "tests/helpers/fixtures.ts",
-  "tests/helpers/canvas-recorder.ts",
-  "tests/helpers/audio-stubs.ts",
-  "tests/helpers/dom-harness.ts",
-  "tests/helpers/payload-assertions.ts",
-  "tests/browser/app-flow.spec.ts",
-  "tests/browser/audio-lifecycle.spec.ts",
-  "tests/browser/canvas-lifecycle.spec.ts",
-  "tests/browser/career-finale.spec.ts",
-  "tests/browser/performance.spec.ts",
-  "tests/browser/controller-fixture.html",
-  "tests/browser/controller-fixture.ts",
-  "tests/browser/fixtures.ts",
-].forEach((file) =>
-  requireFile(
-    file,
-    "Add the missing repo map or validation artifact so a future agent run can discover it in-repo.",
-  ),
-);
-
-requireContains(
-  "AGENTS.md",
-  [
-    "README.md",
-    "docs/README.md",
-    "docs/ARCHITECTURE.md",
-    "docs/OPERATIONS.md",
-    "docs/QUALITY.md",
-    "docs/references/validation-surfaces.md",
-    "docs/references/gameplay-tuning.md",
-    "docs/references/performance-validation.md",
-    "docs/exec-plans/tech-debt-tracker.md",
-    "LICENSE",
-    "src/game/career.ts",
-    "src/game/arena.ts",
-    "src/game/awards.ts",
-    "src/app/loop.ts",
-    "src/app/menu.ts",
-    "src/app/performance.ts",
-    "src/game/render/",
-  ],
-  "AGENTS.md should stay a short map that routes the agent to deeper sources of truth.",
-);
-
-requireContains(
-  "docs/README.md",
-  [
-    "../README.md",
-    "./ARCHITECTURE.md",
-    "./OPERATIONS.md",
-    "./QUALITY.md",
-    "./references/validation-surfaces.md",
-    "./references/gameplay-tuning.md",
-    "./references/performance-validation.md",
-    "./LEGIBILITY-AUDIT.md",
-    "../LICENSE",
-    "./exec-plans/tech-debt-tracker.md",
-    "src/game/career.ts",
-    "src/game/arena.ts",
-    "src/game/awards.ts",
-    "src/app/loop.ts",
-    "src/app/menu.ts",
-    "src/app/performance.ts",
-    "src/game/render/",
-  ],
-  "docs/README.md must index the deeper docs and future-work artifacts.",
-);
-
-requireContains(
-  "README.md",
-  [
-    "## Quick Start",
-    "## Controls",
-    "## Development",
-    "## Project Layout",
-    "## Automation Surfaces",
-    "## License",
-  ],
-  "README.md should remain the public front door with setup, controls, validation, automation surfaces, and license guidance.",
-);
-
-requireContains(
-  "docs/QUALITY.md",
-  [
-    "## Architectural Guardrails",
-    "npm run validate",
-    "src/game/content.ts",
-    "src/game/career.ts",
-    "window.advanceTime(ms)",
-    "window.render_game_to_text()",
-    "tests/career-lifecycle.spec.ts",
-    "npm run test:performance",
-  ],
-  "docs/QUALITY.md must preserve the executable architectural guardrails for content ids, split gameplay modules, and browser hooks.",
-);
-
-requireContains(
-  "LICENSE",
-  ["MIT License", "Copyright (c) 2026 B.T. Franklin"],
-  "LICENSE should preserve the public MIT license terms used by this project.",
-);
-
-requireContains(
-  ".gitignore",
-  [
-    "# OS metadata",
-    ".DS_Store",
-    "# Node / tooling",
-    "node_modules/",
-    "# Build / coverage outputs",
-    "dist/",
-    "coverage/",
-    "# Local inspection captures",
-    "output/",
-    "# Local env files",
-    ".env.*",
-  ],
-  ".gitignore should keep local cruft, generated artifacts, inspection captures, and env files out of the repo.",
-);
-
-requireContains(
-  "src/game/preview.ts",
-  ["CAR_PRESET_IDS", "CAR_PREVIEW_SCENARIO_IDS"],
-  "Preview parsing must derive ids from src/game/content.ts instead of hardcoding duplicate allowlists.",
-);
-
-requireContains(
-  ".github/workflows/validate.yml",
-  [
-    "pull_request:",
-    "npm ci",
-    "npx playwright install --with-deps chromium",
-    "npm run validate",
-  ],
-  "CI should run the same install and validation path documented for local development.",
-);
+for (const absolutePath of [
+  repoPath("README.md"),
+  repoPath("AGENTS.md"),
+  ...listMarkdownFiles(repoPath("docs")),
+]) {
+  if (fs.existsSync(absolutePath)) {
+    validateLocalMarkdownLinks(absolutePath);
+  }
+}
 
 const packageJson = JSON.parse(read("package.json"));
 const scripts = packageJson.scripts ?? {};
+const requiredScripts = [
+  "dev",
+  "build",
+  "check:repo",
+  "typecheck",
+  "test:unit",
+  "test:coverage",
+  "build:browser",
+  "test:browser",
+  "build:performance",
+  "test:performance",
+  "validate",
+];
+
+for (const scriptName of requiredScripts) {
+  if (
+    typeof scripts[scriptName] !== "string" ||
+    scripts[scriptName].trim() === ""
+  ) {
+    failures.push(
+      `package.json: add a non-empty "${scriptName}" script for the documented validation workflow.`,
+    );
+  }
+}
+
+if (
+  typeof scripts["check:repo"] === "string" &&
+  !scripts["check:repo"].includes("scripts/check-repo-legibility.mjs")
+) {
+  failures.push(
+    'package.json: "check:repo" must run scripts/check-repo-legibility.mjs.',
+  );
+}
+if (
+  typeof scripts["test:coverage"] === "string" &&
+  !scripts["test:coverage"].includes("scripts/check-test-coverage.mjs")
+) {
+  failures.push(
+    'package.json: "test:coverage" must run scripts/check-test-coverage.mjs after Vitest coverage.',
+  );
+}
+
+const validationCommands = [
+  "npm run check:repo",
+  "npm run typecheck",
+  "npm run build",
+  "npm run test:coverage",
+  "npm run test:browser",
+];
+for (const command of validationCommands) {
+  if (
+    typeof scripts.validate === "string" &&
+    !scripts.validate.includes(command)
+  ) {
+    failures.push(
+      `package.json: "validate" must include "${command}" in the authoritative validation chain.`,
+    );
+  }
+}
+
 if (packageJson.license !== "MIT") {
   failures.push(
     'package.json: set "license" to "MIT" so package metadata matches LICENSE.',
   );
 }
-if (!scripts["check:repo"]) {
-  failures.push(
-    'package.json: add a "check:repo" script that runs scripts/check-repo-legibility.mjs.',
-  );
-}
-if (!scripts.test) {
-  failures.push(
-    'package.json: add a "test" script that runs the Vitest suite.',
-  );
-}
-if (!scripts["test:unit"]) {
-  failures.push(
-    'package.json: add a "test:unit" script so fast validation is executable rather than ad hoc.',
-  );
-}
-if (!scripts["test:coverage"]) {
-  failures.push(
-    'package.json: add a "test:coverage" script so coverage-gated validation is executable rather than ad hoc.',
-  );
-}
-if (!scripts.typecheck) {
-  failures.push(
-    'package.json: add a "typecheck" script that runs TypeScript without emitting files.',
-  );
-}
 if (
-  typeof scripts.validate !== "string" ||
-  !scripts.validate.includes("npm run check:repo") ||
-  !scripts.validate.includes("npm run typecheck") ||
-  !scripts.validate.includes("npm run build") ||
-  !scripts.validate.includes("npm run test:coverage") ||
-  !scripts.validate.includes("npm run test:browser")
+  fs.existsSync(repoPath("LICENSE")) &&
+  !read("LICENSE").startsWith("MIT License")
 ) {
   failures.push(
-    'package.json: "validate" must run repo legibility checks, typecheck, the production build, Vitest coverage, and the real-browser suite.',
-  );
-}
-if (
-  typeof scripts["test:coverage"] !== "string" ||
-  !scripts["test:coverage"].includes("scripts/check-test-coverage.mjs")
-) {
-  failures.push(
-    'package.json: "test:coverage" must run the calibrated per-surface coverage check after Vitest.',
+    'LICENSE: its declared license must match package.json "license": "MIT".',
   );
 }
 
-if (
-  typeof scripts["build:browser"] !== "string" ||
-  !scripts["build:browser"].includes("vite.browser.config.ts")
-) {
-  failures.push(
-    'package.json: "build:browser" must create the ordinary production browser-test bundle with vite.browser.config.ts.',
+for (const artifactDirectory of ["dist", "coverage", "output"]) {
+  const ignored = spawnSync(
+    "git",
+    ["check-ignore", "--quiet", "--no-index", artifactDirectory],
+    { cwd: root },
   );
-}
-if (
-  typeof scripts["test:browser"] !== "string" ||
-  !scripts["test:browser"].includes("--grep-invert @performance")
-) {
-  failures.push(
-    'package.json: "test:browser" must run the ordinary Chromium suite while excluding the hardware-sensitive @performance smoke.',
-  );
-}
-if (
-  typeof scripts["test:performance"] !== "string" ||
-  !scripts["test:performance"].includes("playwright.performance.config.ts")
-) {
-  failures.push(
-    'package.json: "test:performance" must use the isolated single-worker Playwright performance configuration.',
-  );
-}
-if (
-  typeof scripts["build:performance"] !== "string" ||
-  !scripts["build:performance"].includes("vite.performance.config.ts")
-) {
-  failures.push(
-    'package.json: "build:performance" must use the dedicated Vite configuration for the ignored multi-page fixture bundle.',
-  );
-}
-
-const devDependencies = packageJson.devDependencies ?? {};
-if (!devDependencies["@playwright/test"]) {
-  failures.push(
-    "package.json: add @playwright/test as a devDependency for the supported Chromium integration suite.",
-  );
-}
-for (const dependency of [
-  "@types/node",
-  "vitest",
-  "jsdom",
-  "@vitest/coverage-v8",
-]) {
-  if (!devDependencies[dependency]) {
+  if (ignored.status !== 0) {
     failures.push(
-      `package.json: add ${dependency} as a devDependency for the fast validation suite.`,
+      `.gitignore: generated artifact directory "${artifactDirectory}/" must be ignored.`,
     );
   }
+}
+
+const workflowPath = ".github/workflows/validate.yml";
+requireFile(workflowPath, "CI validation workflow");
+if (
+  fs.existsSync(repoPath(workflowPath)) &&
+  !/^\s*run:\s*npm run validate\s*$/m.test(read(workflowPath))
+) {
+  failures.push(
+    `${workflowPath}: CI must invoke the same "npm run validate" command used locally.`,
+  );
 }
 
 if (failures.length > 0) {
@@ -340,5 +202,5 @@ if (failures.length > 0) {
 }
 
 console.log(
-  "Repo legibility check passed: public entrypoints, docs map, TypeScript/Vitest/Chromium validation scripts, and ignored artifact hygiene are in place.",
+  "Repo legibility check passed: entrypoints, local documentation links, package scripts, license metadata, ignored artifacts, and CI wiring are coherent.",
 );

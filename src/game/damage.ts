@@ -1,10 +1,10 @@
 import { clamp01 } from "./math";
+import type { RoundModifierId } from "./contentIds";
 import { applyFrameImpact } from "./deformation";
 import type {
   Car,
   DamagePhase,
   DamageZone,
-  RoundModifierId,
   SystemName,
   Vec2,
 } from "./types";

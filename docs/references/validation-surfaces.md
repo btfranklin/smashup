@@ -3,12 +3,14 @@
 This document is the durable reference for the repo's browser automation contract.
 
 ## Hidden Preview URL
+
 - Entry point: `/?preview=car&preset=<id>&scenario=<id>`
-- Valid preset ids come from `CAR_PRESET_IDS` in `src/game/content.ts`.
-- Valid preview scenarios come from `CAR_PREVIEW_SCENARIO_IDS` in `src/game/content.ts`.
+- Valid preset ids come from `CAR_PRESET_IDS` in `src/game/contentIds.ts`.
+- Valid preview scenarios come from `CAR_PREVIEW_SCENARIO_IDS` in `src/game/contentIds.ts`.
 - Invalid ids must fail loudly with a visible startup error. They must not silently coerce to defaults.
 
 ## Browser Hooks
+
 - `window.advanceTime(ms)`
   Deterministically advances the game loop for automation.
 - `window.render_game_to_text()`
@@ -20,11 +22,13 @@ test-only controller fixture may expose its snapshot inside the fixture page.
 The production app adds no performance global.
 
 ## Expected Preview Behavior
+
 - Preview mode returns `mode: "car_preview"` from `render_game_to_text()`.
 - The preview payload must echo the requested preset/scenario pair.
 - Preview mode uses the same content tables as live gameplay setup for presets and conditions.
 
 ## Expected Runtime Behavior
+
 - Runtime hook coverage starts a Career Night, selects a preset, advances into gameplay, and inspects the running-state payload.
 - The session payload includes the generated seed and all five round plans. Completed-round payloads include placements, points, Wreck Award ids, and standings derived from those summaries.
 - The running and spectating payloads include the selected preset, current round and arena metadata, player state, remaining drivers, and visible outcome state.
@@ -46,8 +50,12 @@ The production app adds no performance global.
   exposes the derived eight-driver standings rather than dropping final data.
 
 ## Enforcement
+
 - `tests/preview.spec.ts` covers preview matrix alignment and invalid preview failures.
-- `tests/bootstrap.spec.ts` covers jsdom controller wiring, supplied-platform routing, deterministic stepping through Career Night start, and full teardown.
+- `tests/bootstrap-core-menus.spec.ts` covers jsdom controller wiring, hooks, deterministic stepping through Career Night start, and menu flow.
+- `tests/bootstrap-input-platform.spec.ts` covers supplied-platform routing and browser input behavior.
+- `tests/bootstrap-audio-performance.spec.ts` covers injected audio and bounded performance collection.
+- `tests/bootstrap-lifecycle.spec.ts` covers transactional startup and full teardown.
 - `tests/loop.spec.ts` covers fractional stepping, wall-clock catch-up, frame cancellation, and bounded spectator-skip scheduling.
 - `tests/render-game-to-text.spec.ts` covers payload shape and truncation without browser-driving.
 - `tests/career-lifecycle.spec.ts` completes all five rounds through production

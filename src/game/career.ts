@@ -1,13 +1,15 @@
 import {
   ARENA_DEFINITIONS,
-  ARENA_VARIANT_IDS,
   ROUND_MODIFIER_DEFINITIONS,
 } from "./content";
+import {
+  ARENA_VARIANT_IDS,
+  type RoundModifierId,
+} from "./contentIds";
 import { getEngineHealth } from "./damage";
 import type {
   Car,
   CareerStanding,
-  RoundModifierId,
   RoundPlacement,
   RoundPlan,
   RoundSummary,

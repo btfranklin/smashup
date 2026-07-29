@@ -6,6 +6,10 @@ import {
   getOutlastedDriverLabels,
   getPlayerCar,
   getWinnerCar,
+  isActiveCareerMode,
+  requirePlayerBuild,
+  requirePlayerCar,
+  requirePlayerCondition,
 } from "../src/game/selectors";
 import { createCarFixture, createStateFixture } from "./helpers/fixtures";
 
@@ -22,6 +26,7 @@ describe("selectors", () => {
     expect(getCarById(state, player.id)).toBe(player);
     expect(getCarById(state, null)).toBeUndefined();
     expect(getPlayerCar(state)).toBe(player);
+    expect(requirePlayerCar(state)).toBe(player);
     expect(getWinnerCar(state)).toBe(rival);
   });
 
@@ -37,5 +42,32 @@ describe("selectors", () => {
 
     expect(getActiveCars(state)).toEqual([player, survivor]);
     expect(getOutlastedDriverLabels(state)).toEqual(["Rimshot", "Driver 999"]);
+  });
+
+  it("recognizes active Career Night modes", () => {
+    expect(isActiveCareerMode("running")).toBe(true);
+    expect(isActiveCareerMode("menu")).toBe(false);
+  });
+
+  it("fails clearly when required player state is missing", () => {
+    const state = createStateFixture({
+      mode: "running",
+      cars: [],
+      playerId: 999,
+    });
+
+    expect(() => requirePlayerCar(state)).toThrow(
+      'Mode "running" requires a player car.',
+    );
+
+    state.session.playerBuild = null;
+    expect(() => requirePlayerBuild(state)).toThrow(
+      'Mode "running" requires an active player build.',
+    );
+
+    state.session.playerCondition = null;
+    expect(() => requirePlayerCondition(state)).toThrow(
+      'Mode "running" requires an active player condition.',
+    );
   });
 });

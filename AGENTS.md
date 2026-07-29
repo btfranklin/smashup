@@ -3,9 +3,10 @@
 Start here before changing code.
 
 ## Repo Map
+
 - `README.md`: public project overview, controls, setup, and validation summary
 - `docs/README.md`: index of the repo-local system of record
-- `docs/ARCHITECTURE.md`: gameplay/runtime boundaries and where new logic belongs
+- `docs/ARCHITECTURE.md`: complete code-ownership map and boundary guidance
 - `docs/OPERATIONS.md`: run, validate, and inspect the game locally
 - `docs/QUALITY.md`: architectural guardrails, validation expectations, and recovery paths
 - `docs/references/validation-surfaces.md`: hidden preview contract and browser hook reference
@@ -16,8 +17,9 @@ Start here before changing code.
 - `docs/exec-plans/tech-debt-tracker.md`: technical future-work tracker
 
 ## Common Commands
+
 - `npm run dev`: start the local Vite app
-- `npm run check:repo`: verify the repo map, docs, and architecture guardrails
+- `npm run check:repo`: verify entrypoints, documentation links, command wiring, license metadata, and ignored artifacts
 - `npm run typecheck`: run TypeScript without emitting files
 - `npm run test:unit`: run the fast Vitest suite once
 - `npm run test:coverage`: run the coverage-gated Vitest suite plus the per-surface coverage check
@@ -26,6 +28,8 @@ Start here before changing code.
 - `npm run validate`: repo checks + typecheck + build + Vitest coverage + Chromium integration
 
 ## Task Routing
+
+- Content ids and guards: `src/game/contentIds.ts`; authored display and tuning catalogs: `src/game/content.ts`
 - Gameplay flow and round transitions: `src/game/session.ts`
 - Career Night plan generation, placements, scoring, and standings: `src/game/career.ts`
 - Wreck Award qualification: `src/game/awards.ts`
@@ -34,6 +38,7 @@ Start here before changing code.
 - Upgrade effects and condition servicing: `src/game/upgrades.ts`
 - Per-round stat lifecycle: `src/game/roundStats.ts`
 - Event feed appends: `src/game/events.ts`
+- State lookup, active-career predicates, and required-state guards: `src/game/selectors.ts`
 - Per-frame simulation, event expiration, eliminations: `src/game/runtime.ts`
 - Text/debug payloads for automation: `src/game/debug.ts`
 - Preview URL parsing and contract errors: `src/game/preview.ts`
@@ -42,9 +47,12 @@ Start here before changing code.
 - Menu presentation and menu event binding: `src/app/menu.ts`
 - Bounded diagnostic timing and runtime-context collection: `src/app/performance.ts`
 - Stable render façade: `src/game/render.ts`; focused drawing internals: `src/game/render/`
+- Controller test setup and teardown: `tests/helpers/controller-harness.ts`
+- Controller behavior: `tests/bootstrap*.spec.ts`; runtime behavior: `tests/runtime-*.spec.ts`; rendering behavior: `tests/render*.spec.ts`
 - Thin browser entrypoint and CSS import: `src/main.ts`
 
 ## Working Rules
+
 - Do not rebuild a catch-all gameplay module; extend the dedicated split modules instead.
-- Keep preview, Career Night, and Wreck Award ids and display content sourced from `src/game/content.ts`; do not duplicate authored content in bootstrap, session, or tests.
+- Keep preview, Career Night, and Wreck Award ids in `src/game/contentIds.ts` and display/tuning content in `src/game/content.ts`; do not duplicate either in bootstrap, session, or tests.
 - Treat `docs/` as the durable system of record for architecture, operations, and quality expectations. Update docs when commands, boundaries, or validation surfaces change.

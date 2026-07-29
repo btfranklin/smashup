@@ -4,18 +4,29 @@ import {
   AI_ARCHETYPE_CONFIG,
   AI_ARCHETYPE_LABELS,
   ARENA_DEFINITIONS,
-  ARENA_VARIANT_IDS,
   CAR_PRESETS,
-  CAR_PRESET_IDS,
   CAR_PREVIEW_SCENARIOS,
-  CAR_PREVIEW_SCENARIO_IDS,
   ROUND_MODIFIER_DEFINITIONS,
   SESSION_UPGRADES,
   WRECK_AWARD_DEFINITIONS,
   getModifierSummary,
+} from "../src/game/content";
+import {
+  AI_ARCHETYPE_IDS,
+  ARENA_VARIANT_IDS,
+  CAR_PRESET_IDS,
+  CAR_PREVIEW_SCENARIO_IDS,
+  ROUND_MODIFIER_IDS,
+  SESSION_UPGRADE_IDS,
+  WRECK_AWARD_IDS,
+  isAIArchetype,
+  isArenaVariantId,
   isCarPreviewScenarioId,
   isCarPresetId,
-} from "../src/game/content";
+  isRoundModifierId,
+  isSessionUpgradeId,
+  isWreckAwardId,
+} from "../src/game/contentIds";
 
 describe("content contracts", () => {
   it("keeps preset and preview ids aligned with exported records", () => {
@@ -32,14 +43,22 @@ describe("content contracts", () => {
     );
   });
 
-  it("recognizes valid ids and rejects invalid ones", () => {
-    expect(isCarPresetId("bulldozer")).toBe(true);
-    expect(isCarPresetId("not-a-preset")).toBe(false);
-    expect(isCarPreviewScenarioId("critical")).toBe(true);
-    expect(isCarPreviewScenarioId("unknown")).toBe(false);
+  it.each([
+    ["car preset", isCarPresetId, "backstab"],
+    ["car preview scenario", isCarPreviewScenarioId, "disabled"],
+    ["AI archetype", isAIArchetype, "panic_driver"],
+    ["arena variant", isArenaVariantId, "junkyard"],
+    ["round modifier", isRoundModifierId, "redline"],
+    ["session upgrade", isSessionUpgradeId, "steering_clinic"],
+    ["Wreck Award", isWreckAwardId, "finisher"],
+  ] as const)("recognizes valid %s ids and rejects other values", (_, guard, valid) => {
+    expect(guard(valid)).toBe(true);
+    expect(guard("not-an-id")).toBe(false);
+    expect(guard(null)).toBe(false);
   });
 
   it("keeps AI labels and tuning aligned", () => {
+    expect(AI_ARCHETYPE_IDS).toEqual(Object.keys(AI_ARCHETYPE_CONFIG));
     expect(Object.keys(AI_ARCHETYPE_CONFIG)).toEqual(
       Object.keys(AI_ARCHETYPE_LABELS),
     );
@@ -51,6 +70,10 @@ describe("content contracts", () => {
 
   it("single-sources arena, modifier, and award display content", () => {
     expect(ARENA_VARIANT_IDS).toEqual(Object.keys(ARENA_DEFINITIONS));
+    expect(ROUND_MODIFIER_IDS).toEqual(
+      Object.keys(ROUND_MODIFIER_DEFINITIONS),
+    );
+    expect(WRECK_AWARD_IDS).toEqual(Object.keys(WRECK_AWARD_DEFINITIONS));
     Object.entries(ARENA_DEFINITIONS).forEach(([id, definition]) => {
       expect(definition.id).toBe(id);
       expect(definition.title.length).toBeGreaterThan(0);
@@ -72,11 +95,7 @@ describe("content contracts", () => {
   });
 
   it("keeps session upgrades aligned with their record keys", () => {
-    expect(Object.keys(SESSION_UPGRADES)).toEqual([
-      "pit_patch",
-      "ram_rig",
-      "steering_clinic",
-    ]);
+    expect(SESSION_UPGRADE_IDS).toEqual(Object.keys(SESSION_UPGRADES));
     Object.entries(SESSION_UPGRADES).forEach(([id, upgrade]) => {
       expect(upgrade.id).toBe(id);
       expect(upgrade.title.length).toBeGreaterThan(0);

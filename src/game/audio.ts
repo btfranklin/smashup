@@ -41,7 +41,7 @@ function createNoiseBuffer(ctx: AudioContextLike): AudioBuffer {
 }
 
 export function deriveEngineAudioMix(
-  state: Pick<GameState, "mode" | "elapsed">,
+  state: Pick<GameState, "mode" | "sessionElapsed">,
   player: Car,
 ): EngineAudioMix {
   const speed = Math.abs(signedSpeedForCar(player));
@@ -57,7 +57,7 @@ export function deriveEngineAudioMix(
   const enginePitch = 48 + speed * 0.55 + throttle * 28;
   const healthColor = 0.72 + health * 0.42;
   const wobble =
-    Math.sin(state.elapsed * (6 + roughness * 12)) * roughness * 7;
+    Math.sin(state.sessionElapsed * (6 + roughness * 12)) * roughness * 7;
   const pitch = (enginePitch + wobble) * healthColor * player.engineTone;
   const subPitch =
     (enginePitch * 0.48 - roughness * 8) * transmission * player.engineTone;

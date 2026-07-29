@@ -116,7 +116,7 @@ export function spawnCarFragments(state: GameState): void {
       continue;
     }
     const seed =
-      state.tick * 131 +
+      state.roundTick * 131 +
       collision.aId * 23 +
       collision.bId * 37 +
       collision.point.x * 0.13 +

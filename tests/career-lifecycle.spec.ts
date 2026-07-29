@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { buildCareerStandings } from "../src/game/career";
 import { WRECK_AWARD_DEFINITIONS } from "../src/game/content";
+import type { SessionUpgradeId } from "../src/game/contentIds";
 import { getKnockoutCause } from "../src/game/damage";
 import { renderGameToText } from "../src/game/debug";
 import {
@@ -16,7 +17,6 @@ import {
 } from "../src/game/session";
 import type {
   GameState,
-  SessionUpgradeId,
 } from "../src/game/types";
 
 const EXPECTED_PLACEMENT_POINTS = [10, 8, 6, 5, 4, 3, 2, 1];
@@ -38,7 +38,7 @@ function completePlayerWin(state: GameState): void {
   state.session.countdown = 0;
   state.cars.forEach((car, index) => {
     car.disabled = !car.isPlayer;
-    car.eliminationTime = car.isPlayer ? null : state.elapsed - index - 1;
+    car.eliminationTime = car.isPlayer ? null : state.sessionElapsed - index - 1;
   });
   advanceState(state, 1 / 60);
   expect(state.mode).toBe("round_results");
@@ -60,11 +60,11 @@ function completePlayerWreck(state: GameState): void {
   };
   player.body.front = 0.8;
   player.disabled = true;
-  player.eliminationTime = state.elapsed;
+  player.eliminationTime = state.sessionElapsed;
 
   state.cars.slice(1).forEach((car, index) => {
     car.disabled = index >= 2;
-    car.eliminationTime = car.disabled ? state.elapsed - index - 1 : null;
+    car.eliminationTime = car.disabled ? state.sessionElapsed - index - 1 : null;
   });
 
   advanceState(state, 1 / 60);

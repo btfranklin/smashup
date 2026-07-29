@@ -14,7 +14,6 @@ describe("round stats helpers", () => {
       biggestHitSeverity: 0,
       biggestHitLabel: null,
       eliminatedById: null,
-      knockoutReason: null,
       playerKnockouts: [],
       strongestPlayerHitSeverity: 0,
       playerContactLedger: {},
@@ -24,8 +23,8 @@ describe("round stats helpers", () => {
     });
   });
 
-  it("resets round stats from the state's current elapsed time", () => {
-    const state = createStateFixture({ elapsed: 18.5 });
+  it("resets round stats from the state's current session elapsed time", () => {
+    const state = createStateFixture({ sessionElapsed: 18.5 });
     state.roundStats.biggestHitSeverity = 1;
     state.roundStats.biggestHitLabel = "Player into Rimshot";
     state.roundStats.playerKnockouts.push("Rimshot");
@@ -44,7 +43,6 @@ describe("round stats helpers", () => {
       biggestHitSeverity: 0,
       biggestHitLabel: null,
       eliminatedById: null,
-      knockoutReason: null,
       playerKnockouts: [],
       strongestPlayerHitSeverity: 0,
       playerContactLedger: {},

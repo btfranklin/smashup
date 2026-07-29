@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   CAR_PRESET_IDS,
   CAR_PREVIEW_SCENARIO_IDS,
-} from "../src/game/content";
+} from "../src/game/contentIds";
 import { parseCarPreviewRequest } from "../src/game/preview";
 
 describe("preview parsing", () => {

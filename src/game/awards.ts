@@ -1,4 +1,4 @@
-import type { WreckAwardId } from "./types";
+import type { WreckAwardId } from "./contentIds";
 
 export type WreckAwardSelection = {
   playerWon: boolean;

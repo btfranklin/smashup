@@ -10,8 +10,15 @@ import {
 } from "../../src/app/performance";
 import { PLACEMENT_POINTS } from "../../src/game/career";
 import { chooseStarterCar } from "../../src/game/session";
-import type { WreckAwardId } from "../../src/game/types";
+import type { WreckAwardId } from "../../src/game/contentIds";
 import "../../src/style.css";
+
+const CHAMPION_AWARD_IDS: WreckAwardId[] = [
+  "sledgehammer",
+  "last_car_rolling",
+  "double_trouble",
+];
+const SURVIVAL_AWARD_IDS: WreckAwardId[] = ["last_car_rolling"];
 
 const appRoot = document.querySelector<HTMLDivElement>("#fixture-root");
 if (!appRoot) {
@@ -81,12 +88,8 @@ function stageCareerFinale(playerChampion: boolean): void {
       placements,
       awardIds:
         index === 0
-          ? ([
-              "sledgehammer",
-              "last_car_rolling",
-              "double_trouble",
-            ] as WreckAwardId[])
-          : (["last_car_rolling"] as WreckAwardId[]),
+          ? [...CHAMPION_AWARD_IDS]
+          : [...SURVIVAL_AWARD_IDS],
     }),
   );
   activeController.state.mode = "career_over";
@@ -146,10 +149,10 @@ window.controllerFixture = {
     activeController.state.mode = "spectating";
     activeController.state.cars[0].disabled = true;
     activeController.state.cars[0].eliminationTime =
-      activeController.state.elapsed;
+      activeController.state.sessionElapsed;
     activeController.state.cars.slice(3).forEach((car, index) => {
       car.disabled = true;
-      car.eliminationTime = activeController.state.elapsed - index - 1;
+      car.eliminationTime = activeController.state.sessionElapsed - index - 1;
     });
     activeController.syncMenu();
   },

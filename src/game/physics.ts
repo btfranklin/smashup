@@ -3,6 +3,7 @@ import {
   impactZoneForPoint,
   updateSubsystemWear,
 } from "./damage";
+import type { RoundModifierId } from "./contentIds";
 import { clamp, normalizeAngle } from "./math";
 import type {
   ArenaObject,
@@ -10,7 +11,6 @@ import type {
   CollisionEvent,
   GameState,
   MudZone,
-  RoundModifierId,
   Vec2,
 } from "./types";
 

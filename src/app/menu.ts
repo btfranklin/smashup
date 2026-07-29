@@ -1,21 +1,25 @@
 import {
-  CAR_PRESET_IDS,
   CAR_PRESETS,
   SESSION_UPGRADES,
   WRECK_AWARD_DEFINITIONS,
   getModifierSummary,
 } from "../game/content";
 import {
+  CAR_PRESET_IDS,
+  isCarPresetId,
+  isSessionUpgradeId,
+  type CarPresetId,
+  type SessionUpgradeId,
+  type WreckAwardId,
+} from "../game/contentIds";
+import {
   buildCareerStandings,
   CAREER_ROUND_COUNT,
 } from "../game/career";
 import { getActiveCars } from "../game/selectors";
 import type {
-  CarPresetId,
   GameState,
   Mode,
-  SessionUpgradeId,
-  WreckAwardId,
 } from "../game/types";
 
 export type MenuActions = {
@@ -127,7 +131,11 @@ export function createMenuPresenter(
       .querySelectorAll<HTMLButtonElement>("[data-preset-id]")
       .forEach((button) => {
         listenForAction(button, () => {
-          actions.chooseStarterCar(button.dataset.presetId as CarPresetId);
+          const presetId = button.dataset.presetId;
+          if (!isCarPresetId(presetId)) {
+            throw new Error(`Invalid car preset button id "${presetId}".`);
+          }
+          actions.chooseStarterCar(presetId);
         });
       });
   }
@@ -203,9 +211,11 @@ export function createMenuPresenter(
       .querySelectorAll<HTMLButtonElement>("[data-upgrade-id]")
       .forEach((button) => {
         listenForAction(button, () => {
-          actions.applySessionUpgrade(
-            button.dataset.upgradeId as SessionUpgradeId,
-          );
+          const upgradeId = button.dataset.upgradeId;
+          if (!isSessionUpgradeId(upgradeId)) {
+            throw new Error(`Invalid session upgrade button id "${upgradeId}".`);
+          }
+          actions.applySessionUpgrade(upgradeId);
         });
       });
   }

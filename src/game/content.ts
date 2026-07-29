@@ -1,15 +1,17 @@
 import { createFreshCondition } from "./conditions";
 import type {
   AIArchetype,
-  CarCondition,
-  CarPreviewScenarioId,
   ArenaVariantId,
   CarPresetId,
-  PlayerBuild,
+  CarPreviewScenarioId,
   RoundModifierId,
   SessionUpgradeId,
-  WreckAwardDefinition,
   WreckAwardId,
+} from "./contentIds";
+import type {
+  CarCondition,
+  PlayerBuild,
+  WreckAwardDefinition,
 } from "./types";
 
 export const CAR_PRESETS: Record<
@@ -106,14 +108,6 @@ export const CAR_PRESETS: Record<
   },
 };
 
-export const CAR_PRESET_IDS = Object.freeze(
-  Object.keys(CAR_PRESETS) as CarPresetId[],
-);
-
-export function isCarPresetId(value: string | null): value is CarPresetId {
-  return value !== null && CAR_PRESET_IDS.includes(value as CarPresetId);
-}
-
 export const AI_ARCHETYPE_LABELS: Record<AIArchetype, string> = {
   bruiser: "Bruiser",
   circler: "Circler",
@@ -200,10 +194,6 @@ export const ARENA_DEFINITIONS: Record<
     introLine: "Loose junk waits in the dirt for the first big hit.",
   },
 };
-
-export const ARENA_VARIANT_IDS = Object.freeze(
-  Object.keys(ARENA_DEFINITIONS) as ArenaVariantId[],
-);
 
 export const ARENA_MUD_ZONE_LAYOUTS = {
   classic: [],
@@ -566,19 +556,6 @@ export const CAR_PREVIEW_SCENARIOS: Record<
     smoke: null,
   },
 };
-
-export const CAR_PREVIEW_SCENARIO_IDS = Object.freeze(
-  Object.keys(CAR_PREVIEW_SCENARIOS) as CarPreviewScenarioId[],
-);
-
-export function isCarPreviewScenarioId(
-  value: string | null,
-): value is CarPreviewScenarioId {
-  return (
-    value !== null &&
-    CAR_PREVIEW_SCENARIO_IDS.includes(value as CarPreviewScenarioId)
-  );
-}
 
 export function getModifierSummary(modifier: RoundModifierId): string {
   return ROUND_MODIFIER_DEFINITIONS[modifier].title;

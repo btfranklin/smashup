@@ -6,6 +6,7 @@ import {
   CAR_PRESETS,
   createDefaultPlayerBuild,
 } from "./content";
+import type { AIArchetype, CarPresetId } from "./contentIds";
 import { cloneCondition, createFreshCondition } from "./conditions";
 import {
   cloneCarFrame,
@@ -13,11 +14,9 @@ import {
   seedFrameFromBodyDamage,
 } from "./deformation";
 import type {
-  AIArchetype,
   ArenaGeometry,
   Car,
   CarCondition,
-  CarPresetId,
   PlayerBuild,
 } from "./types";
 

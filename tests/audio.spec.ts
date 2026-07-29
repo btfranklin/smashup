@@ -45,10 +45,13 @@ describe("audio derivation and fake-graph orchestration", () => {
     });
 
     const runningMix = deriveEngineAudioMix(
-      { mode: "running", elapsed: 3.4 },
+      { mode: "running", sessionElapsed: 3.4 },
       player,
     );
-    const idleMix = deriveEngineAudioMix({ mode: "menu", elapsed: 3.4 }, player);
+    const idleMix = deriveEngineAudioMix(
+      { mode: "menu", sessionElapsed: 3.4 },
+      player,
+    );
 
     expect(runningMix.engineLevel).toBeGreaterThan(0);
     expect(runningMix.rumbleLevel).toBeGreaterThan(0);
