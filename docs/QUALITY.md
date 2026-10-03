@@ -15,6 +15,9 @@
   placeholder content.
 - Derive car phases from system health. Only the per-round player transition cursor may persist phase history.
 - Treat documentation and repo navigation as part of correctness. When commands, boundaries, or validation surfaces change, update `AGENTS.md` and `docs/` in the same change.
+- Keep a drive action active while either of its keyboard aliases is held.
+  Blur, hidden visibility, and controller destruction release all held keys
+  and player controls.
 
 ## Mechanical Coverage
 

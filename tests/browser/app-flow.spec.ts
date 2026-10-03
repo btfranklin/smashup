@@ -50,8 +50,18 @@ test("boots the application and accepts pointer and keyboard gameplay input", as
   const playerBeforeInput = beforeInput.player as { x: number; y: number };
 
   await page.keyboard.down("w");
+  await page.keyboard.down("ArrowUp");
   await page.evaluate(() => window.advanceTime?.(750));
   await page.keyboard.up("w");
+  await page.evaluate(() => window.advanceTime?.(500));
+
+  const overlappingInput = await readGamePayload(page);
+  expect(
+    (overlappingInput.player as { controls: { forward: number } }).controls
+      .forward,
+  ).toBe(1);
+
+  await page.keyboard.up("ArrowUp");
   await page.evaluate(() => window.advanceTime?.(1000 / 60));
 
   const afterInput = await readGamePayload(page);

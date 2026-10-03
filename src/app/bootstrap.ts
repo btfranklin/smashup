@@ -121,32 +121,53 @@ export function createStateForSearch(search: string): GameState {
 
 export function setInputKeyState(
   input: InputState,
+  pressedCodes: Set<string>,
   code: string,
   active: boolean,
 ): boolean {
   switch (code) {
     case "ArrowLeft":
     case "KeyA":
-      input.left = active;
+      updatePressedCodes(pressedCodes, code, active);
+      input.left = pressedCodes.has("ArrowLeft") || pressedCodes.has("KeyA");
       return true;
     case "ArrowRight":
     case "KeyD":
-      input.right = active;
+      updatePressedCodes(pressedCodes, code, active);
+      input.right = pressedCodes.has("ArrowRight") || pressedCodes.has("KeyD");
       return true;
     case "ArrowUp":
     case "KeyW":
-      input.forward = active;
+      updatePressedCodes(pressedCodes, code, active);
+      input.forward = pressedCodes.has("ArrowUp") || pressedCodes.has("KeyW");
       return true;
     case "ArrowDown":
     case "KeyS":
-      input.reverse = active;
+      updatePressedCodes(pressedCodes, code, active);
+      input.reverse = pressedCodes.has("ArrowDown") || pressedCodes.has("KeyS");
       return true;
     default:
       return false;
   }
 }
 
-export function resetInputState(input: InputState): void {
+function updatePressedCodes(
+  pressedCodes: Set<string>,
+  code: string,
+  active: boolean,
+): void {
+  if (active) {
+    pressedCodes.add(code);
+  } else {
+    pressedCodes.delete(code);
+  }
+}
+
+export function resetInputState(
+  input: InputState,
+  pressedCodes: Set<string>,
+): void {
+  pressedCodes.clear();
   input.left = false;
   input.right = false;
   input.forward = false;
@@ -210,6 +231,13 @@ export function createAppController({
 }: BootstrapOptions): AppController {
   let state: GameState;
   let audio: AudioDriver;
+  const input: InputState = {
+    left: false,
+    right: false,
+    forward: false,
+    reverse: false,
+  };
+  const pressedCodes = new Set<string>();
   try {
     state = createStateForSearch(win.location.search);
     audio = createAudio();
@@ -284,12 +312,23 @@ export function createAppController({
     }
   }
 
+  function releasePlayerInput(): void {
+    resetInputState(input, pressedCodes);
+    const player = state.cars.find((car) => car.id === state.playerId);
+    if (player) {
+      player.controls.forward = 0;
+      player.controls.reverse = 0;
+      player.controls.steer = 0;
+    }
+  }
+
   function destroyController(): Promise<void> {
     if (destroyPromise) {
       return destroyPromise;
     }
     destroyPromise = (async () => {
       destroyed = true;
+      releasePlayerInput();
       if (idleTaskHandle !== null) {
         try {
           cancelIdleTask(idleTaskHandle);
@@ -351,12 +390,6 @@ export function createAppController({
     }
     const renderContext: CanvasRenderingContext2D = ctx;
 
-    const input: InputState = {
-      left: false,
-      right: false,
-      forward: false,
-      reverse: false,
-    };
     const automatedStepping = Boolean(nav.webdriver);
     let audioActivationPending = false;
 
@@ -469,7 +502,7 @@ export function createAppController({
       if (event.repeat) {
         return;
       }
-      if (setInputKeyState(input, event.code, true)) {
+      if (setInputKeyState(input, pressedCodes, event.code, true)) {
         event.preventDefault();
       }
       if (event.code === "Enter") {
@@ -504,23 +537,13 @@ export function createAppController({
     };
 
     const handleKeyUp = (event: KeyboardEvent) => {
-      if (setInputKeyState(input, event.code, false)) {
+      if (setInputKeyState(input, pressedCodes, event.code, false)) {
         event.preventDefault();
       }
     };
 
     const handlePointerDown = () => {
       activateAudio();
-    };
-
-    const releasePlayerInput = () => {
-      resetInputState(input);
-      const player = state.cars.find((car) => car.id === state.playerId);
-      if (player) {
-        player.controls.forward = 0;
-        player.controls.reverse = 0;
-        player.controls.steer = 0;
-      }
     };
 
     const handleWindowBlur = () => {

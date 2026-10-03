@@ -108,12 +108,41 @@ describe("bootstrap-input-platform", () => {
     });
   });
 
+  it.each([
+    ["left", "KeyA", "ArrowLeft"],
+    ["right", "KeyD", "ArrowRight"],
+    ["forward", "KeyW", "ArrowUp"],
+    ["reverse", "KeyS", "ArrowDown"],
+  ] as const)(
+    "keeps %s active until both physical keys are released",
+    async (_action, first, second) => {
+      for (const releaseOrder of [
+        [first, second],
+        [second, first],
+      ]) {
+        const controller = createTestController();
+        document.dispatchEvent(new KeyboardEvent("keydown", { code: first }));
+        document.dispatchEvent(new KeyboardEvent("keydown", { code: second }));
+        document.dispatchEvent(
+          new KeyboardEvent("keyup", { code: releaseOrder[0] }),
+        );
+        expect(controller.input[_action]).toBe(true);
+        document.dispatchEvent(
+          new KeyboardEvent("keyup", { code: releaseOrder[1] }),
+        );
+        expect(controller.input[_action]).toBe(false);
+        await controller.destroy();
+      }
+    },
+  );
+
   it("releases input and live controls on blur or hidden visibility", async () => {
     const controller = createTestController();
     chooseStarterCar(controller.state, "bulldozer", 42);
     controller.state.mode = "running";
 
     document.dispatchEvent(new KeyboardEvent("keydown", { code: "KeyW" }));
+    document.dispatchEvent(new KeyboardEvent("keydown", { code: "ArrowUp" }));
     controller.tick(1 / 60);
     expect(controller.input.forward).toBe(true);
     expect(controller.state.cars[0].controls.forward).toBe(1);
@@ -121,6 +150,9 @@ describe("bootstrap-input-platform", () => {
     window.dispatchEvent(new Event("blur"));
     expect(controller.input.forward).toBe(false);
     expect(controller.state.cars[0].controls.forward).toBe(0);
+    document.dispatchEvent(new KeyboardEvent("keyup", { code: "KeyW" }));
+    document.dispatchEvent(new KeyboardEvent("keydown", { code: "KeyW" }));
+    expect(controller.input.forward).toBe(true);
 
     document.dispatchEvent(new KeyboardEvent("keydown", { code: "KeyA" }));
     controller.tick(1 / 60);
@@ -132,8 +164,13 @@ describe("bootstrap-input-platform", () => {
     document.dispatchEvent(new Event("visibilitychange"));
     expect(controller.input.left).toBe(false);
     expect(controller.state.cars[0].controls.steer).toBe(0);
+    document.dispatchEvent(new KeyboardEvent("keyup", { code: "KeyA" }));
+    document.dispatchEvent(new KeyboardEvent("keydown", { code: "KeyA" }));
+    expect(controller.input.left).toBe(true);
 
     await controller.destroy();
+    expect(controller.input.left).toBe(false);
+    expect(controller.state.cars[0].controls.steer).toBe(0);
     document.dispatchEvent(new KeyboardEvent("keydown", { code: "KeyW" }));
     window.dispatchEvent(new Event("blur"));
     expect(controller.input.forward).toBe(false);

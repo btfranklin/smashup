@@ -190,10 +190,12 @@ describe("bootstrap-core-menus", () => {
       forward: false,
       reverse: false,
     };
-    expect(setInputKeyState(input, "KeyD", true)).toBe(true);
-    expect(setInputKeyState(input, "Space", true)).toBe(false);
+    const pressedCodes = new Set<string>();
+    expect(setInputKeyState(input, pressedCodes, "KeyD", true)).toBe(true);
+    expect(setInputKeyState(input, pressedCodes, "Space", true)).toBe(false);
     expect(input.right).toBe(true);
-    resetInputState(input);
+    resetInputState(input, pressedCodes);
+    expect(pressedCodes.size).toBe(0);
     expect(input).toEqual({
       left: false,
       right: false,
