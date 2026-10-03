@@ -382,6 +382,7 @@ export function stepCar(
     car.controls.forward = 0;
     car.controls.reverse = 0;
     car.controls.steer = 0;
+    car.driveInput = 0;
   }
 
   const desiredDrive = car.controls.forward - car.controls.reverse;

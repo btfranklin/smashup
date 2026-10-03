@@ -35,6 +35,47 @@ describe("physics", () => {
     );
   });
 
+  it.each([-1, 1])("removes powered drive from a disabled car at input %f", (driveInput) => {
+    const state = createStateFixture();
+    const car = createCarFixture({
+      disabled: true,
+      driveInput,
+      controls: { steer: 1, forward: 1, reverse: 1 },
+    });
+
+    stepCar(car, 1 / 60, state.arena, "none");
+
+    expect(car.vx).toBe(0);
+    expect(car.vy).toBe(0);
+    expect(car.driveInput).toBe(0);
+    expect(car.controls).toEqual({ steer: 0, forward: 0, reverse: 0 });
+
+    car.vx = 60;
+    car.vy = 12;
+    stepCar(car, 1 / 60, state.arena, "none");
+
+    expect(car.vx).toBeGreaterThan(0);
+    expect(car.vx).toBeLessThan(60);
+    expect(car.vy).toBeGreaterThan(0);
+    expect(car.x).toBeGreaterThan(500);
+  });
+
+  it("removes powered drive in the step that overheating disables a car", () => {
+    const state = createStateFixture();
+    const car = createCarFixture({
+      driveInput: 1,
+      controls: { steer: 0, forward: 1, reverse: 0 },
+    });
+    car.systems.overheat = 1;
+
+    stepCar(car, 1 / 60, state.arena, "hot_engines");
+
+    expect(car.disabled).toBe(true);
+    expect(car.driveInput).toBe(0);
+    expect(car.vx).toBe(0);
+    expect(car.vy).toBe(0);
+  });
+
   it("reduces lateral slip and tracks slip amount", () => {
     const state = createStateFixture();
     const car = createCarFixture({

@@ -23,6 +23,8 @@ This document captures the current intent behind the hand-tuned gameplay rules. 
   deformation than a glancing impulse. Live impacts and preview damage use
   the same inward direction rule.
 - Disabled cars stay in the arena as hulks; they should keep affecting space without continuing to fight.
+- Disabling a car removes engine force immediately. A hulk keeps its motion
+  from earlier movement or impacts.
 - An inert player hulk cannot earn new player-collision or knockout credit.
 - Collision facts retain whether each participant was active at that exact
   impact, so a player wrecked early in a same-step pileup cannot earn credit
