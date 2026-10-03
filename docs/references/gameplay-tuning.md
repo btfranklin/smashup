@@ -68,6 +68,8 @@ This document captures the current intent behind the hand-tuned gameplay rules. 
 - A player wreck should leave a physical hulk and let the AI finish; skipping must advance the same simulation to a bounded result.
 - Smoke should escalate from light smoke to dark smoke and flame only near critical failure.
 - The smoke pool keeps at most 180 puffs after emission. Keep the newest puffs.
+- The dust pool keeps at most 180 puffs after slip or collision emission.
+  Keep the newest puffs.
 - Car panel lines should describe believable sheet-metal joins rather than cross the cabin, while each preset keeps one simple visual signature that remains legible under damage.
 - Every car's wheels and axles stay below every chassis in the global paint
   order; overlapping cars must never show a wheel on top of another body.

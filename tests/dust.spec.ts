@@ -46,14 +46,14 @@ describe("dust effects", () => {
 
   it("ages and prunes dust puffs", () => {
     const state = createStateFixture({
-      dustPuffs: Array.from({ length: 200 }, (_, index) => ({
+      dustPuffs: Array.from({ length: 210 }, (_, index) => ({
         id: index + 1,
         x: 0,
         y: 0,
         vx: 10,
         vy: 10,
-        age: index % 2 === 0 ? 0.1 : 1,
-        ttl: 0.5,
+        age: index < 200 ? 0.1 : 1,
+        ttl: index < 200 ? 1 : 0.5,
         size: 10,
         alpha: 0.4,
         tone: 0.8,
@@ -62,7 +62,68 @@ describe("dust effects", () => {
 
     updateDustEffects(state, 0.5);
 
-    expect(state.dustPuffs.length).toBeLessThanOrEqual(180);
+    expect(state.dustPuffs).toHaveLength(180);
+    expect(state.dustPuffs[0]?.id).toBe(21);
+    expect(state.dustPuffs.at(-1)?.id).toBe(200);
     expect(state.dustPuffs.every((puff) => puff.age < puff.ttl)).toBe(true);
+  });
+
+  it("caps one collision dust burst and keeps the newest live puffs", () => {
+    const state = createStateFixture({
+      dustPuffs: Array.from({ length: 190 }, (_, index) => ({
+        id: index + 1,
+        x: 0,
+        y: 0,
+        vx: 0,
+        vy: 0,
+        age: index < 180 ? 0 : 2,
+        ttl: 1,
+        size: 8,
+        alpha: 0.4,
+        tone: 0.8,
+      })),
+      nextDustPuffId: 1000,
+      recentCollisions: [createCollisionFixture({ severity: 0.8 })],
+    });
+
+    updateDustEffects(state, 0);
+    spawnCollisionDust(state);
+
+    expect(state.dustPuffs).toHaveLength(180);
+    expect(state.dustPuffs[0]?.id).toBe(5);
+    expect(state.dustPuffs.at(-1)?.id).toBe(1003);
+  });
+
+  it("caps slip dust from eight cars and keeps the newest live puffs", () => {
+    const state = createStateFixture({
+      mode: "running",
+      cars: Array.from({ length: 8 }, (_, index) =>
+        createCarFixture({
+          id: index + 1,
+          slipAmount: 28,
+          disabled: false,
+        }),
+      ),
+      dustPuffs: Array.from({ length: 190 }, (_, index) => ({
+        id: index + 1,
+        x: 0,
+        y: 0,
+        vx: 0,
+        vy: 0,
+        age: index < 180 ? 0 : 2,
+        ttl: 1,
+        size: 8,
+        alpha: 0.4,
+        tone: 0.8,
+      })),
+      nextDustPuffId: 1000,
+    });
+
+    updateDustEffects(state, 0);
+    spawnSlipDust(state);
+
+    expect(state.dustPuffs).toHaveLength(180);
+    expect(state.dustPuffs[0]?.id).toBe(17);
+    expect(state.dustPuffs.at(-1)?.id).toBe(1015);
   });
 });

@@ -1,6 +1,12 @@
 import { pseudoRandom } from "./math";
 import type { Car, DustPuff, GameState } from "./types";
 
+function capDustPuffs(state: GameState): void {
+  if (state.dustPuffs.length > 180) {
+    state.dustPuffs = state.dustPuffs.slice(-180);
+  }
+}
+
 function createDustPuff(
   state: GameState,
   x: number,
@@ -66,6 +72,7 @@ export function spawnCollisionDust(state: GameState): void {
       );
     }
   }
+  capDustPuffs(state);
 }
 
 function spawnWheelDust(
@@ -106,4 +113,5 @@ export function spawnSlipDust(state: GameState): void {
     spawnWheelDust(state, car, 12, -20, -12);
     spawnWheelDust(state, car, 12, 20, 12);
   }
+  capDustPuffs(state);
 }
