@@ -51,6 +51,8 @@ This document captures the current intent behind the hand-tuned gameplay rules. 
 ## Thermal
 - Normal rounds should let healthy cars cool meaningfully when off throttle.
 - `hot_engines` should keep heat elevated and make damaged radiators dangerous under sustained throttle.
+- The Hot Engines starting heat is a minimum. A hotter serviced car keeps its
+  carried heat.
 - `redline` is the fifth-round climax: cars begin hot, generate heat faster, cool slowly, and enter with damaged rear lights.
 - Overheating should create pressure over time rather than instantly decide a round.
 

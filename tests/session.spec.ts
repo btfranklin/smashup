@@ -171,6 +171,38 @@ describe("session flow", () => {
     expect(state.cars.every((car) => car.lights.rearLeft === false)).toBe(true);
   });
 
+  it.each([
+    { carriedHeat: 0.3, expectedHeat: 0.4 },
+    { carriedHeat: 0.96, expectedHeat: 0.71 },
+  ])("starts Hot Engines without cooling carried heat of $carriedHeat", ({
+    carriedHeat, expectedHeat,
+  }) => {
+    const state = createInitialState();
+    chooseStarterCar(state, "bulldozer", 42);
+    const hotEnginesIndex = state.session.roundPlans.findIndex(
+      (plan) => plan.modifier === "hot_engines",
+    );
+    expect(hotEnginesIndex).toBeGreaterThan(0);
+
+    for (let roundIndex = 1; roundIndex <= hotEnginesIndex; roundIndex += 1) {
+      state.session.lastRoundSummary = createRoundSummaryFixture({
+        roundNumber: roundIndex,
+      });
+      if (roundIndex === hotEnginesIndex) {
+        const condition = state.session.playerCondition;
+        if (!condition) {
+          throw new Error("Player condition missing.");
+        }
+        condition.systems.overheat = carriedHeat;
+      }
+      applySessionUpgrade(state, "ram_rig");
+    }
+
+    expect(state.currentRoundPlan?.modifier).toBe("hot_engines");
+    expect(state.cars[0].systems.overheat).toBeCloseTo(expectedHeat);
+    expect(state.cars.slice(1).every((car) => car.systems.overheat === 0.4)).toBe(true);
+  });
+
   it("starts Lights Out with every light dark and no added body damage", () => {
     const state = createInitialState();
     chooseStarterCar(state, "bulldozer", 42);

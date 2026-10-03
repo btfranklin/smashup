@@ -98,7 +98,7 @@ function prepareRound(state: GameState, roundIndex: number): void {
 
   if (roundPlan.modifier === "hot_engines") {
     for (const car of state.cars) {
-      car.systems.overheat = 0.4;
+      car.systems.overheat = Math.max(0.4, car.systems.overheat);
     }
   }
   if (roundPlan.modifier === "redline") {
