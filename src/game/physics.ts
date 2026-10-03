@@ -348,6 +348,67 @@ function resolveWallResponse(
   car.angularVelocity *= 0.3;
 }
 
+export function containCarWithinWalls(
+  car: Car,
+  arena: GameState["arena"],
+): void {
+  const wallHull = getWorldCollisionHull(car, getLocalCollisionHull(car));
+  let minimumX = wallHull[0].x;
+  let maximumX = minimumX;
+  let minimumY = wallHull[0].y;
+  let maximumY = minimumY;
+  for (let index = 1; index < wallHull.length; index += 1) {
+    minimumX = Math.min(minimumX, wallHull[index].x);
+    maximumX = Math.max(maximumX, wallHull[index].x);
+    minimumY = Math.min(minimumY, wallHull[index].y);
+    maximumY = Math.max(maximumY, wallHull[index].y);
+  }
+
+  if (minimumX < arena.wallPadding) {
+    const correction = arena.wallPadding - minimumX;
+    car.x += correction;
+    translateHull(wallHull, correction, 0);
+    resolveWallResponse(
+      car,
+      { x: 1, y: 0 },
+      { x: 0, y: 1 },
+      Math.max(0, -car.vx),
+    );
+  } else if (maximumX > arena.width - arena.wallPadding) {
+    const correction = arena.width - arena.wallPadding - maximumX;
+    car.x += correction;
+    translateHull(wallHull, correction, 0);
+    resolveWallResponse(
+      car,
+      { x: -1, y: 0 },
+      { x: 0, y: 1 },
+      Math.max(0, car.vx),
+    );
+  }
+
+  if (minimumY < arena.wallPadding) {
+    const correction = arena.wallPadding - minimumY;
+    car.y += correction;
+    translateHull(wallHull, 0, correction);
+    resolveWallResponse(
+      car,
+      { x: 0, y: 1 },
+      { x: 1, y: 0 },
+      Math.max(0, -car.vy),
+    );
+  } else if (maximumY > arena.height - arena.wallPadding) {
+    const correction = arena.height - arena.wallPadding - maximumY;
+    car.y += correction;
+    translateHull(wallHull, 0, correction);
+    resolveWallResponse(
+      car,
+      { x: 0, y: -1 },
+      { x: 1, y: 0 },
+      Math.max(0, car.vy),
+    );
+  }
+}
+
 function getGroundGrip(car: Car, mudZones: MudZone[]): number {
   let grip = car.tractionBias;
   for (const zone of mudZones) {
@@ -491,61 +552,7 @@ export function stepCar(
   car.x += car.vx * dt;
   car.y += car.vy * dt;
 
-  const wallHull = getWorldCollisionHull(car, getLocalCollisionHull(car));
-  let minimumX = wallHull[0].x;
-  let maximumX = minimumX;
-  let minimumY = wallHull[0].y;
-  let maximumY = minimumY;
-  for (let index = 1; index < wallHull.length; index += 1) {
-    minimumX = Math.min(minimumX, wallHull[index].x);
-    maximumX = Math.max(maximumX, wallHull[index].x);
-    minimumY = Math.min(minimumY, wallHull[index].y);
-    maximumY = Math.max(maximumY, wallHull[index].y);
-  }
-
-  if (minimumX < arena.wallPadding) {
-    const correction = arena.wallPadding - minimumX;
-    car.x += correction;
-    translateHull(wallHull, correction, 0);
-    resolveWallResponse(
-      car,
-      { x: 1, y: 0 },
-      { x: 0, y: 1 },
-      Math.max(0, -car.vx),
-    );
-  } else if (maximumX > arena.width - arena.wallPadding) {
-    const correction = arena.width - arena.wallPadding - maximumX;
-    car.x += correction;
-    translateHull(wallHull, correction, 0);
-    resolveWallResponse(
-      car,
-      { x: -1, y: 0 },
-      { x: 0, y: 1 },
-      Math.max(0, car.vx),
-    );
-  }
-
-  if (minimumY < arena.wallPadding) {
-    const correction = arena.wallPadding - minimumY;
-    car.y += correction;
-    translateHull(wallHull, 0, correction);
-    resolveWallResponse(
-      car,
-      { x: 0, y: 1 },
-      { x: 1, y: 0 },
-      Math.max(0, -car.vy),
-    );
-  } else if (maximumY > arena.height - arena.wallPadding) {
-    const correction = arena.height - arena.wallPadding - maximumY;
-    car.y += correction;
-    translateHull(wallHull, 0, correction);
-    resolveWallResponse(
-      car,
-      { x: 0, y: -1 },
-      { x: 1, y: 0 },
-      Math.max(0, car.vy),
-    );
-  }
+  containCarWithinWalls(car, arena);
 }
 
 export function stepArenaObjects(

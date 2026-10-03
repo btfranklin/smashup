@@ -13,6 +13,115 @@ import {
 } from "./helpers/fixtures";
 
 describe("runtime flow and system events", () => {
+  it.each([
+    { side: "left", x: 100, otherX: 180, vx: -100, angle: 0 },
+    {
+      side: "right",
+      x: 1_400,
+      otherX: 1_320,
+      vx: 100,
+      angle: Math.PI,
+    },
+  ])("contains cars after car contact at the $side wall", (scenario) => {
+    const player = createCarFixture({
+      id: 1,
+      isPlayer: true,
+      x: scenario.x,
+      y: 450,
+      angle: scenario.angle,
+    });
+    const rival = createCarFixture({
+      id: 2,
+      x: scenario.otherX,
+      y: 450,
+      vx: scenario.vx,
+      disabled: true,
+    });
+    const state = createStateFixture({
+      mode: "running",
+      cars: [player, rival],
+      playerId: player.id,
+    });
+
+    advanceState(state, 1 / 60);
+
+    const worldX = player.frame.vertices.map(
+      (vertex) =>
+        player.x +
+        vertex.x * Math.cos(player.angle) -
+        vertex.y * Math.sin(player.angle),
+    );
+    const edge =
+      scenario.side === "left" ? Math.min(...worldX) : Math.max(...worldX);
+    const wall =
+      scenario.side === "left"
+        ? state.arena.wallPadding
+        : state.arena.width - state.arena.wallPadding;
+    expect(state.recentCollisions).toHaveLength(1);
+    const [collision] = state.recentCollisions;
+    expect(collision.aActiveAtImpact).toBe(true);
+    expect(collision.bActiveAtImpact).toBe(false);
+    expect(collision.aDisabledByImpact).toBe(false);
+    expect(collision.bDisabledByImpact).toBe(false);
+    expect(collision.point).toEqual({
+      x: (collision.pointA.x + collision.pointB.x) * 0.5,
+      y: (collision.pointA.y + collision.pointB.y) * 0.5,
+    });
+    expect(
+      scenario.side === "left" ? edge - wall : wall - edge,
+    ).toBeGreaterThanOrEqual(-1e-8);
+  });
+
+  it.each([
+    { side: "left", x: 100, objectX: 142, angle: 0 },
+    { side: "right", x: 1_400, objectX: 1_358, angle: Math.PI },
+  ])("contains cars after arena-object contact at the $side wall", (scenario) => {
+    const player = createCarFixture({
+      id: 1,
+      isPlayer: true,
+      x: scenario.x,
+      y: 450,
+      angle: scenario.angle,
+    });
+    const state = createStateFixture({
+      mode: "running",
+      cars: [player],
+      playerId: player.id,
+    });
+    state.arena.objects = [
+      {
+        id: 1,
+        kind: "junk",
+        x: scenario.objectX,
+        y: 450,
+        vx: 0,
+        vy: 0,
+        radius: 18,
+        mass: 1,
+        rotation: 0,
+        spin: 0,
+      },
+    ];
+
+    advanceState(state, 1 / 60);
+
+    const worldX = player.frame.vertices.map(
+      (vertex) =>
+        player.x +
+        vertex.x * Math.cos(player.angle) -
+        vertex.y * Math.sin(player.angle),
+    );
+    const edge =
+      scenario.side === "left" ? Math.min(...worldX) : Math.max(...worldX);
+    const wall =
+      scenario.side === "left"
+        ? state.arena.wallPadding
+        : state.arena.width - state.arena.wallPadding;
+    expect(
+      scenario.side === "left" ? edge - wall : wall - edge,
+    ).toBeGreaterThanOrEqual(-1e-8);
+  });
+
   it("fails clearly when an active runtime mode has no round plan", () => {
     const player = createCarFixture({ id: 1, isPlayer: true });
     const state = createStateFixture({

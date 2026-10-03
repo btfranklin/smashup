@@ -16,6 +16,7 @@ import {
 import { spawnCollisionDust, spawnSlipDust, updateDustEffects } from "./dust";
 import { pushEvent } from "./events";
 import {
+  containCarWithinWalls,
   resolveArenaObjectInteractions,
   resolveCarCollisions,
   stepArenaObjects,
@@ -563,6 +564,9 @@ export function advanceState(state: GameState, dt: number): void {
   stepArenaObjects(state.arena.objects, dt, state.arena);
   resolveArenaObjectInteractions(state.cars, state.arena.objects, state.arena);
   state.recentCollisions = resolveCarCollisions(state.cars);
+  for (const car of state.cars) {
+    containCarWithinWalls(car, state.arena);
+  }
   registerCollisionDrama(state, stepEndElapsed);
   spawnImpactDebris(state);
   spawnCarFragments(state);

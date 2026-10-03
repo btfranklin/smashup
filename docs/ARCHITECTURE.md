@@ -17,7 +17,7 @@ Smashup Derby is a browser-only Vite + TypeScript + canvas game with one authori
 - `src/game/upgrades.ts` owns upgrade bonuses and between-round condition servicing.
 - `src/game/roundStats.ts` owns round-stat defaults and reset lifecycle.
 - `src/game/events.ts` owns event-feed appends and capping.
-- `src/game/runtime.ts` owns per-frame mutation: AI updates, physics/effects stepping, collision drama, event expiration, elimination handling, camera updates, and transitions into spectating or round results.
+- `src/game/runtime.ts` owns per-frame mutation: AI updates, physics/effects stepping, collision drama, event expiration, elimination handling, camera updates, and transitions into spectating or round results. After object and car contacts, it reapplies car wall containment.
 - `src/game/debug.ts` is the read-only serialization layer for `window.render_game_to_text()`.
 - `src/game/preview.ts` owns URL parsing and validation for the hidden preview surface.
 - `src/game/contentIds.ts` is the source of truth for preset, arena, modifier, upgrade, Wreck Award, and preview id tuples, types, and guards.
@@ -80,7 +80,8 @@ Smashup Derby is a browser-only Vite + TypeScript + canvas game with one authori
   wall containment, loose-object contact, and car-to-car contact. Cache each
   local convex hull weakly by frame, verify its live vertex coordinates when
   physics requests it, and refresh it immediately after deformation so later
-  contacts in the same pileup use the new shape.
+  contacts in the same pileup use the new shape. Runtime reapplies wall
+  containment after contact solvers move cars.
 - Keep arena geometry and coordinate materialization in `src/game/arena.ts`.
   `src/game/content.ts` owns normalized mud and object layouts, while roster
   owns normalized lineup slots, membership, orientation, and car-extent
