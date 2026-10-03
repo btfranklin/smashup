@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 
 import { updateAi } from "../src/game/ai";
+import { normalizeAngle } from "../src/game/math";
+import { stepCar } from "../src/game/physics";
 import { createCarFixture } from "./helpers/fixtures";
 
 const ARENA_WIDTH = 1500;
@@ -115,6 +117,35 @@ describe("AI behavior", () => {
 
     expect(car.aiState.resetTimer).toBeGreaterThan(0);
     expect(car.controls.forward + car.controls.reverse).toBeGreaterThan(0);
+  });
+
+  it.each([-0.4, 0.4])("steers reverse wall recovery toward the arena at offset %f", (offset) => {
+    const angle = Math.PI + offset;
+    const car = createCarFixture({
+      x: 180,
+      y: 450,
+      angle,
+      vx: -Math.cos(angle) * 80,
+      vy: -Math.sin(angle) * 80,
+      aiState: { targetId: null, jamTimer: 0, resetTimer: 1.4 },
+    });
+    const arena = {
+      width: ARENA_WIDTH,
+      height: ARENA_HEIGHT,
+      wallPadding: WALL_PADDING,
+      mudZones: [],
+      objects: [],
+    };
+
+    for (let index = 0; index < 60; index += 1) {
+      updateAi(car, [car], arena.width, arena.height, arena.wallPadding, 1 / 60);
+      stepCar(car, 1 / 60, arena, "none");
+    }
+
+    expect(car.x).toBeGreaterThan(180);
+    expect(Math.abs(normalizeAngle(Math.PI - car.angle))).toBeLessThan(
+      Math.abs(offset),
+    );
   });
 
   it("accumulates jam pressure when cornered or stalled", () => {

@@ -245,7 +245,7 @@ export function updateAi(
     } else {
       car.controls.forward = 0;
       car.controls.reverse = boundaryDanger > 0.58 ? 1 : 0.88;
-      car.controls.steer = clamp(reverseEscapeError / 0.95, -1, 1);
+      car.controls.steer = clamp(-reverseEscapeError / 0.95, -1, 1);
     }
     return;
   }

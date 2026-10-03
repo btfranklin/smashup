@@ -40,6 +40,8 @@ This document captures the current intent behind the hand-tuned gameplay rules. 
 ## AI
 - AI drivers are simple flock-like attackers, not perfect racers.
 - They prefer reversing into exposed or wounded targets, separate from local crowding, and recover from wall pressure.
+- Reverse wall recovery must turn the rear of the car toward the arena.
+  Steering must account for the direction of travel.
 - Archetypes should bias target choice and recovery behavior without making any driver feel like it belongs to a different ruleset.
 
 ## Thermal
