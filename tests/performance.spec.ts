@@ -303,6 +303,69 @@ describe("bounded performance collector", () => {
     expect(disconnect).toHaveBeenCalledTimes(2);
   });
 
+  it("drains queued timeline entries into their bounded rings before snapshot", () => {
+    const callbacks: PerformanceObserverCallback[] = [];
+    const queuedEntries: PerformanceEntry[][] = [];
+    const takeRecords: Array<ReturnType<typeof vi.fn>> = [];
+    const collector = createPerformanceCollector({
+      timelineCapacity: 2,
+      observerFactory: (callback) => {
+        const queued: PerformanceEntry[] = [];
+        const takeQueuedRecords = vi.fn(() => queued.splice(0));
+        callbacks.push(callback);
+        queuedEntries.push(queued);
+        takeRecords.push(takeQueuedRecords);
+        return {
+          disconnect: vi.fn(),
+          observe: vi.fn(),
+          takeRecords: takeQueuedRecords,
+        } as unknown as PerformanceObserver;
+      },
+      supportedEntryTypes: ["longtask", "gc"],
+    });
+    function entry(entryType: string, index: number): PerformanceEntry {
+      return {
+        name: `${entryType}-${index}`,
+        entryType,
+        startTime: index * 10,
+        duration: entryType === "longtask" ? 50 + index : index,
+        toJSON: () => ({}),
+      };
+    }
+
+    for (const [observerIndex, entryType] of ["longtask", "gc"].entries()) {
+      callbacks[observerIndex](
+        { getEntries: () => [entry(entryType, 1)] } as PerformanceObserverEntryList,
+        {} as PerformanceObserver,
+      );
+      queuedEntries[observerIndex].push(
+        entry(entryType, 2),
+        entry(entryType, 3),
+        entry(entryType, 4),
+      );
+    }
+
+    const snapshot = collector.snapshot();
+    expect(snapshot.longTasks).toEqual([
+      { name: "longtask-3", startTimeMs: 30, durationMs: 53 },
+      { name: "longtask-4", startTimeMs: 40, durationMs: 54 },
+    ]);
+    expect(snapshot.garbageCollections).toEqual([
+      { name: "gc-3", startTimeMs: 30, durationMs: 3 },
+      { name: "gc-4", startTimeMs: 40, durationMs: 4 },
+    ]);
+    expect(queuedEntries).toEqual([[], []]);
+    expect(collector.snapshot()).toEqual(snapshot);
+    takeRecords.forEach((takeQueuedRecords) => {
+      expect(takeQueuedRecords).toHaveBeenCalledTimes(2);
+    });
+    collector.destroy();
+    expect(collector.snapshot()).toEqual(snapshot);
+    takeRecords.forEach((takeQueuedRecords) => {
+      expect(takeQueuedRecords).toHaveBeenCalledTimes(2);
+    });
+  });
+
   it("rejects unbounded capacities", () => {
     expect(() => createPerformanceCollector({ capacity: 0 })).toThrow(
       RangeError,

@@ -22,6 +22,7 @@ type SceneName = "clean" | "collision" | "damaged";
 type SceneResult = {
   name: SceneName;
   markerMs: number;
+  endMs: number;
   durationsMs: number[];
   snapshot: PerformanceSnapshot;
 };
@@ -112,10 +113,12 @@ async function runFixedStepScene(
           await yieldToBrowser();
         }
       }
+      const endMs = performance.now();
       await (yieldInterval === 0 ? yieldToFrame() : yieldToBrowser());
       return {
         name: sceneName,
         markerMs,
+        endMs,
         durationsMs,
         snapshot: window.controllerFixture.performanceSnapshot(),
       };
@@ -132,15 +135,85 @@ async function runFixedStepScene(
 function postWarmupLongTasks(result: SceneResult) {
   return result.snapshot.longTasks.filter(
     (entry) =>
-      entry.startTimeMs >= result.markerMs && entry.durationMs >= LONG_TASK_MS,
+      entry.startTimeMs < result.endMs &&
+      entry.startTimeMs + entry.durationMs > result.markerMs &&
+      entry.durationMs >= LONG_TASK_MS,
   );
 }
 
 function measuredSamples(result: SceneResult) {
   return result.snapshot.samples.filter(
-    (sample) => sample.timestampMs >= result.markerMs,
+    (sample) =>
+      sample.timestampMs >= result.markerMs && sample.timestampMs <= result.endMs,
   );
 }
+
+test("@performance detects stalls in the first and final measured tasks", async ({
+  page,
+}) => {
+  await createFixture(page, { audio: false });
+  const result = await page.evaluate(async (stallMs) => {
+    if (!PerformanceObserver.supportedEntryTypes.includes("longtask")) {
+      throw new Error("The stall probe requires native long-task observation.");
+    }
+    const yieldToBrowser = () =>
+      new Promise<void>((resolve) => {
+        const channel = new MessageChannel();
+        channel.port1.onmessage = () => {
+          channel.port1.close();
+          channel.port2.close();
+          resolve();
+        };
+        channel.port2.postMessage(undefined);
+      });
+    const stall = (milliseconds: number) => {
+      const startedAt = performance.now();
+      while (performance.now() - startedAt < milliseconds) {}
+    };
+
+    await yieldToBrowser();
+    stall(stallMs);
+    await yieldToBrowser();
+    // Keep the marker inside the first measured browser task.
+    stall(5);
+    const markerMs = performance.now();
+    stall(stallMs);
+    const firstTaskEndMs = performance.now();
+    await yieldToBrowser();
+    stall(stallMs);
+    const endMs = performance.now();
+    await yieldToBrowser();
+    return {
+      name: "clean" as const,
+      markerMs,
+      endMs,
+      firstTaskEndMs,
+      durationsMs: [],
+      snapshot: window.controllerFixture.performanceSnapshot(),
+    };
+  }, LONG_TASK_MS + 25);
+
+  const firstTask = result.snapshot.longTasks.find(
+    (entry) =>
+      entry.startTimeMs < result.markerMs &&
+      entry.startTimeMs + entry.durationMs > result.markerMs,
+  );
+  const finalTask = result.snapshot.longTasks.find(
+    (entry) =>
+      entry.startTimeMs >= result.firstTaskEndMs && entry.startTimeMs < result.endMs,
+  );
+  expect(firstTask).toBeDefined();
+  expect(finalTask).toBeDefined();
+  const measuredTasks = postWarmupLongTasks(result);
+  expect(measuredTasks).toEqual(expect.arrayContaining([firstTask, finalTask]));
+  expect(
+    result.snapshot.longTasks.some(
+      (entry) => entry.startTimeMs + entry.durationMs <= result.markerMs,
+    ),
+  ).toBe(true);
+  expect(measuredTasks).toHaveLength(2);
+  await page.evaluate(() => window.controllerFixture.destroy());
+});
 
 test("@performance profiles deterministic clean, collision, and damaged scenes", async ({
   page,

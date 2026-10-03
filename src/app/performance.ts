@@ -357,9 +357,21 @@ export function createPerformanceCollector({
   const longTasks = createRing<PerformanceTimelineEntry>(timelineCapacity);
   const garbageCollections =
     createRing<PerformanceTimelineEntry>(timelineCapacity);
-  const observers: PerformanceObserver[] = [];
+  const observers: Array<{
+    observer: PerformanceObserver;
+    target: ReturnType<typeof createRing<PerformanceTimelineEntry>>;
+  }> = [];
   let previousHeapBytes: number | null = null;
   let destroyed = false;
+
+  function appendTimelineEntries(
+    target: ReturnType<typeof createRing<PerformanceTimelineEntry>>,
+    entries: PerformanceEntry[],
+  ): void {
+    for (const entry of entries) {
+      target.push(timelineEntry(entry));
+    }
+  }
 
   function observe(
     entryType: "longtask" | "gc",
@@ -373,12 +385,10 @@ export function createPerformanceCollector({
         if (destroyed) {
           return;
         }
-        for (const entry of list.getEntries()) {
-          target.push(timelineEntry(entry));
-        }
+        appendTimelineEntries(target, list.getEntries());
       });
       observer.observe({ entryTypes: [entryType] });
-      observers.push(observer);
+      observers.push({ observer, target });
     } catch {
       // Browser support lists can be optimistic. Samples remain useful without
       // optional timeline evidence.
@@ -417,6 +427,9 @@ export function createPerformanceCollector({
       });
     },
     snapshot(): PerformanceSnapshot {
+      for (const { observer, target } of observers) {
+        appendTimelineEntries(target, observer.takeRecords());
+      }
       return {
         capacity,
         droppedSamples: samples.dropped(),
@@ -430,7 +443,7 @@ export function createPerformanceCollector({
         return;
       }
       destroyed = true;
-      for (const observer of observers) {
+      for (const { observer } of observers) {
         observer.disconnect();
       }
       observers.length = 0;

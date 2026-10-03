@@ -43,6 +43,13 @@ dust, debris, fragments, and scars. These structural checks assert cache reuse
 and command budgets without introducing wall-clock noise or a browser launch.
 The browser workload may end naturally before the spectator cap.
 
+Scene measurements have a start and end time. The long-task gate checks every
+task that overlaps this interval, including a task that starts before the
+start marker but continues into the first measured batch. A collector snapshot
+drains queued observer entries before it copies the timeline rings. A separate
+Chromium probe adds a stall to the first and final measured tasks and checks
+that both are detected. Its warmup stall stays outside the measured interval.
+
 ## Reference Profile: 2026-07-26
 
 Reference machine: MacBook Pro `Mac15,7`, Apple M3 Pro, 18 GB RAM, macOS
