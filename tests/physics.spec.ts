@@ -91,6 +91,41 @@ describe("physics", () => {
     expect(Math.abs(car.vy)).toBeLessThan(90);
   });
 
+  it.each(Object.values(CAR_PRESETS))("retains more lateral speed in mud for $title", ({ id }) => {
+    const state = createStateFixture();
+    const dryArena = { ...state.arena, mudZones: [] };
+    const mudArena = {
+      ...dryArena,
+      mudZones: [{ id: 1, x: 400, y: 400, width: 200, height: 200, grip: 0.5 }],
+    };
+    const dry = createCarFixture({ vx: 20, vy: 90 }, id);
+    const muddy = createCarFixture({ vx: 20, vy: 90 }, id);
+
+    stepCar(dry, 1 / 60, dryArena, "none");
+    stepCar(muddy, 1 / 60, mudArena, "none");
+
+    expect(muddy.vy).toBeGreaterThan(dry.vy);
+    expect(muddy.vy).toBeLessThan(90);
+  });
+
+  it.each(["steering", "traction"] as const)("retains more lateral speed with lower %s grip", (source) => {
+    const state = createStateFixture();
+    const arena = { ...state.arena, mudZones: [] };
+    const healthy = createCarFixture({ vy: 90 });
+    const lowGrip = createCarFixture({ vy: 90 });
+    if (source === "steering") {
+      lowGrip.systems.steering = 0.4;
+    } else {
+      lowGrip.tractionBias *= 0.5;
+    }
+
+    stepCar(healthy, 1 / 60, arena, "none");
+    stepCar(lowGrip, 1 / 60, arena, "none");
+
+    expect(lowGrip.vy).toBeGreaterThan(healthy.vy);
+    expect(lowGrip.vy).toBeLessThan(90);
+  });
+
   it("clamps cars against arena walls and nudges them back inward", () => {
     const state = createStateFixture();
     const car = createCarFixture({

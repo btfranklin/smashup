@@ -11,6 +11,8 @@ This document captures the current intent behind the hand-tuned gameplay rules. 
 - Wall containment uses each rotated live frame's projected extents so every
   angle and deformation state meets the same visible boundary.
 - Mud should reduce grip and make steering messier, not turn the round into a different control scheme.
+- Lower ground grip or steering health removes less lateral speed each step.
+  The car therefore keeps more of its sideways motion.
 - Junkyard objects should add readable chaos while staying secondary to car-on-car collisions.
 - An object embedded inside a car resolves toward the nearest local face, with
   a deterministic exact-center tie, so tunneling cannot silently skip contact.

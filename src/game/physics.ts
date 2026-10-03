@@ -452,13 +452,13 @@ export function stepCar(
   const correctedForwardSpeed = car.vx * forwardX + car.vy * forwardY;
   const correctedLateralSpeed = car.vx * rightX + car.vy * rightY;
   car.slipAmount = Math.abs(correctedLateralSpeed);
-  const lateralGrip = clamp(
-    (0.72 + car.systems.steering * 0.19) * groundGrip,
-    0.44,
-    0.98,
+  const lateralDamping = clamp(
+    0.02 * (0.72 + car.systems.steering * 0.19) * groundGrip,
+    0,
+    1,
   );
   const lateralReduction =
-    correctedLateralSpeed * (1 - Math.pow(lateralGrip, dt * 60));
+    correctedLateralSpeed * (1 - Math.pow(1 - lateralDamping, dt * 60));
   car.vx -= rightX * lateralReduction;
   car.vy -= rightY * lateralReduction;
 
