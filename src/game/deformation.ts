@@ -330,7 +330,7 @@ export function applyFrameImpact(
 
   const zoneInward = zoneAxis(zone);
   const directness = clamp01(
-    Math.max(0.28, -(localDirection.x * zoneInward.x + localDirection.y * zoneInward.y)),
+    Math.max(0.28, localDirection.x * zoneInward.x + localDirection.y * zoneInward.y),
   );
   const impactDepth = impactCoordinate(zone, localPoint);
   const cross = crossImpactCoordinate(zone, localPoint);
@@ -398,10 +398,7 @@ export function seedFrameFromBodyDamage(car: Car): void {
     }
     const point = syntheticImpactForZone(car, zone, amount);
     const inward = zoneAxis(zone);
-    applyFrameImpact(car, point, clamp01(amount * 1.15), zone, {
-      x: -inward.x,
-      y: -inward.y,
-    });
+    applyFrameImpact(car, point, clamp01(amount * 1.15), zone, inward);
   }
 }
 

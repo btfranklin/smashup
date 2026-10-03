@@ -125,6 +125,34 @@ describe("car frame deformation", () => {
     expect(vertex(right, "right-front-fender").y).toBeLessThan(rightBeforeY);
   });
 
+  it.each([
+    { zone: "front", x: 0.5, y: 0, inwardX: -1, inwardY: 0 },
+    { zone: "rear", x: -0.5, y: 0, inwardX: 1, inwardY: 0 },
+    { zone: "left", x: 0, y: -0.5, inwardX: 0, inwardY: 1 },
+    { zone: "right", x: 0, y: 0.5, inwardX: 0, inwardY: -1 },
+  ])("crushes the $zone more from a direct impact than a glancing impact", ({
+    x, y, inwardX, inwardY,
+  }) => {
+    const direct = createCarFixture();
+    const glancing = createCarFixture();
+    const point = {
+      x: direct.x + direct.length * x,
+      y: direct.y + direct.width * y,
+    };
+    const directDeformation = applyImpactDamage(direct, point, 0.55, {
+      x: inwardX,
+      y: inwardY,
+    });
+    const glancingDeformation = applyImpactDamage(glancing, point, 0.55, {
+      x: inwardX * 0.5 - inwardY * Math.sqrt(0.75),
+      y: inwardY * 0.5 + inwardX * Math.sqrt(0.75),
+    });
+
+    expect(directDeformation).toBeGreaterThan(glancingDeformation);
+    expectFrameWithinOriginalHull(direct);
+    expectFrameToKeepCarLikeProportions(direct);
+  });
+
   it("accumulates repeated deformation and summarizes compact frame damage", () => {
     const car = createCarFixture();
     const before = vertex(car, "front-tip-right").x;
@@ -186,7 +214,7 @@ describe("car frame deformation", () => {
     };
 
     for (let index = 0; index < 24; index += 1) {
-      applyFrameImpact(car, impactPoint, 1, "front", { x: 1, y: 0 });
+      applyFrameImpact(car, impactPoint, 1, "front", { x: -1, y: 0 });
     }
 
     const leftTip = vertex(car, "front-tip-left");
@@ -218,7 +246,7 @@ describe("car frame deformation", () => {
       { x: car.length * 0.5, y: 0 },
       0.9,
       "front",
-      { x: 1, y: 0 },
+      { x: -1, y: 0 },
     );
 
     expect(deformation).toBeGreaterThan(0);

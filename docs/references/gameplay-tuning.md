@@ -19,6 +19,9 @@ This document captures the current intent behind the hand-tuned gameplay rules. 
 - Front impacts are the most dangerous to the striker because engine, radiator, transmission, and steering damage live there.
 - Rear and side impacts should still matter, but the game should reward reverse attacks into exposed fronts and sides.
 - Frame deformation should preserve asymmetric dents and accumulated crush without letting any structural axis or mirrored body rail collapse far enough to turn the car into a wedge or teardrop.
+- At equal severity, an impulse into a body panel must cause more frame
+  deformation than a glancing impulse. Live impacts and preview damage use
+  the same inward direction rule.
 - Disabled cars stay in the arena as hulks; they should keep affecting space without continuing to fight.
 - An inert player hulk cannot earn new player-collision or knockout credit.
 - Collision facts retain whether each participant was active at that exact
