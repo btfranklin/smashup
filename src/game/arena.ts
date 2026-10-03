@@ -4,10 +4,72 @@ import {
 } from "./content";
 import type { ArenaVariantId } from "./contentIds";
 import type {
+  ArenaObject,
   ArenaGeometry,
   ArenaState,
   Vec2,
 } from "./types";
+
+const JUNK_CORNER_RADIUS = 8;
+const JUNK_CORNER_SEGMENTS = 3;
+
+type JunkOutlineCacheEntry = {
+  radius: number;
+  points: Vec2[];
+};
+
+const junkOutlineCache = new WeakMap<ArenaObject, JunkOutlineCacheEntry>();
+
+export function getArenaObjectOutline(object: ArenaObject): Vec2[] | null {
+  if (object.kind !== "junk") {
+    return null;
+  }
+  const cached = junkOutlineCache.get(object);
+  if (cached?.radius === object.radius) {
+    return cached.points;
+  }
+
+  const halfWidth = object.radius * 1.2;
+  const halfHeight = object.radius * 0.8;
+  const cornerRadius = Math.min(JUNK_CORNER_RADIUS, halfWidth, halfHeight);
+  const corners = [
+    {
+      x: halfWidth - cornerRadius,
+      y: -halfHeight + cornerRadius,
+      startAngle: -Math.PI * 0.5,
+    },
+    {
+      x: halfWidth - cornerRadius,
+      y: halfHeight - cornerRadius,
+      startAngle: 0,
+    },
+    {
+      x: -halfWidth + cornerRadius,
+      y: halfHeight - cornerRadius,
+      startAngle: Math.PI * 0.5,
+    },
+    {
+      x: -halfWidth + cornerRadius,
+      y: -halfHeight + cornerRadius,
+      startAngle: Math.PI,
+    },
+  ];
+  const points: Vec2[] = [];
+  for (const corner of corners) {
+    for (let step = 0; step <= JUNK_CORNER_SEGMENTS; step += 1) {
+      const angle =
+        corner.startAngle +
+        (step / JUNK_CORNER_SEGMENTS) * Math.PI * 0.5;
+      points.push({
+        x: corner.x + Math.cos(angle) * cornerRadius,
+        y: corner.y + Math.sin(angle) * cornerRadius,
+      });
+    }
+  }
+
+  junkOutlineCache.set(object, { radius: object.radius, points });
+  return points;
+}
 
 export const DEFAULT_ARENA_GEOMETRY: Readonly<ArenaGeometry> = Object.freeze({
   width: 1500,

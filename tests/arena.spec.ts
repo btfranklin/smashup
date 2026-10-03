@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   createArena,
   DEFAULT_ARENA_GEOMETRY,
+  getArenaObjectOutline,
   materializeArenaPoint,
 } from "../src/game/arena";
 
@@ -73,6 +74,32 @@ describe("arena geometry", () => {
     expect(
       materializeArenaPoint(DEFAULT_ARENA_GEOMETRY, 0.5, 0.25),
     ).toEqual({ x: 750, y: 252 });
+  });
+
+  it("shares the junk outline across movement and updates it when size changes", () => {
+    const object = createArena("junkyard").objects[0];
+    const original = getArenaObjectOutline(object);
+    expect(original).not.toBeNull();
+    expect(Math.max(...original!.map((point) => point.x))).toBeCloseTo(
+      object.radius * 1.2,
+    );
+    expect(Math.max(...original!.map((point) => point.y))).toBeCloseTo(
+      object.radius * 0.8,
+    );
+
+    object.x += 100;
+    object.rotation = Math.PI / 2;
+    expect(getArenaObjectOutline(object)).toBe(original);
+
+    object.radius = 2;
+    const smaller = getArenaObjectOutline(object);
+    expect(smaller).not.toBe(original);
+    for (const point of smaller!) {
+      expect(Math.abs(point.x)).toBeLessThanOrEqual(object.radius * 1.2 + 1e-8);
+      expect(Math.abs(point.y)).toBeLessThanOrEqual(object.radius * 0.8 + 1e-8);
+    }
+    object.kind = "tire";
+    expect(getArenaObjectOutline(object)).toBeNull();
   });
 
   it("rejects geometry without a playable rectangle", () => {

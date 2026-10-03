@@ -1,3 +1,4 @@
+import { getArenaObjectOutline } from "../arena";
 import type { ArenaObject, GameState, MudZone } from "../types";
 
 const arenaLayerCache = new Map<string, CanvasImageSource>();
@@ -159,13 +160,15 @@ export function drawArenaObject(
   } else {
     ctx.fillStyle = "#6c5a4a";
     ctx.beginPath();
-    ctx.roundRect(
-      -object.radius * 1.2,
-      -object.radius * 0.8,
-      object.radius * 2.4,
-      object.radius * 1.6,
-      8,
-    );
+    const outline = getArenaObjectOutline(object) ?? [];
+    outline.forEach((point, index) => {
+      if (index === 0) {
+        ctx.moveTo(point.x, point.y);
+      } else {
+        ctx.lineTo(point.x, point.y);
+      }
+    });
+    ctx.closePath();
     ctx.fill();
     ctx.fillStyle = "rgba(198, 164, 114, 0.5)";
     ctx.fillRect(

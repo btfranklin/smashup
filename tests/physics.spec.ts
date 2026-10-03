@@ -11,6 +11,26 @@ import { applyFrameImpact } from "../src/game/deformation";
 import { signedSpeedForCar } from "../src/game/math";
 import { createCarFixture, createRunningState, createStateFixture } from "./helpers/fixtures";
 
+function createJunkFixture(
+  x: number,
+  y: number,
+  rotation = 0,
+  radius = 26,
+) {
+  return {
+    id: 1,
+    kind: "junk" as const,
+    x,
+    y,
+    vx: 0,
+    vy: 0,
+    radius,
+    mass: 240,
+    rotation,
+    spin: 0,
+  };
+}
+
 describe("physics", () => {
   it("applies throttle, braking, and a meaningful forward speed cap", () => {
     const state = createStateFixture();
@@ -340,7 +360,79 @@ describe("physics", () => {
 
     expect(car.x).toBeLessThan(initialCarX);
     expect(object.x).toBeGreaterThan(initialObjectX);
-    expect(object.x - car.x).toBeCloseTo(car.length * 0.5 + object.radius);
+    expect(object.x - car.x).toBeCloseTo(
+      car.length * 0.5 + object.radius * 1.2,
+    );
+  });
+
+  it.each([
+    {
+      face: "short",
+      x: 516.56,
+      y: 452.2,
+      rotation: 0,
+      halfExtent: 0.8,
+      axis: "y",
+    },
+    {
+      face: "long",
+      x: 576.2,
+      y: 500,
+      rotation: 0,
+      halfExtent: 1.2,
+      axis: "x",
+    },
+    {
+      face: "rotated long",
+      x: 516.56,
+      y: 441.8,
+      rotation: Math.PI / 2,
+      halfExtent: 1.2,
+      axis: "y",
+    },
+  ])(
+    "pushes junk to its visible $face edge",
+    ({ x, y, rotation, halfExtent, axis }) => {
+      const state = createStateFixture();
+      const car = createCarFixture({ x: 500, y: 500, angle: 0 });
+      const object = createJunkFixture(x, y, rotation);
+
+      resolveArenaObjectInteractions([car], [object], state.arena);
+
+      const halfObjectExtent = halfExtent * object.radius;
+      if (axis === "y") {
+        const carTop = car.y - 28;
+        const junkBottom = object.y + halfObjectExtent;
+        expect(junkBottom).toBeCloseTo(carTop, 1);
+      } else {
+        const carRight = car.x + 46;
+        const junkLeft = object.x - halfObjectExtent;
+        expect(junkLeft).toBeCloseTo(carRight, 1);
+      }
+    },
+  );
+
+  it("does not push junk while its visible shape is clear of the car", () => {
+    const state = createStateFixture();
+    const car = createCarFixture({ x: 500, y: 500, angle: 0 });
+    const object = createJunkFixture(516.56, 447.7);
+    const initialPosition = { x: object.x, y: object.y };
+
+    resolveArenaObjectInteractions([car], [object], state.arena);
+
+    expect({ x: object.x, y: object.y }).toEqual(initialPosition);
+    expect(car.x).toBe(500);
+    expect(car.y).toBe(500);
+  });
+
+  it("ejects centered junk by the visible shape's shortest distance", () => {
+    const state = createStateFixture();
+    const car = createCarFixture({ x: 500, y: 500, angle: 0 });
+    const object = createJunkFixture(car.x, car.y);
+
+    resolveArenaObjectInteractions([car], [object], state.arena);
+
+    expect(Math.abs(object.y - car.y)).toBeCloseTo(28 + 0.8 * object.radius, 1);
   });
 
   it("uses a deterministic outward normal for an exactly centered object", () => {

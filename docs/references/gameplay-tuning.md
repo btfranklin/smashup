@@ -14,8 +14,10 @@ This document captures the current intent behind the hand-tuned gameplay rules. 
 - Lower ground grip or steering health removes less lateral speed each step.
   The car therefore keeps more of its sideways motion.
 - Junkyard objects should add readable chaos while staying secondary to car-on-car collisions.
-- An object embedded inside a car resolves toward the nearest local face, with
-  a deterministic exact-center tie, so tunneling cannot silently skip contact.
+- Junk uses the same rounded outline for drawing and car contact. Tires use
+  circular contact.
+- An object embedded inside a car resolves through the shortest exit from the
+  visible shapes, with a deterministic exact-center tie.
 
 ## Damage
 - Front impacts are the most dangerous to the striker because engine, radiator, transmission, and steering damage live there.

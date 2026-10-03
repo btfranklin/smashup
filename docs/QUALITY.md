@@ -39,6 +39,8 @@
   - repeated and asymmetric impacts keep the wheelbase and body footprint;
     folds stay on the shell through service and condition carry-over, and
     rendered end panels stay inside the damaged body
+  - junk contact matches its drawn short, long, and rotated edges, leaves a
+    visible gap untouched, and resolves complete shape containment
   - arena layouts and complete rotated-car extents remain inside the
     wall-bounded playable rectangle at alternate dimensions
   - roster, event, round-stat, and upgrade helpers preserve their current behavior

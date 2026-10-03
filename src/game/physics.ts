@@ -3,6 +3,7 @@ import {
   impactZoneForPoint,
   updateSubsystemWear,
 } from "./damage";
+import { getArenaObjectOutline } from "./arena";
 import type { RoundModifierId } from "./contentIds";
 import { clamp, normalizeAngle } from "./math";
 import type {
@@ -232,6 +233,92 @@ function getCollisionOverlap(
     amount: minimumOverlap,
     axis: { x: smallestAxisX, y: smallestAxisY },
   };
+}
+
+function getPolygonSeparation(
+  firstHull: Vec2[],
+  secondHull: Vec2[],
+): { amount: number; axis: Vec2 } | null {
+  let firstMinX = firstHull[0].x;
+  let firstMaxX = firstMinX;
+  let firstMinY = firstHull[0].y;
+  let firstMaxY = firstMinY;
+  for (let index = 1; index < firstHull.length; index += 1) {
+    firstMinX = Math.min(firstMinX, firstHull[index].x);
+    firstMaxX = Math.max(firstMaxX, firstHull[index].x);
+    firstMinY = Math.min(firstMinY, firstHull[index].y);
+    firstMaxY = Math.max(firstMaxY, firstHull[index].y);
+  }
+  let secondMinX = secondHull[0].x;
+  let secondMaxX = secondMinX;
+  let secondMinY = secondHull[0].y;
+  let secondMaxY = secondMinY;
+  for (let index = 1; index < secondHull.length; index += 1) {
+    secondMinX = Math.min(secondMinX, secondHull[index].x);
+    secondMaxX = Math.max(secondMaxX, secondHull[index].x);
+    secondMinY = Math.min(secondMinY, secondHull[index].y);
+    secondMaxY = Math.max(secondMaxY, secondHull[index].y);
+  }
+  if (
+    firstMaxX <= secondMinX ||
+    secondMaxX <= firstMinX ||
+    firstMaxY <= secondMinY ||
+    secondMaxY <= firstMinY
+  ) {
+    return null;
+  }
+
+  let minimumAmount = Infinity;
+  let smallestAxis = { x: 0, y: 0 };
+
+  for (let hullIndex = 0; hullIndex < 2; hullIndex += 1) {
+    const sourceHull = hullIndex === 0 ? firstHull : secondHull;
+    for (let index = 0; index < sourceHull.length; index += 1) {
+      const point = sourceHull[index];
+      const next = sourceHull[(index + 1) % sourceHull.length];
+      const edgeX = next.x - point.x;
+      const edgeY = next.y - point.y;
+      const edgeLength = Math.hypot(edgeX, edgeY);
+      if (edgeLength <= COLLISION_EPSILON) {
+        continue;
+      }
+      const axis = { x: -edgeY / edgeLength, y: edgeX / edgeLength };
+      let firstMin = dot(firstHull[0], axis);
+      let firstMax = firstMin;
+      for (let pointIndex = 1; pointIndex < firstHull.length; pointIndex += 1) {
+        const projection = dot(firstHull[pointIndex], axis);
+        firstMin = Math.min(firstMin, projection);
+        firstMax = Math.max(firstMax, projection);
+      }
+      let secondMin = dot(secondHull[0], axis);
+      let secondMax = secondMin;
+      for (let pointIndex = 1; pointIndex < secondHull.length; pointIndex += 1) {
+        const projection = dot(secondHull[pointIndex], axis);
+        secondMin = Math.min(secondMin, projection);
+        secondMax = Math.max(secondMax, projection);
+      }
+
+      if (
+        Math.min(firstMax, secondMax) - Math.max(firstMin, secondMin) <=
+        COLLISION_EPSILON
+      ) {
+        return null;
+      }
+
+      const movePositive = firstMax - secondMin;
+      const moveNegative = secondMax - firstMin;
+      const amount = Math.min(movePositive, moveNegative);
+      const direction = movePositive <= moveNegative ? 1 : -1;
+      if (amount < minimumAmount) {
+        minimumAmount = amount;
+        smallestAxis = { x: axis.x * direction, y: axis.y * direction };
+      }
+    }
+  }
+
+  return Number.isFinite(minimumAmount)
+    ? { amount: minimumAmount, axis: smallestAxis }
+    : null;
 }
 
 function getCircleCollisionOverlap(
@@ -595,14 +682,27 @@ export function resolveArenaObjectInteractions(
   objects: ArenaObject[],
   arena: GameState["arena"],
 ): void {
+  const objectHulls = objects.map((object) => {
+    const outline = getArenaObjectOutline(object);
+    if (!outline) {
+      return null;
+    }
+    const cosine = Math.cos(object.rotation);
+    const sine = Math.sin(object.rotation);
+    return outline.map((point) => ({
+      x: object.x + point.x * cosine - point.y * sine,
+      y: object.y + point.x * sine + point.y * cosine,
+    }));
+  });
+
   for (const car of cars) {
     const carHull = getWorldCollisionHull(car, getLocalCollisionHull(car));
-    for (const object of objects) {
-      const overlap = getCircleCollisionOverlap(
-        carHull,
-        object,
-        object.radius,
-      );
+    for (let index = 0; index < objects.length; index += 1) {
+      const object = objects[index];
+      const objectHull = objectHulls[index];
+      const overlap = objectHull
+        ? getPolygonSeparation(carHull, objectHull)
+        : getCircleCollisionOverlap(carHull, object, object.radius);
       if (!overlap) {
         continue;
       }
@@ -614,6 +714,13 @@ export function resolveArenaObjectInteractions(
       object.x += overlap.axis.x * overlap.amount * 0.7;
       object.y += overlap.axis.y * overlap.amount * 0.7;
       translateHull(carHull, carCorrectionX, carCorrectionY);
+      if (objectHull) {
+        translateHull(
+          objectHull,
+          overlap.axis.x * overlap.amount * 0.7,
+          overlap.axis.y * overlap.amount * 0.7,
+        );
+      }
 
       const relativeVelocity = {
         x: car.vx - object.vx,
