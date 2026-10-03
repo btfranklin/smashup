@@ -1,4 +1,5 @@
-import { clamp, clamp01, pseudoRandom } from "./math";
+import { clamp01, pseudoRandom } from "./math";
+import { getCarPolygonContact } from "./physics";
 import { getCarById } from "./selectors";
 import type { Car, CarFragment, CollisionEvent, GameState, Vec2 } from "./types";
 
@@ -43,9 +44,16 @@ function fragmentPalette(car: Car, seed: number): { color: string; edgeColor: st
   };
 }
 
+function cross(origin: Vec2, first: Vec2, second: Vec2): number {
+  return (
+    (first.x - origin.x) * (second.y - origin.y) -
+    (first.y - origin.y) * (second.x - origin.x)
+  );
+}
+
 function createFragmentPoints(radius: number, seed: number): Vec2[] {
   const count = 3 + Math.floor(pseudoRandom(seed) * 3);
-  return Array.from({ length: count }, (_, index) => {
+  const points = Array.from({ length: count }, (_, index) => {
     const angle = (index / count) * Math.PI * 2 + pseudoRandom(seed + index + 1) * 0.52;
     const distance = radius * (0.46 + pseudoRandom(seed + index + 7) * 0.62);
     return {
@@ -53,6 +61,35 @@ function createFragmentPoints(radius: number, seed: number): Vec2[] {
       y: Math.sin(angle) * distance,
     };
   });
+  const sorted = [...points].sort(
+    (first, second) => first.x - second.x || first.y - second.y,
+  );
+  const lower: Vec2[] = [];
+  const upper: Vec2[] = [];
+
+  for (const point of sorted) {
+    while (
+      lower.length >= 2 &&
+      cross(lower[lower.length - 2], lower[lower.length - 1], point) <= 0
+    ) {
+      lower.pop();
+    }
+    lower.push(point);
+  }
+  for (let index = sorted.length - 1; index >= 0; index -= 1) {
+    const point = sorted[index];
+    while (
+      upper.length >= 2 &&
+      cross(upper[upper.length - 2], upper[upper.length - 1], point) <= 0
+    ) {
+      upper.pop();
+    }
+    upper.push(point);
+  }
+
+  lower.pop();
+  upper.pop();
+  return lower.concat(upper);
 }
 
 function spawnFragmentsForCar(
@@ -179,35 +216,27 @@ export function updateCarFragments(state: GameState, dt: number): void {
 }
 
 export function pushCarFragments(state: GameState): void {
-  for (const car of state.cars) {
-    const forward = { x: Math.cos(car.angle), y: Math.sin(car.angle) };
-    const right = { x: -forward.y, y: forward.x };
-    const halfLength = car.length * 0.5;
-    const halfWidth = car.width * 0.5;
-    for (const fragment of state.carFragments) {
-      const localX =
-        (fragment.x - car.x) * forward.x + (fragment.y - car.y) * forward.y;
-      const localY =
-        (fragment.x - car.x) * right.x + (fragment.y - car.y) * right.y;
-      const closestX = clamp(localX, -halfLength, halfLength);
-      const closestY = clamp(localY, -halfWidth, halfWidth);
-      const dx = localX - closestX;
-      const dy = localY - closestY;
-      const distance = Math.hypot(dx, dy);
-      if (distance >= fragment.radius) {
+  for (const fragment of state.carFragments) {
+    const cosine = Math.cos(fragment.rotation);
+    const sine = Math.sin(fragment.rotation);
+    const fragmentHull = fragment.points.map((point) => ({
+      x: fragment.x + point.x * cosine - point.y * sine,
+      y: fragment.y + point.x * sine + point.y * cosine,
+    }));
+    for (const car of state.cars) {
+      const contact = getCarPolygonContact(car, fragmentHull);
+      if (!contact) {
         continue;
       }
 
-      const normal =
-        distance > 0
-          ? {
-              x: (forward.x * dx + right.x * dy) / distance,
-              y: (forward.y * dx + right.y * dy) / distance,
-            }
-          : { x: forward.x, y: forward.y };
-      const overlap = fragment.radius - distance;
-      fragment.x += normal.x * overlap;
-      fragment.y += normal.y * overlap;
+      const normal = contact.axis;
+      fragment.x += normal.x * contact.amount;
+      fragment.y += normal.y * contact.amount;
+      translateFragmentHull(
+        fragmentHull,
+        normal.x * contact.amount,
+        normal.y * contact.amount,
+      );
       const relativeSpeed =
         (car.vx - fragment.vx) * normal.x + (car.vy - fragment.vy) * normal.y;
       if (relativeSpeed > 0) {
@@ -215,8 +244,20 @@ export function pushCarFragments(state: GameState): void {
         fragment.vy += normal.y * relativeSpeed * 0.82;
         fragment.spin += relativeSpeed * 0.035;
       }
+      const previousX = fragment.x;
+      const previousY = fragment.y;
       constrainFragment(fragment, state.arena);
+      translateFragmentHull(
+        fragmentHull, fragment.x - previousX, fragment.y - previousY,
+      );
     }
+  }
+}
+
+function translateFragmentHull(hull: Vec2[], x: number, y: number): void {
+  for (const point of hull) {
+    point.x += x;
+    point.y += y;
   }
 }
 

@@ -41,6 +41,8 @@
     rendered end panels stay inside the damaged body
   - junk contact matches its drawn short, long, and rotated edges, leaves a
     visible gap untouched, and resolves complete shape containment
+  - physical fragments use convex drawn outlines and the current car hull;
+    clear crushed noses, rotated contact, and embedded pieces stay covered
   - arena layouts and complete rotated-car extents remain inside the
     wall-bounded playable rectangle at alternate dimensions
   - roster, event, round-stat, and upgrade helpers preserve their current behavior

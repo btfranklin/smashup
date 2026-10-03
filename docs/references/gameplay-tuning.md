@@ -78,6 +78,8 @@ This document captures the current intent behind the hand-tuned gameplay rules. 
 - The smoke pool keeps at most 180 puffs after emission. Keep the newest puffs.
 - The dust pool keeps at most 180 puffs after slip or collision emission.
   Keep the newest puffs.
+- Loose car fragments meet the current body hull at their drawn edges. A
+  crushed nose must not push a piece from the car's former full length.
 - Car panel lines should describe believable sheet-metal joins rather than cross the cabin, while each preset keeps one simple visual signature that remains legible under damage.
 - Every car's wheels and axles stay below every chassis in the global paint
   order; overlapping cars must never show a wheel on top of another body.

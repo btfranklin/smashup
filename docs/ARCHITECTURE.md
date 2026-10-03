@@ -82,6 +82,9 @@ Smashup Derby is a browser-only Vite + TypeScript + canvas game with one authori
   physics requests it, and refresh it immediately after deformation so later
   contacts in the same pileup use the new shape. Runtime reapplies wall
   containment after contact solvers move cars.
+- Fragment creation produces one convex outline per piece. Rendering and
+  contact use those same points. `fragments.ts` uses the live car hull through
+  `getCarPolygonContact`; it must not restore the original car rectangle.
 - Keep arena geometry, junk outlines, and coordinate materialization in
   `src/game/arena.ts`. Drawing and car contact use the same local junk outline.
   `src/game/content.ts` owns normalized mud and object layouts, while roster

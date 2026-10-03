@@ -321,6 +321,16 @@ function getPolygonSeparation(
     : null;
 }
 
+export function getCarPolygonContact(
+  car: Car,
+  otherWorldHull: Vec2[],
+): { amount: number; axis: Vec2 } | null {
+  return getPolygonSeparation(
+    getWorldCollisionHull(car, getLocalCollisionHull(car)),
+    otherWorldHull,
+  );
+}
+
 function getCircleCollisionOverlap(
   hull: Vec2[],
   center: Vec2,
