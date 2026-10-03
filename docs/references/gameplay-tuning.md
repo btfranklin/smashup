@@ -20,7 +20,13 @@ This document captures the current intent behind the hand-tuned gameplay rules. 
 ## Damage
 - Front impacts are the most dangerous to the striker because engine, radiator, transmission, and steering damage live there.
 - Rear and side impacts should still matter, but the game should reward reverse attacks into exposed fronts and sides.
-- Frame deformation should preserve asymmetric dents and accumulated crush without letting any structural axis or mirrored body rail collapse far enough to turn the car into a wedge or teardrop.
+- The wheel mounts and cabin support the body. Repeated impacts must keep the
+  wheelbase and most of the body footprint. Front and rear panels can crush
+  farther than the supported fenders. A local dent must not pull the other
+  side of the car inward to match it.
+- Hood and rear panels fold over the structure below them. Creases have light
+  and dark faces, and heavy front damage exposes the engine. Wrecks keep some
+  body color. New and existing creases stay on the current shell as it bends.
 - At equal severity, an impulse into a body panel must cause more frame
   deformation than a glancing impulse. Live impacts and preview damage use
   the same inward direction rule.

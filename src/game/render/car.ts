@@ -1,5 +1,5 @@
 import { getSystemPhase } from "../damage";
-import type { Car } from "../types";
+import type { Car, Vec2 } from "../types";
 
 let windshieldPath: Path2D | undefined;
 
@@ -79,15 +79,92 @@ function createRoofPanelPath(car: Car): Path2D {
   return path;
 }
 
-function createHoodPanelPath(car: Car): Path2D {
-  const frontCrush = car.frame.crush.front;
+type EndPanel = {
+  path: Path2D;
+  nearLeft: Vec2;
+  nearRight: Vec2;
+  farLeft: Vec2;
+  farRight: Vec2;
+  ridgeTop: Vec2;
+  ridgeBottom: Vec2;
+  ridge: Vec2;
+  damage: number;
+};
+
+function createEndPanel(car: Car, zone: "front" | "rear"): EndPanel {
+  const damage = Math.max(car.body[zone], car.frame.crush[zone]);
+  const direction = zone === "front" ? 1 : -1;
+  const nearX = car.length * (zone === "front" ? 0.17 : -0.2);
+  const farX =
+    car.length * (zone === "front" ? 0.35 : -0.42) -
+    direction * damage * car.length * 0.045;
+  const leftCorner = car.frame.vertices[zone === "front" ? 1 : 5];
+  const rightCorner = car.frame.vertices[zone === "front" ? 12 : 8];
+  const skew = (leftCorner.x - rightCorner.x) * direction * 0.3;
+  const nearLeft = { x: nearX, y: -car.width * 0.3 };
+  const nearRight = { x: nearX, y: car.width * 0.3 };
+  const farLeft = { x: farX, y: -car.width * 0.22 };
+  const farRight = { x: farX - direction * damage * 2, y: car.width * 0.22 };
+  const ridgeX = (nearX + farX) * 0.5;
+  const ridgeTop = { x: ridgeX, y: -car.width * 0.26 + damage * 4 };
+  const ridgeBottom = { x: ridgeX, y: car.width * 0.26 + damage * 2 };
+  const ridge = { x: ridgeX + direction * damage * 3, y: skew };
   const path = new Path2D();
-  path.moveTo(car.length * 0.17 - frontCrush * 12, -17);
-  path.lineTo(car.length * 0.36 - frontCrush * 18, -12);
-  path.lineTo(car.length * 0.34 - frontCrush * 20, 12);
-  path.lineTo(car.length * 0.16 - frontCrush * 12, 17);
+  path.moveTo(nearLeft.x, nearLeft.y);
+  path.lineTo(ridgeTop.x, ridgeTop.y);
+  path.lineTo(farLeft.x, farLeft.y);
+  path.lineTo(farRight.x, farRight.y);
+  path.lineTo(ridgeBottom.x, ridgeBottom.y);
+  path.lineTo(nearRight.x, nearRight.y);
   path.closePath();
-  return path;
+  return {
+    path,
+    nearLeft,
+    nearRight,
+    farLeft,
+    farRight,
+    ridgeTop,
+    ridgeBottom,
+    ridge,
+    damage,
+  };
+}
+
+function drawEndPanelRelief(ctx: CanvasRenderingContext2D, panel: EndPanel): void {
+  if (panel.damage <= 0.12) {
+    return;
+  }
+  const { ridge, damage } = panel;
+  ctx.fillStyle = `rgba(224, 208, 175, ${0.07 + damage * 0.2})`;
+  ctx.beginPath();
+  ctx.moveTo(panel.nearLeft.x, panel.nearLeft.y);
+  ctx.lineTo(panel.ridgeTop.x, panel.ridgeTop.y);
+  ctx.lineTo(panel.farLeft.x, panel.farLeft.y);
+  ctx.lineTo(ridge.x, ridge.y);
+  ctx.closePath();
+  ctx.fill();
+  ctx.fillStyle = `rgba(18, 17, 15, ${0.12 + damage * 0.28})`;
+  ctx.beginPath();
+  ctx.moveTo(panel.nearRight.x, panel.nearRight.y);
+  ctx.lineTo(panel.ridgeBottom.x, panel.ridgeBottom.y);
+  ctx.lineTo(panel.farRight.x, panel.farRight.y);
+  ctx.lineTo(ridge.x, ridge.y);
+  ctx.closePath();
+  ctx.fill();
+  ctx.lineWidth = 1 + damage * 1.5;
+  ctx.strokeStyle = `rgba(19, 17, 15, ${0.2 + damage * 0.4})`;
+  ctx.beginPath();
+  ctx.moveTo(panel.ridgeTop.x, panel.ridgeTop.y);
+  ctx.lineTo(ridge.x, ridge.y);
+  ctx.lineTo(panel.ridgeBottom.x, panel.ridgeBottom.y);
+  ctx.stroke();
+  ctx.lineWidth = 1;
+  ctx.strokeStyle = `rgba(233, 220, 190, ${damage * 0.4})`;
+  ctx.beginPath();
+  ctx.moveTo(panel.ridgeTop.x - 1, panel.ridgeTop.y);
+  ctx.lineTo(ridge.x - 1, ridge.y);
+  ctx.lineTo(panel.ridgeBottom.x - 1, panel.ridgeBottom.y);
+  ctx.stroke();
 }
 
 function getWindshieldPath(): Path2D {
@@ -220,6 +297,21 @@ function drawExposedCrush(
     ctx.lineTo(halfLength - depth * 0.78, halfWidth * 0.7);
     ctx.closePath();
     ctx.fill();
+
+    drawExposedChassis(ctx, car, "front");
+    ctx.fillStyle = "#343634";
+    ctx.beginPath();
+    ctx.roundRect(car.length * 0.3, -10, car.length * 0.15, 20, 2);
+    ctx.fill();
+    ctx.strokeStyle = "rgba(176, 173, 152, 0.55)";
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    for (let index = 0; index < 3; index += 1) {
+      const x = car.length * (0.32 + index * 0.035);
+      ctx.moveTo(x, -8);
+      ctx.lineTo(x, 8);
+    }
+    ctx.stroke();
   }
   if (rear > 0.32) {
     const depth = 7 + rear * 19;
@@ -231,18 +323,48 @@ function drawExposedCrush(
     ctx.lineTo(-halfLength + depth * 0.82, halfWidth * 0.62);
     ctx.closePath();
     ctx.fill();
+
+    drawExposedChassis(ctx, car, "rear");
+    ctx.strokeStyle = "rgba(162, 156, 137, 0.5)";
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(-car.length * 0.31, -car.width * 0.28);
+    ctx.lineTo(-car.length * 0.31, car.width * 0.28);
+    ctx.stroke();
   }
 }
 
 function drawCrumpleScars(ctx: CanvasRenderingContext2D, car: Car): void {
   ctx.lineCap = "round";
-  for (let index = 0; index < car.frame.scars.length; index += 1) {
+  for (
+    let index = Math.max(0, car.frame.scars.length - 24);
+    index < car.frame.scars.length;
+    index += 1
+  ) {
     const scar = car.frame.scars[index];
-    const half = scar.length * 0.5;
+    const half = Math.min(scar.length, car.width * 0.65) * 0.5;
     const dx = Math.cos(scar.angle) * half;
     const dy = Math.sin(scar.angle) * half;
-    ctx.strokeStyle = `rgba(22, 18, 16, ${0.2 + scar.depth * 0.48})`;
-    ctx.lineWidth = scar.width;
+    const ridge = 1.5 + scar.depth * 3.5;
+    const normalX = -Math.sin(scar.angle) * ridge;
+    const normalY = Math.cos(scar.angle) * ridge;
+    ctx.fillStyle = `rgba(218, 205, 175, ${0.12 + scar.depth * 0.22})`;
+    ctx.beginPath();
+    ctx.moveTo(scar.x - dx, scar.y - dy);
+    ctx.lineTo(scar.x + normalX, scar.y + normalY);
+    ctx.lineTo(scar.x + dx, scar.y + dy);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = `rgba(20, 18, 16, ${0.18 + scar.depth * 0.28})`;
+    ctx.beginPath();
+    ctx.moveTo(scar.x - dx, scar.y - dy);
+    ctx.lineTo(scar.x - normalX, scar.y - normalY);
+    ctx.lineTo(scar.x + dx, scar.y + dy);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.strokeStyle = `rgba(22, 18, 16, ${0.24 + scar.depth * 0.42})`;
+    ctx.lineWidth = Math.max(0.8, scar.width * 0.45);
     ctx.beginPath();
     ctx.moveTo(scar.x - dx, scar.y - dy);
     ctx.lineTo(scar.x + dx, scar.y + dy);
@@ -260,6 +382,27 @@ function drawCrumpleScars(ctx: CanvasRenderingContext2D, car: Car): void {
     );
     ctx.stroke();
   }
+}
+
+function drawExposedChassis(
+  ctx: CanvasRenderingContext2D,
+  car: Car,
+  zone: "front" | "rear",
+): void {
+  const direction = zone === "front" ? 1 : -1;
+  const shoulderX = car.length * (zone === "front" ? 0.26 : 0.28) * direction;
+  const nearX = car.length * 0.2 * direction;
+  const farX = car.length * 0.34 * direction;
+  const path = new Path2D();
+  path.moveTo(farX, -car.width * 0.24);
+  path.lineTo(shoulderX, -car.width * 0.35);
+  path.lineTo(nearX, -car.width * 0.35);
+  path.lineTo(nearX, car.width * 0.35);
+  path.lineTo(shoulderX, car.width * 0.35);
+  path.lineTo(farX, car.width * 0.24);
+  path.closePath();
+  ctx.fillStyle = "#393732";
+  ctx.fill(path);
 }
 
 function drawDamageScrapes(ctx: CanvasRenderingContext2D, car: Car): void {
@@ -396,7 +539,8 @@ function drawCarBody(
 ): void {
   const { path: bodyPath, frontEdge, rearEdge } = createCarBodyPath(car);
   const roofPath = createRoofPanelPath(car);
-  const hoodPath = createHoodPanelPath(car);
+  const hood = createEndPanel(car, "front");
+  const trunk = createEndPanel(car, "rear");
   const frontCrush = Math.max(car.body.front, car.frame.crush.front);
   const rearCrush = Math.max(car.body.rear, car.frame.crush.rear);
   const hasExposedCrush = frontCrush > 0.28 || rearCrush > 0.32;
@@ -422,7 +566,7 @@ function drawCarBody(
   }
 
   if (car.disabled) {
-    ctx.fillStyle = "#6f665f";
+    ctx.fillStyle = car.color;
   } else {
     const bodyGradient = ctx.createLinearGradient(
       -car.length * 0.5,
@@ -437,6 +581,10 @@ function drawCarBody(
     ctx.fillStyle = bodyGradient;
   }
   ctx.fill(bodyPath);
+  if (car.disabled) {
+    ctx.fillStyle = "rgba(65, 58, 49, 0.62)";
+    ctx.fill(bodyPath);
+  }
 
   if (hasExposedCrush) {
     ctx.save();
@@ -452,14 +600,23 @@ function drawCarBody(
   ctx.fill(roofPath);
 
   ctx.fillStyle = car.disabled ? "#48423d" : "rgba(34, 28, 24, 0.9)";
-  ctx.fill(hoodPath);
+  ctx.fill(hood.path);
+  drawEndPanelRelief(ctx, hood);
+  if (trunk.damage > 0.12) {
+    ctx.fillStyle = car.disabled ? "#4f4840" : "rgba(48, 35, 27, 0.65)";
+    ctx.fill(trunk.path);
+    drawEndPanelRelief(ctx, trunk);
+  }
 
   ctx.fillStyle = "rgba(210, 229, 232, 0.28)";
   ctx.fill(getWindshieldPath());
 
   ctx.save();
   ctx.clip(bodyPath);
-  drawPanelSeams(ctx, car, roofPath, hoodPath);
+  drawPanelSeams(ctx, car, roofPath, hood.path);
+  if (trunk.damage > 0.12) {
+    ctx.stroke(trunk.path);
+  }
   drawPresetCharacterLines(ctx, car);
   ctx.restore();
 

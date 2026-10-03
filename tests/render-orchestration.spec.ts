@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 
+import { CAR_PRESET_IDS } from "../src/game/contentIds";
+import { applyFrameImpact } from "../src/game/deformation";
 import {
   drawCars,
   getCameraOffset,
@@ -164,6 +166,56 @@ describe("render facade, cars, and overlays", () => {
     expect(firstBodyFill).toBeGreaterThan(lastWheelOrAxle);
     expect(axleRects).toHaveLength(cars.length * 2);
   });
+
+  it.each(CAR_PRESET_IDS)(
+    "keeps the %s chassis and end panels inside the damaged shell",
+    (presetId) => {
+      const car = createCarFixture({ disabled: true }, presetId);
+      for (let hit = 0; hit < 40; hit += 1) {
+        const side = ((hit % 5) - 2) * car.width * 0.22;
+        const end = ((hit % 7) - 3) * car.length * 0.12;
+        applyFrameImpact(
+          car, { x: car.length * 0.5, y: side }, 1, "front", { x: -1, y: 0 },
+        );
+        applyFrameImpact(
+          car, { x: -car.length * 0.5, y: -side }, 1, "rear", { x: 1, y: 0 },
+        );
+        applyFrameImpact(
+          car, { x: end, y: -car.width * 0.5 }, 1, "left", { x: 0, y: 1 },
+        );
+        applyFrameImpact(
+          car, { x: -end, y: car.width * 0.5 }, 1, "right", { x: 0, y: -1 },
+        );
+      }
+      const canvas = createCanvasRecorder();
+      drawCars(canvas.ctx, [car], { showPlayerOutline: false });
+      const panels = canvas.paths("fill").filter((path) =>
+        path.operations.filter((operation) => operation.type === "lineTo").length
+          !== car.frame.vertices.length - 1,
+      );
+      expect(panels.length).toBeGreaterThanOrEqual(4);
+      for (const panel of panels) {
+        for (const operation of panel.operations) {
+          if (operation.type !== "moveTo" && operation.type !== "lineTo") {
+            continue;
+          }
+          const [x, y] = operation.args as number[];
+          let inside = false;
+          for (let index = 0; index < car.frame.vertices.length; index += 1) {
+            const start = car.frame.vertices[index];
+            const end = car.frame.vertices[(index + 1) % car.frame.vertices.length];
+            if (
+              (start.y > y) !== (end.y > y) &&
+              x < ((end.x - start.x) * (y - start.y)) / (end.y - start.y) + start.x
+            ) {
+              inside = !inside;
+            }
+          }
+          expect(inside, `Panel point ${x}, ${y} must stay inside the body`).toBe(true);
+        }
+      }
+    },
+  );
 
   it("omits HUD and event-feed commands in preview mode", () => {
     const canvas = createCanvasRecorder();

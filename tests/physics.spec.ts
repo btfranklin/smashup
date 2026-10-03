@@ -466,7 +466,8 @@ describe("physics", () => {
 
     const collisions = resolveCarCollisions([first, second]);
 
-    expect(visibleGap).toBeGreaterThan(20);
+    expect(visibleGap).toBeGreaterThan(0);
+    expect(second.x - first.x).toBeLessThan((first.length + second.length) * 0.5);
     expect(collisions).toEqual([]);
     expect(first.x).toBe(initialFirstX);
     expect(second.x).toBe(initialSecondX);

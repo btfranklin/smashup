@@ -36,6 +36,9 @@
   - live-frame car collision hulls reject empty rectangular-corner overlap for
     cars and loose objects, honor crushed body extents, and deliberately bridge
     shallow concavities
+  - repeated and asymmetric impacts keep the wheelbase and body footprint;
+    folds stay on the shell through service and condition carry-over, and
+    rendered end panels stay inside the damaged body
   - arena layouts and complete rotated-car extents remain inside the
     wall-bounded playable rectangle at alternate dimensions
   - roster, event, round-stat, and upgrade helpers preserve their current behavior

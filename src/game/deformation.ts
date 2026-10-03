@@ -17,48 +17,19 @@ const FRAME_VERTEX_DEFS: Array<{
 }> = [
   { id: "front-tip-left", x: 0.5, y: -0.21, stiffness: 0.44 },
   { id: "front-left-corner", x: 0.45, y: -0.45, stiffness: 0.5 },
-  { id: "left-front-fender", x: 0.18, y: -0.5, stiffness: 0.62 },
+  { id: "left-front-fender", x: 0.18, y: -0.5, stiffness: 0.88 },
   { id: "left-door-front", x: -0.1, y: -0.49, stiffness: 0.72 },
-  { id: "left-door-rear", x: -0.34, y: -0.47, stiffness: 0.7 },
+  { id: "left-door-rear", x: -0.34, y: -0.47, stiffness: 0.86 },
   { id: "rear-left-corner", x: -0.5, y: -0.37, stiffness: 0.56 },
   { id: "rear-tip-left", x: -0.48, y: -0.18, stiffness: 0.5 },
   { id: "rear-tip-right", x: -0.48, y: 0.18, stiffness: 0.5 },
   { id: "rear-right-corner", x: -0.5, y: 0.37, stiffness: 0.56 },
-  { id: "right-door-rear", x: -0.34, y: 0.47, stiffness: 0.7 },
+  { id: "right-door-rear", x: -0.34, y: 0.47, stiffness: 0.86 },
   { id: "right-door-front", x: -0.1, y: 0.49, stiffness: 0.72 },
-  { id: "right-front-fender", x: 0.18, y: 0.5, stiffness: 0.62 },
+  { id: "right-front-fender", x: 0.18, y: 0.5, stiffness: 0.88 },
   { id: "front-right-corner", x: 0.45, y: 0.45, stiffness: 0.5 },
   { id: "front-tip-right", x: 0.5, y: 0.21, stiffness: 0.44 },
 ];
-
-const MIRRORED_FRAME_VERTEX_IDS: ReadonlyArray<readonly [string, string]> = [
-  ["front-tip-left", "front-tip-right"],
-  ["front-left-corner", "front-right-corner"],
-  ["left-front-fender", "right-front-fender"],
-  ["left-door-front", "right-door-front"],
-  ["left-door-rear", "right-door-rear"],
-  ["rear-left-corner", "rear-right-corner"],
-  ["rear-tip-left", "rear-tip-right"],
-];
-
-const FRONT_END_VERTEX_IDS = [
-  "front-tip-left",
-  "front-left-corner",
-  "front-right-corner",
-  "front-tip-right",
-] as const;
-
-const REAR_END_VERTEX_IDS = [
-  "rear-left-corner",
-  "rear-tip-left",
-  "rear-tip-right",
-  "rear-right-corner",
-] as const;
-
-// Damage and scars keep accumulating after the shell reaches these visual limits.
-const MIN_FRAME_AXIS_RETENTION = 0.58;
-const MAX_MIRRORED_RAIL_SKEW = 0.14;
-const MAX_END_PROFILE_SPREAD = 0.07;
 
 function cloneBodyState(body: BodyState): BodyState {
   return {
@@ -94,86 +65,30 @@ export function createFreshFrame(length: number, width: number): CarFrameState {
   };
 }
 
-function clampTowardCenter(
-  value: number,
-  base: number,
-  minimumRetention: number,
-): number {
-  const innerLimit = base * minimumRetention;
-  if (base >= 0) {
-    return clamp(value, innerLimit, base);
-  }
-  return clamp(value, base, innerLimit);
-}
+function constrainFrameVertex(
+  vertex: FrameVertex,
+  length: number,
+  width: number,
+): void {
+  const endPanel = Math.abs(vertex.baseX) >= length * 0.4;
+  const wheelSupported =
+    (vertex.baseX > length * 0.1 && vertex.baseX < length * 0.25) ||
+    (vertex.baseX < -length * 0.25 && vertex.baseX > -length * 0.38);
+  const sidePanel = Math.abs(vertex.baseY) > width * 0.4;
+  const longitudinalDent = length * (endPanel ? 0.1 : 0.025);
+  const lateralDent = width * (wheelSupported ? 0.04 : sidePanel ? 0.1 : 0.035);
 
-function constrainFrameVertex(vertex: FrameVertex, length: number, width: number): void {
-  const halfLength = length * 0.5;
-  const halfWidth = width * 0.5;
-  vertex.x = clamp(vertex.x, -halfLength * 0.98, halfLength * 0.98);
-  vertex.y = clamp(vertex.y, -halfWidth * 0.98, halfWidth * 0.98);
-  vertex.x = clampTowardCenter(
+  // The wheel mounts and cabin support the shell. Dents stay local to a panel.
+  vertex.x = clamp(
     vertex.x,
-    vertex.baseX,
-    MIN_FRAME_AXIS_RETENTION,
+    Math.max(-length * 0.5, vertex.baseX - longitudinalDent),
+    Math.min(length * 0.5, vertex.baseX + longitudinalDent),
   );
-  vertex.y = clampTowardCenter(
+  vertex.y = clamp(
     vertex.y,
-    vertex.baseY,
-    MIN_FRAME_AXIS_RETENTION,
+    Math.max(-width * 0.5, vertex.baseY - lateralDent),
+    Math.min(width * 0.5, vertex.baseY + lateralDent),
   );
-}
-
-function constrainMirroredPair(
-  first: FrameVertex,
-  second: FrameVertex,
-  axis: "x" | "y",
-  maximumDifference: number,
-): void {
-  const firstMagnitude = Math.abs(first[axis]);
-  const secondMagnitude = Math.abs(second[axis]);
-  const minimumMagnitude =
-    Math.max(firstMagnitude, secondMagnitude) - maximumDifference;
-
-  if (firstMagnitude < minimumMagnitude) {
-    const sign = axis === "x" ? Math.sign(first.baseX) : Math.sign(first.baseY);
-    first[axis] = minimumMagnitude * sign;
-  }
-  if (secondMagnitude < minimumMagnitude) {
-    const sign = axis === "x" ? Math.sign(second.baseX) : Math.sign(second.baseY);
-    second[axis] = minimumMagnitude * sign;
-  }
-}
-
-function keepFrontTipAheadOfCorner(
-  verticesById: ReadonlyMap<string, FrameVertex>,
-  tipId: string,
-  cornerId: string,
-): void {
-  const tip = verticesById.get(tipId);
-  const corner = verticesById.get(cornerId);
-  if (tip && corner) {
-    tip.x = Math.max(tip.x, corner.x);
-  }
-}
-
-function constrainEndProfile(
-  verticesById: ReadonlyMap<string, FrameVertex>,
-  vertexIds: readonly string[],
-  maximumDifference: number,
-): void {
-  const vertices = vertexIds
-    .map((id) => verticesById.get(id))
-    .filter((vertex): vertex is FrameVertex => vertex !== undefined);
-  const outermostMagnitude = Math.max(
-    ...vertices.map((vertex) => Math.abs(vertex.x)),
-  );
-  const minimumMagnitude = outermostMagnitude - maximumDifference;
-
-  for (const vertex of vertices) {
-    if (Math.abs(vertex.x) < minimumMagnitude) {
-      vertex.x = minimumMagnitude * Math.sign(vertex.baseX);
-    }
-  }
 }
 
 function constrainFrameShape(
@@ -184,50 +99,46 @@ function constrainFrameShape(
   for (const vertex of frame.vertices) {
     constrainFrameVertex(vertex, length, width);
   }
+}
 
-  const verticesById = new Map(
-    frame.vertices.map((vertex) => [vertex.id, vertex]),
-  );
-  for (const [firstId, secondId] of MIRRORED_FRAME_VERTEX_IDS) {
-    const first = verticesById.get(firstId);
-    const second = verticesById.get(secondId);
-    if (!first || !second) {
-      continue;
+function keepScarOnShell(frame: CarFrameState, scar: CrumpleScar): void {
+  let inside = false;
+  let nearestX = scar.x;
+  let nearestY = scar.y;
+  let nearestDistance = Infinity;
+  const vertices = frame.vertices;
+  for (let index = 0; index < vertices.length; index += 1) {
+    const start = vertices[index];
+    const end = vertices[(index + 1) % vertices.length];
+    if (
+      (start.y > scar.y) !== (end.y > scar.y) &&
+      scar.x <
+        ((end.x - start.x) * (scar.y - start.y)) / (end.y - start.y) + start.x
+    ) {
+      inside = !inside;
     }
-    constrainMirroredPair(
-      first,
-      second,
-      "x",
-      length * MAX_MIRRORED_RAIL_SKEW,
+    const edgeX = end.x - start.x;
+    const edgeY = end.y - start.y;
+    const along = clamp(
+      ((scar.x - start.x) * edgeX + (scar.y - start.y) * edgeY) /
+        (edgeX * edgeX + edgeY * edgeY),
+      0,
+      1,
     );
-    constrainMirroredPair(
-      first,
-      second,
-      "y",
-      width * MAX_MIRRORED_RAIL_SKEW,
-    );
+    const x = start.x + edgeX * along;
+    const y = start.y + edgeY * along;
+    const distance = (scar.x - x) ** 2 + (scar.y - y) ** 2;
+    if (distance < nearestDistance) {
+      nearestX = x;
+      nearestY = y;
+      nearestDistance = distance;
+    }
   }
-
-  keepFrontTipAheadOfCorner(
-    verticesById,
-    "front-tip-left",
-    "front-left-corner",
-  );
-  keepFrontTipAheadOfCorner(
-    verticesById,
-    "front-tip-right",
-    "front-right-corner",
-  );
-  constrainEndProfile(
-    verticesById,
-    FRONT_END_VERTEX_IDS,
-    length * MAX_END_PROFILE_SPREAD,
-  );
-  constrainEndProfile(
-    verticesById,
-    REAR_END_VERTEX_IDS,
-    length * MAX_END_PROFILE_SPREAD,
-  );
+  if (!inside) {
+    const inwardLength = Math.hypot(nearestX, nearestY);
+    scar.x = nearestX - (nearestX / inwardLength) * 2;
+    scar.y = nearestY - (nearestY / inwardLength) * 2;
+  }
 }
 
 function zoneAxis(zone: DamageZone): Vec2 {
@@ -280,9 +191,9 @@ function crossImpactCoordinate(zone: DamageZone, point: Vec2): number {
 function scarAngle(zone: DamageZone, impactSide: number, seed: number): number {
   const jitter = (pseudoRandom(seed) - 0.5) * 0.45;
   if (zone === "front" || zone === "rear") {
-    return impactSide >= 0 ? 0.35 + jitter : -0.35 + jitter;
+    return Math.PI * 0.5 + (impactSide >= 0 ? 0.25 : -0.25) + jitter;
   }
-  return impactSide >= 0 ? Math.PI * 0.5 - 0.35 + jitter : Math.PI * 0.5 + 0.35 + jitter;
+  return (impactSide >= 0 ? -0.25 : 0.25) + jitter;
 }
 
 function addCrumpleScars(
@@ -310,6 +221,7 @@ function addCrumpleScars(
       depth: clamp01(severity * (0.55 + pseudoRandom(seed + 5) * 0.45)),
       width: 1.4 + severity * 2.8 + pseudoRandom(seed + 6) * 1.4,
     };
+    keepScarOnShell(frame, scar);
     frame.scars.push(scar);
   }
   frame.scars = frame.scars.slice(-42);
@@ -336,9 +248,9 @@ export function applyFrameImpact(
   const cross = crossImpactCoordinate(zone, localPoint);
   const zoneSpan = zone === "front" || zone === "rear" ? car.length : car.width;
   const crossSpan = zone === "front" || zone === "rear" ? car.width : car.length;
-  const band = zoneSpan * (0.18 + scaled * 0.24);
+  const band = zoneSpan * (0.2 + scaled * 0.12);
   const crossBand = crossSpan * (0.36 + scaled * 0.22);
-  const baseCrush = (4 + scaled * 24) * directness;
+  const baseCrush = (1.2 + scaled * 9.5) * directness;
   let deformation = 0;
 
   for (const vertex of frame.vertices) {
@@ -365,6 +277,9 @@ export function applyFrameImpact(
     deformation += amount;
   }
   constrainFrameShape(frame, car.length, car.width);
+  for (const scar of frame.scars) {
+    keepScarOnShell(frame, scar);
+  }
 
   const deformationScore = clamp01(deformation / Math.max(car.length, car.width));
   frame.crush[zone] = clamp01(frame.crush[zone] + deformationScore * 0.62);

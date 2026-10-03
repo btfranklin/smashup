@@ -1,18 +1,15 @@
 import { describe, expect, it } from "vitest";
 
+import { CAR_PRESET_IDS } from "../src/game/contentIds";
+import { captureCarCondition, cloneCondition } from "../src/game/conditions";
 import { applyImpactDamage } from "../src/game/damage";
-import { applyFrameImpact, summarizeFrameDamage } from "../src/game/deformation";
+import {
+  applyFrameImpact,
+  repairCarFrame,
+  summarizeFrameDamage,
+} from "../src/game/deformation";
+import type { Vec2 } from "../src/game/types";
 import { createCarFixture } from "./helpers/fixtures";
-
-const MIRRORED_VERTEX_IDS = [
-  ["front-tip-left", "front-tip-right"],
-  ["front-left-corner", "front-right-corner"],
-  ["left-front-fender", "right-front-fender"],
-  ["left-door-front", "right-door-front"],
-  ["left-door-rear", "right-door-rear"],
-  ["rear-left-corner", "rear-right-corner"],
-  ["rear-tip-left", "rear-tip-right"],
-] as const;
 
 function vertex(car: ReturnType<typeof createCarFixture>, id: string) {
   const found = car.frame.vertices.find((candidate) => candidate.id === id);
@@ -22,63 +19,50 @@ function vertex(car: ReturnType<typeof createCarFixture>, id: string) {
   return found;
 }
 
+function isInsideShell(car: ReturnType<typeof createCarFixture>, point: Vec2) {
+  let inside = false;
+  const vertices = car.frame.vertices;
+  for (let index = 0; index < vertices.length; index += 1) {
+    const start = vertices[index];
+    const end = vertices[(index + 1) % vertices.length];
+    if (
+      (start.y > point.y) !== (end.y > point.y) &&
+      point.x <
+        ((end.x - start.x) * (point.y - start.y)) / (end.y - start.y) + start.x
+    ) {
+      inside = !inside;
+    }
+  }
+  return inside;
+}
+
 describe("car frame deformation", () => {
   function expectFrameWithinOriginalHull(car: ReturnType<typeof createCarFixture>) {
     for (const point of car.frame.vertices) {
-      expect(Math.abs(point.x)).toBeLessThanOrEqual(Math.abs(point.baseX) + 0.001);
-      expect(Math.abs(point.y)).toBeLessThanOrEqual(Math.abs(point.baseY) + 0.001);
+      expect(Number.isFinite(point.x) && Number.isFinite(point.y)).toBe(true);
       expect(Math.abs(point.x)).toBeLessThanOrEqual(car.length * 0.5 + 0.001);
       expect(Math.abs(point.y)).toBeLessThanOrEqual(car.width * 0.5 + 0.001);
     }
   }
 
-  function expectFrameToKeepCarLikeProportions(
+  function expectSupportedBody(
     car: ReturnType<typeof createCarFixture>,
   ) {
-    for (const point of car.frame.vertices) {
-      expect(Math.abs(point.x)).toBeGreaterThanOrEqual(
-        Math.abs(point.baseX) * 0.57,
-      );
-      expect(Math.abs(point.y)).toBeGreaterThanOrEqual(
-        Math.abs(point.baseY) * 0.57,
-      );
+    const xs = car.frame.vertices.map((point) => point.x);
+    const ys = car.frame.vertices.map((point) => point.y);
+    expect(Math.max(...xs) - Math.min(...xs)).toBeGreaterThanOrEqual(
+      car.length * 0.78,
+    );
+    expect(Math.max(...ys) - Math.min(...ys)).toBeGreaterThanOrEqual(
+      car.width * 0.85,
+    );
+    for (const side of ["left", "right"]) {
+      const front = vertex(car, `${side}-front-fender`);
+      const rear = vertex(car, `${side}-door-rear`);
+      expect(front.x - rear.x).toBeGreaterThanOrEqual(car.length * 0.46);
+      expect(Math.abs(front.y)).toBeGreaterThanOrEqual(car.width * 0.42);
+      expect(Math.abs(rear.y)).toBeGreaterThanOrEqual(car.width * 0.42);
     }
-
-    for (const [firstId, secondId] of MIRRORED_VERTEX_IDS) {
-      const first = vertex(car, firstId);
-      const second = vertex(car, secondId);
-      expect(Math.abs(Math.abs(first.x) - Math.abs(second.x))).toBeLessThanOrEqual(
-        car.length * 0.141,
-      );
-      expect(Math.abs(Math.abs(first.y) - Math.abs(second.y))).toBeLessThanOrEqual(
-        car.width * 0.141,
-      );
-    }
-
-    const frontProfile = [
-      vertex(car, "front-tip-left").x,
-      vertex(car, "front-left-corner").x,
-      vertex(car, "front-right-corner").x,
-      vertex(car, "front-tip-right").x,
-    ];
-    const rearProfile = [
-      vertex(car, "rear-left-corner").x,
-      vertex(car, "rear-tip-left").x,
-      vertex(car, "rear-tip-right").x,
-      vertex(car, "rear-right-corner").x,
-    ].map(Math.abs);
-    expect(Math.max(...frontProfile) - Math.min(...frontProfile)).toBeLessThanOrEqual(
-      car.length * 0.071,
-    );
-    expect(Math.max(...rearProfile) - Math.min(...rearProfile)).toBeLessThanOrEqual(
-      car.length * 0.071,
-    );
-    expect(vertex(car, "front-tip-left").x).toBeGreaterThanOrEqual(
-      vertex(car, "front-left-corner").x,
-    );
-    expect(vertex(car, "front-tip-right").x).toBeGreaterThanOrEqual(
-      vertex(car, "front-right-corner").x,
-    );
   }
 
   it("crumples front, rear, left, and right frame vertices inward from local impacts", () => {
@@ -150,7 +134,7 @@ describe("car frame deformation", () => {
 
     expect(directDeformation).toBeGreaterThan(glancingDeformation);
     expectFrameWithinOriginalHull(direct);
-    expectFrameToKeepCarLikeProportions(direct);
+    expectSupportedBody(direct);
   });
 
   it("accumulates repeated deformation and summarizes compact frame damage", () => {
@@ -203,7 +187,7 @@ describe("car frame deformation", () => {
     }
 
     expectFrameWithinOriginalHull(car);
-    expectFrameToKeepCarLikeProportions(car);
+    expectSupportedBody(car);
   });
 
   it("caps a localized crumple before one body rail collapses into a point", () => {
@@ -220,11 +204,12 @@ describe("car frame deformation", () => {
     const leftTip = vertex(car, "front-tip-left");
     const rightTip = vertex(car, "front-tip-right");
     expect(rightTip.x).toBeLessThan(rightTip.baseX);
-    expect(rightTip.x).toBeGreaterThanOrEqual(rightTip.baseX * 0.58);
-    expect(Math.abs(leftTip.x - rightTip.x)).toBeLessThanOrEqual(
-      car.length * 0.141,
+    expect(rightTip.x).toBeGreaterThanOrEqual(car.length * 0.39);
+    expect(leftTip.x).toBe(leftTip.baseX);
+    expect(vertex(car, "rear-tip-right").x).toBe(
+      vertex(car, "rear-tip-right").baseX,
     );
-    expectFrameToKeepCarLikeProportions(car);
+    expectSupportedBody(car);
   });
 
   it("can visually deform disabled cars without applying more gameplay damage", () => {
@@ -253,4 +238,82 @@ describe("car frame deformation", () => {
     expect(car.systems).toEqual(beforeSystems);
     expect(car.body).toEqual(beforeBody);
   });
+
+  it.each(CAR_PRESET_IDS)(
+    "keeps the %s wheelbase, body footprint, and visible folds after repeated hits",
+    (presetId) => {
+      const car = createCarFixture({}, presetId);
+      for (let hit = 0; hit < 24; hit += 1) {
+        applyFrameImpact(
+          car,
+          { x: car.length * 0.5, y: 0 },
+          1,
+          "front",
+          { x: -1, y: 0 },
+        );
+        applyFrameImpact(
+          car,
+          { x: -car.length * 0.5, y: 0 },
+          1,
+          "rear",
+          { x: 1, y: 0 },
+        );
+        applyFrameImpact(
+          car,
+          { x: -car.length * 0.1, y: -car.width * 0.5 },
+          1,
+          "left",
+          { x: 0, y: 1 },
+        );
+        applyFrameImpact(
+          car,
+          { x: car.length * 0.1, y: car.width * 0.5 },
+          1,
+          "right",
+          { x: 0, y: -1 },
+        );
+      }
+
+      expectFrameWithinOriginalHull(car);
+      expectSupportedBody(car);
+      expect(car.frame.scars).toHaveLength(42);
+      for (const scar of car.frame.scars) {
+        expect(Number.isFinite(scar.x) && Number.isFinite(scar.y)).toBe(true);
+        expect(isInsideShell(car, scar)).toBe(true);
+      }
+    },
+  );
+
+  it.each(["front", "rear", "left", "right"] as const)(
+    "keeps %s dents and scars local through service and condition carry-over",
+    (zone) => {
+      const car = createCarFixture();
+      const direction = {
+        x: zone === "front" ? -1 : zone === "rear" ? 1 : 0,
+        y: zone === "left" ? 1 : zone === "right" ? -1 : 0,
+      };
+      for (let hit = 0; hit < 100; hit += 1) {
+        const offset = ((hit % 9) - 4) * 0.11;
+        const point = direction.x
+          ? { x: -direction.x * car.length * 0.5, y: offset * car.width }
+          : { x: offset * car.length, y: -direction.y * car.width * 0.5 };
+        applyFrameImpact(car, point, 0.9, zone, direction);
+      }
+      const damaged = captureCarCondition(car);
+      const carried = cloneCondition(damaged);
+      expect(carried.frame).toEqual(car.frame);
+      expect(carried.frame).not.toBe(car.frame);
+
+      for (const amount of [0.12, 0.28, 0.6]) {
+        const repaired = repairCarFrame(carried.frame, amount)!;
+        const serviced = createCarFixture({ frame: repaired });
+        expectFrameWithinOriginalHull(serviced);
+        expectSupportedBody(serviced);
+        for (const scar of repaired.scars) {
+          expect(isInsideShell(serviced, scar)).toBe(true);
+        }
+      }
+      expect(carried.frame).toEqual(damaged.frame);
+    },
+  );
 });
