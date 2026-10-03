@@ -25,14 +25,14 @@ describe("debris effects", () => {
 
   it("ages and prunes debris particles", () => {
     const state = createStateFixture({
-      debrisParticles: Array.from({ length: 240 }, (_, index) => ({
+      debrisParticles: Array.from({ length: 260 }, (_, index) => ({
         id: index + 1,
         x: 10_000 + index,
         y: -10_000 - index,
         vx: 20,
         vy: -20,
-        age: index % 2 === 0 ? 0.1 : 1,
-        ttl: 0.4,
+        age: index < 240 ? 0.1 : 1,
+        ttl: index < 240 ? 1 : 0.4,
         size: 3,
         rotation: 0,
         spin: 1,
@@ -42,7 +42,9 @@ describe("debris effects", () => {
 
     updateDebrisEffects(state, 0.5);
 
-    expect(state.debrisParticles.length).toBeLessThanOrEqual(220);
+    expect(state.debrisParticles).toHaveLength(220);
+    expect(state.debrisParticles[0]?.id).toBe(21);
+    expect(state.debrisParticles.at(-1)?.id).toBe(240);
     expect(state.debrisParticles.every((particle) => particle.age < particle.ttl)).toBe(true);
   });
 
