@@ -27,6 +27,7 @@ body {
 #app {
   width: 100vw;
   height: 100vh;
+  height: 100dvh;
   display: grid;
   place-items: center;
   padding: 20px;
@@ -34,9 +35,10 @@ body {
 
 .frame {
   position: relative;
-  width: min(100%, 1480px);
+  width: min(100%, 1480px, calc((100dvh - 40px) * 1.6));
   min-width: 0;
   aspect-ratio: 16 / 10;
+  max-height: calc(100dvh - 40px);
   display: grid;
   place-items: center;
 }
@@ -55,6 +57,9 @@ canvas {
   position: absolute;
   inset: 32px auto auto 32px;
   width: min(380px, calc(100% - 64px));
+  max-height: calc(100% - 64px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
   padding: 18px 20px;
   background: rgba(250, 234, 198, 0.92);
   border: 2px solid rgba(73, 33, 6, 0.25);
@@ -569,13 +574,14 @@ canvas {
 
 @media (max-width: 900px) {
   .frame {
-    width: 100%;
+    width: min(100%, calc((100dvh - 40px) * 9 / 14));
     aspect-ratio: 9 / 14;
   }
 
   .menu {
     inset: auto 16px 16px 16px;
     width: auto;
+    max-height: calc(100% - 32px);
   }
 
   .menu[data-mode="car_select"],
@@ -615,6 +621,13 @@ canvas {
 
   .podium-place strong {
     font-size: 0.82rem;
+  }
+}
+
+@media (max-width: 900px) and (orientation: landscape) {
+  .frame {
+    width: min(100%, calc((100dvh - 40px) * 1.6));
+    aspect-ratio: 16 / 10;
   }
 }
 

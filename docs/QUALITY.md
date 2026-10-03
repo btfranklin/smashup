@@ -18,6 +18,8 @@
 - Keep a drive action active while either of its keyboard aliases is held.
   Blur, hidden visibility, and controller destruction release all held keys
   and player controls.
+- Keep the game frame and menus inside the viewport. Long menus must scroll
+  so that all controls stay reachable in portrait and landscape.
 
 ## Mechanical Coverage
 
@@ -50,6 +52,8 @@
   - a fresh production bundle is built and served for the ordinary suite
   - the served application boots and accepts pointer and keyboard menu/gameplay input through Career Night start
   - representative spectating and final-standings layouts remain usable at desktop and mobile widths
+  - start, car selection, round results, and upgrade menus fit phone viewports
+    in portrait and landscape, with their final controls reachable by scrolling
   - native Canvas 2D paints normal and representative preview states without page, console, or request errors
   - browser resize, fullscreen, and requestAnimationFrame lifecycles remain functional
   - native Web Audio starts under user activation, resumes from suspension, and closes during controller teardown/recreation

@@ -9,7 +9,8 @@ import {
   type PerformanceSnapshot,
 } from "../../src/app/performance";
 import { PLACEMENT_POINTS } from "../../src/game/career";
-import { chooseStarterCar } from "../../src/game/session";
+import { advanceAfterRound, chooseStarterCar } from "../../src/game/session";
+import { advanceState } from "../../src/game/runtime";
 import type { WreckAwardId } from "../../src/game/contentIds";
 import "../../src/style.css";
 
@@ -97,6 +98,17 @@ function stageCareerFinale(playerChampion: boolean): void {
   activeController.syncMenu();
 }
 
+function stageRoundResults(): AppController {
+  const activeController = stageRunningRound(0x5a17);
+  for (const car of activeController.state.cars.slice(1)) {
+    car.disabled = true;
+    car.eliminationTime = activeController.state.sessionElapsed;
+  }
+  advanceState(activeController.state, 1 / 60);
+  activeController.syncMenu();
+  return activeController;
+}
+
 window.controllerFixture = {
   create(options = {}) {
     if (controller) {
@@ -154,6 +166,14 @@ window.controllerFixture = {
       car.disabled = true;
       car.eliminationTime = activeController.state.sessionElapsed - index - 1;
     });
+    activeController.syncMenu();
+  },
+  stageRoundResults() {
+    stageRoundResults();
+  },
+  stageUpgrade() {
+    const activeController = stageRoundResults();
+    advanceAfterRound(activeController.state);
     activeController.syncMenu();
   },
   stageCleanRound() {
@@ -248,6 +268,8 @@ declare global {
       stageChampionStandings: () => void;
       stageFieldStandings: () => void;
       stageSpectating: () => void;
+      stageRoundResults: () => void;
+      stageUpgrade: () => void;
       stageCleanRound: () => void;
       stageHeavyCollision: () => void;
       stageDamagedRound: () => void;
