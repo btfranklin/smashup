@@ -163,6 +163,45 @@ describe("audio derivation and fake-graph orchestration", () => {
     expect(ctx.state).toBe("running");
   });
 
+  it.each([
+    { state: "suspended", resumeCalls: 1, finalState: "running" },
+    { state: "interrupted", resumeCalls: 1, finalState: "running" },
+    { state: "running", resumeCalls: 0, finalState: "running" },
+    { state: "closed", resumeCalls: 0, finalState: "closed" },
+  ] as const)(
+    "resumes an owned context only when needed from $state",
+    async (scenario) => {
+      const manager = new AudioManager();
+      await manager.resume();
+      const ctx = getLatestAudioContext();
+      Object.defineProperty(ctx, "state", {
+        configurable: true,
+        writable: true,
+        value: scenario.state,
+      });
+
+      await manager.resume();
+
+      expect(ctx.resumeCalls).toBe(scenario.resumeCalls);
+      expect(ctx.state).toBe(scenario.finalState);
+      await manager.destroy();
+    },
+  );
+
+  it("does not resume a context after its manager releases it", async () => {
+    const manager = new AudioManager();
+    manager.prepare();
+    const ctx = getLatestAudioContext();
+
+    const pendingResume = manager.resume();
+    await manager.destroy();
+    await pendingResume;
+
+    expect(ctx.resumeCalls).toBe(0);
+    expect(ctx.closeCalls).toBe(1);
+    expect(ctx.state).toBe("closed");
+  });
+
   it("tolerates browsers without a Web Audio constructor", async () => {
     delete (window as Window & { AudioContext?: typeof AudioContext }).AudioContext;
     const manager = new AudioManager();

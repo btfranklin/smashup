@@ -20,6 +20,8 @@
   and player controls.
 - Keep the game frame and menus inside the viewport. Long menus must scroll
   so that all controls stay reachable in portrait and landscape.
+- On user input, resume the owned audio context from suspended or interrupted
+  state. Do not resume a closed context or one released by its controller.
 
 ## Mechanical Coverage
 

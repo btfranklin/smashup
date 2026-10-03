@@ -303,7 +303,12 @@ export class AudioManager {
     this.createGraph(false);
     const ctx = this.ctx;
     await this.prepareSuspension;
-    if (ctx === this.ctx && ctx?.state === "suspended") {
+    if (
+      ctx &&
+      ctx === this.ctx &&
+      ctx.state !== "running" &&
+      ctx.state !== "closed"
+    ) {
       await ctx.resume();
     }
   }
