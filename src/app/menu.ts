@@ -321,6 +321,7 @@ export function createMenuPresenter(
         }
         <button class="primary-button" id="start-btn" type="button">Run Another Career Night</button>
         <p class="hint">Press R or click to return to the garage.</p>
+        <p class="creator-credit">Created by B.T. Franklin with Codex · <a href="https://btfranklin.info" target="_blank" rel="noopener noreferrer" aria-label="btfranklin.info (opens in a new tab)">btfranklin.info</a></p>
       </section>
     `;
     listenForAction(

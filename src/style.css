@@ -309,6 +309,29 @@ canvas {
   position: relative;
 }
 
+.menu .creator-credit {
+  margin-top: 0.75rem;
+  color: #c9bca7;
+  font-size: 0.8rem;
+  line-height: 1.5;
+  text-align: center;
+}
+
+.creator-credit a {
+  color: #e9ad4f;
+  text-decoration: underline;
+  text-underline-offset: 0.18em;
+}
+
+.creator-credit a:hover {
+  color: #ffe2a2;
+}
+
+.creator-credit a:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 3px;
+}
+
 .finale-header {
   position: relative;
   z-index: 2;
