@@ -170,7 +170,7 @@ export function createAppLoop({
       let completedSteps = 0;
       while (
         completedSteps < SPECTATOR_SKIP_MAX_STEPS_PER_BATCH &&
-        remainingSteps > 0 &&
+        completedSteps < remainingSteps &&
         isSpectating()
       ) {
         runSpectatorStep(FIXED_STEP_SECONDS);

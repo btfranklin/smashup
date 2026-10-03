@@ -273,6 +273,35 @@ describe("app loop", () => {
     ).toBe(true);
   });
 
+  it("keeps the exact spectator cap after a time-limited partial batch", () => {
+    let now = 0;
+    const runSpectatorStep = vi.fn(() => {
+      if (runSpectatorStep.mock.calls.length === 1) {
+        now += SPECTATOR_SKIP_FRAME_BUDGET_MS + 1;
+      }
+    });
+    const harness = createLoopHarness({
+      performanceNow: () => now,
+      runSpectatorStep,
+    });
+    harness.setSpectating(true);
+    harness.loop.startSpectatorSkip();
+    harness.flushFrame();
+    expect(runSpectatorStep).toHaveBeenCalledTimes(1);
+
+    for (
+      let batch = 0;
+      batch < 100 && harness.finishSpectating.mock.calls.length === 0;
+      batch += 1
+    ) {
+      harness.flushFrame();
+    }
+
+    expect(runSpectatorStep).toHaveBeenCalledTimes(SPECTATOR_SKIP_MAX_STEPS);
+    expect(harness.finishSpectating).toHaveBeenCalledTimes(1);
+    expect(harness.onSpectatorSkipActive).toHaveBeenLastCalledWith(false);
+  });
+
   it("honors the skip time budget and resumes if spectating ends before work", () => {
     let now = 0;
     const budgetedStep = vi.fn(() => {

@@ -33,6 +33,8 @@ The production app adds no performance global.
 - The session payload includes the generated seed and all five round plans. Completed-round payloads include placements, points, Wreck Award ids, and standings derived from those summaries.
 - The running and spectating payloads include the selected preset, current round and arena metadata, player state, remaining drivers, and visible outcome state.
 - `advanceTime(ms)` remains deterministic in `spectating`; the **Skip to Results** control uses the same fixed-step runtime rather than a separate result path.
+- Spectator skip runs at most 5,400 fixed steps, including partial batches
+  that stop at the browser time budget.
 - `advanceTime(ms)` accepts finite millisecond values from `0` through `120000`
   inclusive and throws `RangeError` otherwise. Zero is a no-op for `GameState`.
   Fractional fixed-step remainder is controller-local so partitioned calls and
