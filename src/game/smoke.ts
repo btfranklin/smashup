@@ -110,4 +110,8 @@ export function updateSmokeEffects(state: GameState, dt: number): void {
       state.smokePuffs.push(createSmokePuff(state, car));
     }
   }
+
+  if (state.smokePuffs.length > 180) {
+    state.smokePuffs = state.smokePuffs.slice(-180);
+  }
 }
