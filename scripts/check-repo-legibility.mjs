@@ -174,7 +174,7 @@ if (
 for (const artifactDirectory of ["dist", "coverage", "output"]) {
   const ignored = spawnSync(
     "git",
-    ["check-ignore", "--quiet", "--no-index", artifactDirectory],
+    ["check-ignore", "--quiet", "--no-index", `${artifactDirectory}/`],
     { cwd: root },
   );
   if (ignored.status !== 0) {
