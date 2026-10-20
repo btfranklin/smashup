@@ -1,0 +1,17 @@
+include = ["**/*.md"]
+exclude = ["**/.git/**", "**/node_modules/**", "**/dist/**", "coverage/**", "output/**"]
+required_paths = ["README.md", "AGENTS.md", "docs/README.md", "docs/ARCHITECTURE.md", "docs/OPERATIONS.md", "docs/QUALITY.md"]
+
+[markdown]
+dialect = "gfm"
+anchors = "github"
+
+[links]
+allow_outside_root = false
+strict_case = true
+
+[routes]
+enabled = false
+
+[network]
+enabled = false

@@ -70,12 +70,18 @@ test("uses native resize, RAF, and fullscreen lifecycle", async ({ page }) => {
         return box ? box.width / box.height : 0;
       })
       .toBeCloseTo(1500 / 900, 2);
-    const canvasBox = await canvas.boundingBox();
-    const frameBox = await frame.boundingBox();
-    expect(canvasBox).not.toBeNull();
-    expect(frameBox).not.toBeNull();
-    expect(canvasBox!.width).toBeLessThanOrEqual(frameBox!.width + 1);
-    expect(canvasBox!.height).toBeLessThanOrEqual(frameBox!.height + 1);
+    await expect.poll(() => frame.evaluate((element) => {
+      const canvasElement = element.querySelector("canvas");
+      if (!canvasElement) {
+        return { widthFits: false, heightFits: false };
+      }
+      const canvasBox = canvasElement.getBoundingClientRect();
+      const frameBox = element.getBoundingClientRect();
+      return {
+        widthFits: canvasBox.width <= frameBox.width + 1,
+        heightFits: canvasBox.height <= frameBox.height + 1,
+      };
+    })).toEqual({ widthFits: true, heightFits: true });
   }
 
   await page.locator("body").click({ position: { x: 1, y: 1 } });

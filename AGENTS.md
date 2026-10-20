@@ -20,12 +20,13 @@ Start here before changing code.
 
 - `npm run dev`: start the local Vite app
 - `npm run check:repo`: verify entrypoints, documentation links, command wiring, license metadata, and ignored artifacts
+- `npm run check:docs`: run `perfect-doc check . --offline --no-banner` with `perfect-doc.toml`; install Perfect Doc before validation
 - `npm run typecheck`: run TypeScript without emitting files
 - `npm run test:unit`: run the fast Vitest suite once
 - `npm run test:coverage`: run the coverage-gated Vitest suite plus the per-surface coverage check
 - `npm run test:browser`: run the focused real-Chromium integration suite
 - `npm run test:performance`: run the separate single-worker production-build performance smoke
-- `npm run validate`: repo checks + typecheck + build + Vitest coverage + Chromium integration
+- `npm run validate`: repo and documentation checks + typecheck + build + Vitest coverage + Chromium integration
 
 ## Task Routing
 
@@ -56,3 +57,4 @@ Start here before changing code.
 - Do not rebuild a catch-all gameplay module; extend the dedicated split modules instead.
 - Keep preview, Career Night, and Wreck Award ids in `src/game/contentIds.ts` and display/tuning content in `src/game/content.ts`; do not duplicate either in bootstrap, session, or tests.
 - Treat `docs/` as the durable system of record for architecture, operations, and quality expectations. Update docs when commands, boundaries, or validation surfaces change.
+- Publish only `dist/` through GitHub Pages after validation passes on `main`. Keep test fixtures in the separate ignored build directories.

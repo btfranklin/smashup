@@ -1,80 +1,109 @@
 # Smashup Derby
 
-**Smashup Derby** is a browser-based demolition derby game built with TypeScript, Vite, and canvas.
+![Smashup Derby banner](https://raw.githubusercontent.com/btfranklin/smashup/main/.github/social%20preview/smashup_social_preview.jpg "Smashup Derby")
 
-Pick a car and fight through a five-round Career Night whose arenas and pressure escalate toward a Redline finale. Keep the machine running through pit choices, hazards, smoke, debris, engine damage, and AI drivers that would rather reverse into you than behave sensibly.
+[![Validate and Deploy](https://github.com/btfranklin/smashup/actions/workflows/validate.yml/badge.svg)](https://github.com/btfranklin/smashup/actions/workflows/validate.yml)
 
-## Quick Start
+Smashup Derby is a demolition derby game that runs in your browser. Choose a
+car, compete against seven AI drivers, and keep it running through five rounds
+of Career Night. Earn points, repair damage between rounds, and reach the
+Redline finale.
 
-```bash
-npm install
+The game uses TypeScript, Vite, and Canvas 2D. It needs no account, application
+server, or database. All game state stays in memory; reloading the page starts
+a new session.
+
+## Features
+
+- **Five-round Career Night.** Compete across a seeded sequence of arenas and
+  round conditions. All eight drivers earn points toward the final standings.
+- **Three car choices.** Select a car and make pit decisions between rounds.
+- **Visible damage.** Impacts change the car's shape and damage its engine,
+  radiator, steering, lights, and body panels.
+- **Arena hazards.** Drive through mud, avoid obstacles, and work around wrecks
+  that stay on the track.
+- **Wreck Awards.** Earn awards for impact, survival, and style after each round.
+- **Spectator mode.** If your car stops running, watch the remaining drivers or
+  skip to the results.
+- **Procedural sound and effects.** Engine audio, smoke, dust, sparks, and debris
+  respond to the action.
+
+## Play Locally
+
+Use Node.js `26.x` and npm. From the project directory, run:
+
+```sh
+npm ci
 npm run dev
 ```
 
-Open the local Vite URL shown in the terminal, usually `http://localhost:5173/`.
+Open the address that Vite prints, usually `http://localhost:5173/`. Use a
+keyboard to drive. Select a car and start Career Night from the game menu.
 
 ## Controls
 
-- `W` / `ArrowUp`: accelerate forward
-- `S` / `ArrowDown`: accelerate backward
-- `A` / `ArrowLeft`: steer left
-- `D` / `ArrowRight`: steer right
-- `Enter`: advance menu flow
-- `F`: toggle fullscreen
+| Key | Action |
+| --- | --- |
+| `W` or `ArrowUp` | Drive forward |
+| `S` or `ArrowDown` | Drive backward |
+| `A` or `ArrowLeft` | Steer left |
+| `D` or `ArrowRight` | Steer right |
+| `Enter` | Continue through menus |
+| `F` | Enter or leave fullscreen |
 
-## Game Features
+## Build a Static Site
 
-- Five-round Career Night with a seeded sequence of arenas and modifiers, between-round pit choices, and a Redline finale.
-- Three player car presets and multiple arena variants.
-- Physics-based impacts that follow each car's live deformed silhouette, with
-  directional damage to engines, radiators, steering, lights, and body panels.
-- Disabled cars remain in the arena as hulks; if the player is wrecked, the remaining fight can be watched or skipped to its result.
-- Post-round Wreck Awards celebrate impact, survival, and style.
-- All eight drivers earn placement points toward a final standings table and top-three podium.
-- Procedural audio, smoke, debris, dust, screen shake, and hit callouts.
-- Browser-only, in-memory runtime with no server or saved state.
+```sh
+npm run build
+npm run preview
+```
+
+Open the preview address that Vite prints. The production files are in `dist/`.
+A static host can serve these files without a Node.js process. Node.js is
+required only for development and the build.
 
 ## Development
 
-Validated local and CI runtime: Node `26.x`.
+Install [Perfect Doc](https://github.com/btfranklin/perfect-doc#build-and-install)
+for documentation checks. Install Chromium once before browser tests:
 
-```bash
-npm ci
+```sh
 npx playwright install chromium
-npm run typecheck
-npm run build
-npm run test:unit
-npm run test:browser
 npm run validate
-npm run test:performance
 ```
 
-`npm run validate` is the main regression command. It runs the repo legibility check, typecheck, builds the production bundle, runs the coverage-gated Vitest suite, verifies calibrated per-surface coverage thresholds, and exercises the focused Chromium integration suite. Install Chromium once with `npx playwright install chromium` before running browser validation locally.
+`npm run validate` checks repository structure and documentation, checks types,
+builds the game, runs unit tests with coverage checks, and runs the Chromium
+integration tests. CI runs the same command.
 
-`npm run test:performance` is a separate, hardware-sensitive production-build smoke. Run it for changes that can affect simulation, rendering, menus, or browser-controller responsiveness; it intentionally stays outside the ordinary validation command. See [Performance Validation](docs/references/performance-validation.md) for budgets and artifact policy.
+For focused checks:
 
-## Project Layout
+| Command | Purpose |
+| --- | --- |
+| `npm run check:repo` | Check repository structure, local links, and command setup |
+| `npm run check:docs` | Check Markdown with Perfect Doc, without network access |
+| `npm run typecheck` | Check TypeScript types |
+| `npm run test:unit` | Run unit tests |
+| `npm run test:coverage` | Run unit tests and check coverage limits |
+| `npm run test:browser` | Test the production build in Chromium |
+| `npm run test:performance` | Run the separate production performance check |
 
-- `src/app/`: browser lifecycle, scheduling, menus, and diagnostic collection
-- `src/game/`: content, simulation, Career Night rules, audio, and rendering
-- `tests/`: Vitest rule/controller coverage plus focused real-browser checks
-- `scripts/`: repository and coverage validation
-- `docs/`: the complete architecture map, operations, quality, and validation references
+The documentation command runs `perfect-doc check . --offline --no-banner`.
+The performance check depends on machine load and stays outside
+`npm run validate`. See [Performance Validation](docs/references/performance-validation.md)
+for its limits and output files.
 
-## Automation Surfaces
+## Documentation
 
-The game exposes a small browser-validation contract:
+Start with the [documentation index](docs/README.md), or use these guides:
 
-- Hidden preview URL: `/?preview=car&preset=<id>&scenario=<id>`
-- Deterministic stepping hook: `window.advanceTime(ms)`
-- Text-state hook: `window.render_game_to_text()`
-
-See `docs/references/validation-surfaces.md` for the full contract.
-
-## Notes
-
-This is a toy demolition derby game, not a realistic vehicle simulator. The physics and damage model are tuned for readable arcade chaos.
+- [Architecture](docs/ARCHITECTURE.md): module ownership and game-state rules.
+- [Operations](docs/OPERATIONS.md): setup, validation, and failure recovery.
+- [Gameplay Tuning](docs/references/gameplay-tuning.md): physics, damage, AI,
+  and effects.
+- [Validation Surfaces](docs/references/validation-surfaces.md): preview URLs
+  and browser test hooks.
 
 ## License
 
-MIT. See `LICENSE`.
+[MIT](LICENSE). Created by [B.T. Franklin](https://btfranklin.info).

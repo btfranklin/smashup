@@ -1,8 +1,12 @@
-name: Validate
+name: Validate and Deploy
 
 on:
     push:
     pull_request:
+    workflow_dispatch:
+
+permissions:
+    contents: read
 
 jobs:
     validate:
@@ -24,5 +28,44 @@ jobs:
             - name: Install Chromium
               run: npx playwright install --with-deps chromium
 
+            - name: Install Perfect Doc
+              env:
+                  PERFECT_DOC_URL: https://github.com/btfranklin/perfect-doc/releases/download/v0.1.0/perfect-doc-0.1.0-x86_64-unknown-linux-gnu.tar.gz
+                  PERFECT_DOC_SHA256: 80da73f3a01ab1301539561812d81213112187e71ad4ee630a0d70e95692cd22
+              run: |
+                  curl --fail --location "$PERFECT_DOC_URL" --output "$RUNNER_TEMP/perfect-doc.tar.gz"
+                  printf '%s  %s\n' "$PERFECT_DOC_SHA256" "$RUNNER_TEMP/perfect-doc.tar.gz" | sha256sum --check
+                  mkdir "$RUNNER_TEMP/perfect-doc-bin"
+                  tar -xzf "$RUNNER_TEMP/perfect-doc.tar.gz" -C "$RUNNER_TEMP/perfect-doc-bin" --strip-components=1
+                  echo "$RUNNER_TEMP/perfect-doc-bin" >> "$GITHUB_PATH"
+
             - name: Run validation
               run: npm run validate
+
+            - name: Configure GitHub Pages
+              if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+              uses: actions/configure-pages@v6
+
+            - name: Upload production site
+              if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+              uses: actions/upload-pages-artifact@v5
+              with:
+                  path: dist
+
+    deploy:
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        needs: validate
+        runs-on: ubuntu-latest
+        permissions:
+            pages: write
+            id-token: write
+        environment:
+            name: github-pages
+            url: ${{ steps.deployment.outputs.page_url }}
+        concurrency:
+            group: github-pages
+            cancel-in-progress: false
+        steps:
+            - name: Deploy to GitHub Pages
+              id: deployment
+              uses: actions/deploy-pages@v5

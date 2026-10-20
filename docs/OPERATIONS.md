@@ -4,6 +4,7 @@
 
 - Use Node `26.x`, matching the validated local and CI runtime.
 - Install dependencies with `npm install`.
+- Install [Perfect Doc](https://github.com/btfranklin/perfect-doc#build-and-install) for documentation checks.
 - Install the supported browser once with `npx playwright install chromium`.
 - Start the game locally with `npm run dev`.
 - To mirror CI locally from a clean checkout, run `npm ci && npx playwright install chromium && npm run validate`.
@@ -16,8 +17,11 @@
   the CI validation command.
 - `npm run typecheck`
   Runs TypeScript against `src`, `tests`, and `vitest.config.ts` without emitting files.
+- `npm run check:docs`
+  Runs `perfect-doc check . --offline --no-banner` with `perfect-doc.toml`.
+  Checks Markdown structure and local links without network access.
 - `npm run validate`
-  Runs `check:repo`, typecheck, the production build, the coverage-gated Vitest suite, and the focused Chromium integration suite.
+  Runs `check:repo`, `check:docs`, typecheck, the production build, the coverage-gated Vitest suite, and the focused Chromium integration suite.
 - `npm run test:unit`
   Runs the fast Vitest suite once without coverage instrumentation.
 - `npm run test:coverage`
@@ -34,6 +38,32 @@
   extra controller page is test-only and is not part of the normal production
   build. This hardware-sensitive check is intentionally not part of
   `npm run validate`.
+
+## Public Deployment
+
+The public source repository is [btfranklin/smashup](https://github.com/btfranklin/smashup).
+GitHub Pages serves the production build. The intended custom address is
+`https://smashup.btfranklin.info/`.
+
+- `.github/workflows/validate.yml` runs `npm run validate` on pushes and pull requests.
+- After validation passes on `main`, the workflow uploads only `dist/` and
+  deploys that artifact to the `github-pages` environment.
+- Pull requests and other branches do not deploy. A manual workflow run on
+  `main` can repeat validation and deployment.
+- The browser-test build stays in `output/browser-build/`. It is not published.
+- Keep the GitHub Pages source set to **GitHub Actions** in repository settings.
+- Set the Pages custom domain to `smashup.btfranklin.info`. At the DNS provider,
+  set a `CNAME` record named `smashup` to `btfranklin.github.io`. Do not include
+  the repository name in the DNS target.
+- Enable **Enforce HTTPS** when GitHub has issued the domain certificate.
+- The custom domain serves the game at `/`, which matches Vite's default asset
+  path. A domain change must preserve this path or update the build base.
+
+DNS does not select a build folder. The workflow selects `dist/`; the Pages
+custom-domain setting connects the hostname to this repository.
+
+Before archiving the repository, confirm the deployment commit, test the public
+game, and check HTTPS. Later changes require the repository to be unarchived.
 
 ## Runtime Inspection Surfaces
 

@@ -11,13 +11,14 @@
     "build:performance": "vite build --config vite.performance.config.ts",
     "preview": "vite preview",
     "check:repo": "node scripts/check-repo-legibility.mjs",
+    "check:docs": "perfect-doc check . --offline --no-banner",
     "test": "vitest",
     "test:unit": "vitest run",
     "test:browser": "playwright test --grep-invert @performance",
     "test:performance": "playwright test --config playwright.performance.config.ts",
     "typecheck": "tsc --noEmit",
     "test:coverage": "vitest run --coverage && node scripts/check-test-coverage.mjs",
-    "validate": "npm run check:repo && npm run typecheck && npm run build && npm run test:coverage && npm run test:browser"
+    "validate": "npm run check:repo && npm run check:docs && npm run typecheck && npm run build && npm run test:coverage && npm run test:browser"
   },
   "devDependencies": {
     "@playwright/test": ">=1.63.0",

@@ -99,6 +99,7 @@ const requiredScripts = [
   "dev",
   "build",
   "check:repo",
+  "check:docs",
   "typecheck",
   "test:unit",
   "test:coverage",
@@ -139,6 +140,7 @@ if (
 
 const validationCommands = [
   "npm run check:repo",
+  "npm run check:docs",
   "npm run typecheck",
   "npm run build",
   "npm run test:coverage",
